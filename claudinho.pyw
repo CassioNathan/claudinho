@@ -204,6 +204,17 @@ def monitor(x, y):
     return h, (w.left, w.top, w.right, w.bottom), (m.left, m.top, m.right, m.bottom)
 
 
+def fora_da_barra(win):
+    """Tira a janela da barra de tarefas (o Claudinho fica só nos ícones ocultos da bandeja):
+    vira "janela de ferramenta". O Windows só relê o estilo ao esconder e mostrar de novo."""
+    win.update_idletasks()
+    hwnd = int(win.wm_frame(), 16)
+    estilo = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
+    user32.SetWindowLongW(hwnd, -20, (estilo & ~0x40000) | 0x80)  # tira APPWINDOW, põe TOOLWINDOW
+    win.withdraw()
+    win.deiconify()
+
+
 def cursor():
     p = wt.POINT()
     user32.GetCursorPos(ctypes.byref(p))
@@ -602,6 +613,7 @@ class Balao:
         # nasce invisível: o CTk ainda redimensiona a janela (DPI) logo depois de criar,
         # e isso aparecia como uma tremida. Só mostra quando já está no tamanho e lugar certos.
         self.win.attributes("-alpha", 0.0)
+        fora_da_barra(self.win)
         self.frame = ctk.CTkFrame(self.win, corner_radius=16, fg_color=FUNDO, bg_color=CHAVE,
                                   border_width=2, border_color=LARANJA)
         self.frame.pack(pady=(0, self.CAUDA_H))
@@ -779,6 +791,7 @@ class Claudinho:
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-transparentcolor", CHAVE)
+        fora_da_barra(self.root)
         self.W, self.H = (COLS + 2 * MARGEM) * self.S, (LINHAS + FOLGA) * self.S
         self.canvas = tk.Canvas(self.root, width=self.W, height=self.H, bg=CHAVE,
                                 highlightthickness=0, cursor="hand2")

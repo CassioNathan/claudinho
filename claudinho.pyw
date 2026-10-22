@@ -211,8 +211,9 @@ def fora_da_barra(win):
     hwnd = int(win.wm_frame(), 16)
     estilo = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
     user32.SetWindowLongW(hwnd, -20, (estilo & ~0x40000) | 0x80)  # tira APPWINDOW, põe TOOLWINDOW
-    win.withdraw()
-    win.deiconify()
+    # direto do tk: o withdraw/deiconify do CTk tem lógica própria e a janela ficava escondida
+    tk.Wm.wm_withdraw(win)
+    tk.Wm.wm_deiconify(win)
 
 
 def cursor():

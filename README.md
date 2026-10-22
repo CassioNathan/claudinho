@@ -62,3 +62,8 @@ Depois:
 | `~/.claudinho/estado.json`, `avaliacoes.json` | conversa, memória do dia, piadas recentes, notas |
 
 As coisas em `~/.claudinho` são deste PC e não vão pro Git.
+
+## Próximos passos
+
+- [Plano: MCP exclusivo do Claudinho](docs/plano-mcp.md): trocar os ajudantes via Bash por um servidor
+  MCP com ferramentas próprias (livres e com confirmação).

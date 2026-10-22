@@ -14,6 +14,9 @@ terminam e solta piadas sobre o que está na tela.
   Sua pergunta tem prioridade; os avisos esperam e somem sozinhos.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modos maldoso 😈 e TDAH 🐿️,
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
+- **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
+  do Windows), zoa a música de vez em quando e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
+  ("pausa", "pula essa"), sem confirmação (via `musica.py`).
 - **Sprites:** andando, correndo entre monitores, notebook digitando, pensando, sendo carregado, vendado.
 - **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos.
   Menu no botão direito e no ícone da bandeja.
@@ -47,6 +50,7 @@ Depois:
 | `frases.py` | banco de frases (edite à vontade) |
 | `janelas.py` | lê as janelas abertas no Windows |
 | `abrir.py` | ajudante limitado: só abre site, pesquisa ou programa da lista |
+| `musica.py` | o que está tocando + tocar/pausar/próxima/anterior |
 | `hook/claudinho_notificar.py` | hook "Stop" do Claude Code que manda os avisos |
 | `instalar.py` | instalação num PC novo |
 | `~/.claudinho/config.json` | configurações (movimento, frequência, modos, atalho, pastas de leitura) |

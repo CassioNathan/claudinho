@@ -32,6 +32,7 @@ from PIL import Image, ImageDraw, ImageGrab
 
 import frases
 import janelas
+import musica
 
 PORTA = 47821
 DADOS = Path.home() / ".claudinho"
@@ -49,6 +50,7 @@ CONFIG_PADRAO = {
     "modo_tdah": False,                  # comentários que viajam pra assuntos nada a ver
     "modo_avaliacao": True,              # botões boa/ruim nas piadas; ele aprende com as notas
     "vendado": False,                    # faixa nos olhos: não tira print da tela (só banco de frases)
+    "ver_musica": True,                  # sabe o que está tocando (piadas, chat e menu com controles)
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
@@ -82,7 +84,9 @@ PROMPT_SISTEMA = (
     "PROGRAMA use sempre a ferramenta Bash com o ajudante da pasta atual, que roda sem pedir "
     "confirmação: `python abrir.py site <url>`, `python abrir.py pesquisa \"<termo>\" [google|youtube|"
     "bing|duckduckgo]` ou `python abrir.py programa <nome>` (navegador, chrome, edge, opera, intellij, "
-    "vscode, discord, whatsapp, postman, docker, spotify). Um comando por vez, sem && nem |. "
+    "vscode, discord, whatsapp, postman, docker, spotify). Para a MÚSICA que ele está ouvindo use "
+    "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
+    "sem confirmação. Um comando por vez, sem && nem |. "
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
 
@@ -301,7 +305,8 @@ JOB_FILHOS = _criar_job()
 
 
 # o ajudante, sozinho, sem encadear nada (&&, |, ;, redirecionamento, subcomando)
-AJUDANTE = re.compile(r"python3? (?:\./)?abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+")
+AJUDANTE = re.compile(r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
+                      r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior))")
 # tentativas de abrir coisa por fora do ajudante
 ABRIR_NA_MAO = re.compile(r"(?i)(?:cmd(?:\.exe)?\s+/c\s+)?(?:start|start-process|explorer(?:\.exe)?|invoke-item)\b")
 
@@ -329,14 +334,15 @@ class ChatClaude:
             raise RuntimeError("Não achei o comando `claude` no PATH.")
         DADOS.mkdir(exist_ok=True)
         # o ajudante limitado mora na pasta do chat, então o comando é sempre "python abrir.py ..."
-        for arquivo in ("abrir.py", "janelas.py"):  # o ajudante usa o janelas.py pra trazer a janela pra frente
+        # ajudantes limitados (o abrir.py usa o janelas.py pra trazer a janela pra frente)
+        for arquivo in ("abrir.py", "janelas.py", "musica.py"):
             shutil.copy(Path(__file__).with_name(arquivo), DADOS / arquivo)
         cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                "--model", "haiku", "--effort", "low",  # rápido: Haiku com pensamento leve
                "--append-system-prompt", PROMPT_SISTEMA, "--strict-mcp-config", "--disable-slash-commands",
                "--permission-mode", "default", "--permission-prompt-tool", "stdio",
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
-               "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*)"]
+               "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)"]
         if self.pastas:  # dentro delas, ler arquivo não pede confirmação
             cmd += ["--add-dir", *self.pastas]
         if self.sid:
@@ -747,6 +753,8 @@ class Claudinho:
         self.chat = ChatClaude(self.estado.get("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
+        self.musica = None  # o que está tocando, atualizado em segundo plano
+        threading.Thread(target=self.acompanhar_musica, daemon=True).start()
         self.S = escala()
         self.falas = deque()       # o que ele tem para falar, em ordem
         self.balao = None          # balão de fala na tela
@@ -1052,12 +1060,43 @@ class Claudinho:
             self.alternar_entrada()
 
     # ---------- menus (botão direito no mascote e ícone na bandeja) ----------
+    # ---------- música ----------
+    def atualizar_musica(self):
+        self.musica = musica.tocando() if self.cfg["ver_musica"] else None
+        try:
+            self.icone.update_menu()
+        except Exception:
+            pass
+
+    def acompanhar_musica(self):
+        while True:
+            self.atualizar_musica()
+            time.sleep(10)
+
+    def itens_musica(self):
+        if not self.cfg["ver_musica"]:
+            return [("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]), None]
+        m = self.musica
+        if not m:
+            return [("🎵 nada tocando", "musica:tocar", None),
+                    ("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]), None]
+        nome = f"{m['titulo']} - {m['artista']}" if m["artista"] else m["titulo"]
+        if len(nome) > 45:
+            nome = nome[:44] + "…"
+        return [(f"🎵 {nome}", "musica:alternar", None),
+                ("⏸ Pausar" if m["tocando"] else "▶ Tocar", "musica:alternar", None),
+                ("⏭ Próxima", "musica:proxima", None),
+                ("⏮ Anterior", "musica:anterior", None),
+                ("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]),
+                None]
+
     def itens_menu(self):
         """(rótulo, ação, marcado?) — None = separador. Usado pelos dois menus."""
         return [
             ("Perguntar", "perguntar", None),
             ("Esconder o Claudinho" if self.visivel else "Mostrar o Claudinho", "visivel", None),
             None,
+            *self.itens_musica(),
             ("Andar pela tela toda", "livre", lambda: self.cfg["movimento"] == "livre"),
             ("Seguir o mouse entre monitores", "segue", lambda: self.cfg["seguir_mouse_entre_monitores"]),
             ("Comentar o que está na tela", "comenta", lambda: self.cfg["comentar_tela"]),
@@ -1157,6 +1196,14 @@ class Claudinho:
             self.mudar_cfg("seguir_mouse_entre_monitores", not self.cfg["seguir_mouse_entre_monitores"])
         elif acao == "comenta":
             self.mudar_cfg("comentar_tela", not self.cfg["comentar_tela"])
+        elif acao.startswith("musica:"):  # ⏯ ⏭ ⏮ (em thread: o Windows responde devagar às vezes)
+            comando = acao.split(":", 1)[1]
+            threading.Thread(target=lambda: (musica.controlar(comando), self.atualizar_musica()),
+                             daemon=True).start()
+        elif acao == "ver_musica":
+            self.mudar_cfg("ver_musica", not self.cfg["ver_musica"])
+            if not self.cfg["ver_musica"]:
+                self.musica = None
         elif acao == "venda":
             self.mudar_cfg("vendado", not self.cfg["vendado"])
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if self.cfg["vendado"]
@@ -1386,7 +1433,10 @@ class Claudinho:
         self.estado["historico"].append({"quem": "eu", "texto": texto})
         gravar_json(ESTADO, self.estado)
         self.ocupado = True
-        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(texto))),
+        pergunta = texto
+        if self.musica:  # contexto que ele vê mas não precisa comentar
+            pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
+        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pergunta))),
                          daemon=True).start()
 
     def nova_conversa(self):
@@ -1488,6 +1538,8 @@ class Claudinho:
         alvo, ponto = self.sortear_alvo(area_total)
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                     if self.app_atual else "") + self.resumo_do_dia() + self.resumo_do_gosto() + perfil_curto()
+        if self.musica and self.musica["tocando"]:
+            contexto += f"\nEle está ouvindo agora: {musica.descrever(self.musica)}."
 
         def trabalho():
             try:
@@ -1508,7 +1560,8 @@ class Claudinho:
             janela = next((j for j in lista if j["exe"] == self.app_atual), lista[0])
         minutos = self.minutos_no_app() if janela and janela["exe"] == self.app_atual else 0
         modelo, texto = frases.escolher(janela, minutos, self.recentes_frases, self.cfg["modo_maldoso"],
-                                        self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco())
+                                        self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
+                                        self.musica)
         self.recentes_frases.append(modelo)
         self.lembrar_piada(texto)
         self.comentar(texto, {"origem": "banco", "modelo": modelo})

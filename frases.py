@@ -216,6 +216,22 @@ TDAH = [
 ]
 
 
+# o que está tocando: {musica}, {artista} e {app} são preenchidos sozinhos
+MUSICA = [
+    "Tocando {musica}, de {artista}. Bom gosto, hein. Posso pedir a próxima?",
+    "{musica} no {app}? Agora o código sai no ritmo.",
+    "Essa {musica} é trilha sonora oficial de deploy, já pode registrar.",
+    "Se eu tivesse fone, tava ouvindo {musica} junto.",
+    "{artista} de fundo e foco total. Respeito.",
+]
+MUSICA_MALDOSAS = [
+    "{musica}, de {artista}? Agora entendi o estado desse código.",
+    "Ouvindo {artista} no volume do bug: alto e sem controle.",
+    "{musica} de novo? Seu algoritmo de recomendação desistiu de você.",
+    "Com {musica} tocando eu também não conseguiria me concentrar, relaxa.",
+]
+
+
 def dados_do_dia(dia):
     if not dia:
         return None
@@ -266,11 +282,16 @@ def sortear(opcoes, recentes, notas):
     return random.choices(aprovadas, weights=pesos)[0]
 
 
-def escolher(janela, minutos_no_app, recentes=(), maldoso=False, dia=(), tdah=False, notas=None):
+def escolher(janela, minutos_no_app, recentes=(), maldoso=False, dia=(), tdah=False, notas=None,
+             musica=None):
     """Monta um comentário a partir do banco. `janela` pode ser None; `dia` = avisos de hoje;
-    `notas` = soma das avaliações boa/ruim de cada frase."""
+    `notas` = soma das avaliações boa/ruim de cada frase; `musica` = o que está tocando (ou None)."""
     notas = notas or {}
     cat = categoria(janela) if janela else "geral"
+    if musica and musica.get("tocando") and random.random() < 0.25:  # de vez em quando, zoa a música
+        modelo = sortear(MUSICA_MALDOSAS if maldoso else MUSICA, recentes, notas)
+        return modelo, modelo.format(musica=musica["titulo"], artista=musica["artista"] or "artista desconhecido",
+                                     app=musica["app"])
     if tdah and random.random() < 0.7:  # modo TDAH: parte do programa e viaja pra outro assunto
         modelo = sortear(TDAH, recentes, notas)
         return modelo, modelo.format(app=NOMES.get(cat, "computador") if janela else "computador")

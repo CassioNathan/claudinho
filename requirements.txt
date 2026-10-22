@@ -1,3 +1,6 @@
 customtkinter>=5.2
 pillow>=10.0
 pystray>=0.19
+winrt-runtime>=2.0
+winrt-Windows.Media.Control>=2.0
+winrt-Windows.Foundation>=2.0

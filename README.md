@@ -15,7 +15,8 @@ terminam e solta piadas sobre o que está na tela.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modos maldoso 😈 e TDAH 🐿️,
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
 - **Sprites:** andando, correndo entre monitores, notebook digitando, pensando, sendo carregado, vendado.
-- **Atalho:** `Win+Y` comenta a tela na hora. Menu no botão direito e no ícone da bandeja.
+- **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos.
+  Menu no botão direito e no ícone da bandeja.
 
 ## Instalar num PC novo
 

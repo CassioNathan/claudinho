@@ -52,6 +52,7 @@ CONFIG_PADRAO = {
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
+    "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
     # onde o chat lê arquivos sem perguntar; fora daqui (e qualquer comando ou edição) pede confirmação
     "pastas_leitura": ["D:\\Projetos", "E:\\Stompdesk Projeto"],
 }
@@ -502,8 +503,9 @@ MODIFICADORES = {"alt": 0x1, "ctrl": 0x2, "shift": 0x4, "win": 0x8}
 TECLAS = {"space": 0x20, "espaco": 0x20, **{f"f{i}": 0x6F + i for i in range(1, 13)}}
 
 
-def iniciar_atalho(texto, eventos, acao):
-    """Registra o atalho (ex.: "Ctrl+Shift+Alt+C") no Windows; quando apertado, manda ("menu", acao)."""
+def iniciar_atalho(texto, eventos, acao, ident=1):
+    """Registra o atalho (ex.: "Win+Shift+Y") no Windows; quando apertado, manda ("menu", acao).
+    `ident` separa um atalho do outro."""
     mods, vk = 0x4000, None  # 0x4000 = não repetir segurando a tecla
     for parte in texto.lower().replace(" ", "").split("+"):
         if parte in MODIFICADORES:
@@ -517,7 +519,7 @@ def iniciar_atalho(texto, eventos, acao):
 
     def laco():
         # o atalho pertence à thread que registrou: o laço de mensagens tem que ser aqui
-        if not user32.RegisterHotKey(None, 1, mods, vk):
+        if not user32.RegisterHotKey(None, ident, mods, vk):
             eventos.put(("atalho_ocupado", texto))
             return
         msg = wt.MSG()
@@ -793,7 +795,8 @@ class Claudinho:
         self.visivel = True
         self.mover_janela()
         self.criar_icone_bandeja()
-        iniciar_atalho(self.cfg["atalho_comentar"], self.eventos, "comentar_agora")
+        iniciar_atalho(self.cfg["atalho_comentar"], self.eventos, "comentar_agora", 1)
+        iniciar_atalho(self.cfg["atalho_venda"], self.eventos, "venda", 2)
         self.root.after(70, self.tick)
 
     # ---------- laço principal ----------
@@ -1061,7 +1064,7 @@ class Claudinho:
             ("Comentário maldoso 😈", "maldoso", lambda: self.cfg["modo_maldoso"]),
             ("Modo TDAH 🐿️", "tdah", lambda: self.cfg["modo_tdah"]),
             ("Avaliar piadas (boa/ruim)", "avaliacao", lambda: self.cfg["modo_avaliacao"]),
-            ("Faixa nos olhos 🙈 (não olha a tela)", "venda", lambda: self.cfg["vendado"]),
+            (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             None,

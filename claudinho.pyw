@@ -13,6 +13,7 @@ import io
 import json
 import os
 import queue
+import math
 import random
 import re
 import shutil
@@ -32,6 +33,7 @@ from PIL import Image, ImageDraw, ImageGrab
 
 import frases
 import janelas
+import emojis
 import musica
 
 PORTA = 47821
@@ -51,6 +53,7 @@ CONFIG_PADRAO = {
     "modo_avaliacao": True,              # botões boa/ruim nas piadas; ele aprende com as notas
     "vendado": False,                    # faixa nos olhos: não tira print da tela (só banco de frases)
     "ver_musica": True,                  # sabe o que está tocando (piadas, chat e menu com controles)
+    "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
@@ -766,6 +769,7 @@ class Claudinho:
         self.chat = ChatClaude(self.estado.get("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
+        self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
         self.S = escala()
@@ -829,6 +833,8 @@ class Claudinho:
             self.mover()
             self.cuidar_dos_baloes()
             self.talvez_comentar()
+            self.talvez_emoji()
+            self.animar_emoji()
             self.desenhar()
         finally:
             self.root.after(70, self.tick)
@@ -1118,6 +1124,7 @@ class Claudinho:
             ("Modo TDAH 🐿️", "tdah", lambda: self.cfg["modo_tdah"]),
             ("Avaliar piadas (boa/ruim)", "avaliacao", lambda: self.cfg["modo_avaliacao"]),
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
+            ("Reações com emojis ✨", "emojis", lambda: self.cfg["emojis"]),
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             None,
@@ -1218,6 +1225,10 @@ class Claudinho:
             self.mudar_cfg("ver_musica", not self.cfg["ver_musica"])
             if not self.cfg["ver_musica"]:
                 self.musica = None
+        elif acao == "emojis":
+            self.mudar_cfg("emojis", not self.cfg["emojis"])
+            if self.cfg["emojis"]:
+                self.soltar_emoji("coracao")
         elif acao == "venda":
             self.mudar_cfg("vendado", not self.cfg["vendado"])
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if self.cfg["vendado"]
@@ -1302,6 +1313,7 @@ class Claudinho:
                 winsound.MessageBeep(0x40)
             except Exception:
                 pass
+            self.soltar_emoji("check")  # comemora o chat que terminou
         elif fala.get("piada") and self.cfg["modo_avaliacao"]:  # piada com botões pra avaliar
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
                                botoes=[("boa", lambda: self.avaliar(fala, 1), True),
@@ -1601,9 +1613,66 @@ class Claudinho:
                 return True
         return False
 
-    def comentar(self, texto, piada=None):
+    def comentar(self, texto, piada=None, duracao=8):
         """Comenta de onde está. `piada` (origem etc.) marca que é piada: aí dá pra avaliar."""
-        self.falas.append({"tipo": "comentario", "texto": texto, "duracao": 8, "piada": piada})
+        self.falas.append({"tipo": "comentario", "texto": texto, "duracao": duracao, "piada": piada})
+
+    # ---------- reações (emojis que sobem flutuando) ----------
+    def talvez_emoji(self):
+        if not self.cfg["emojis"] or self.emoji or time.time() < self.prox_emoji:
+            return
+        if self.balao or self.entrada or self.ocupado or self.arrasto or not self.visivel:
+            return
+        self.prox_emoji = time.time() + random.uniform(60, 180)
+        ativa = next((j for j in janelas.listar() if j["exe"] == self.app_atual), None)
+        categoria = frases.categoria(ativa) if ativa else "geral"
+        tocando = bool(self.musica and self.musica["tocando"])
+        nome = emojis.escolher(categoria, self.minutos_no_app() if ativa else 0, tocando)
+        self.soltar_emoji(nome, com_frase=random.random() < 0.4)
+
+    def soltar_emoji(self, nome, com_frase=False):
+        if self.emoji or not self.cfg["emojis"]:
+            return
+        P = max(3, self.S * 2 // 3)  # tamanho do "pixel" do emoji
+        lado = 9 * P
+        win = tk.Toplevel(self.root)  # só um Canvas dentro: nada de widget do CTk aqui
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-transparentcolor", CHAVE)
+        win.config(bg=CHAVE)
+        canvas = tk.Canvas(win, width=lado, height=lado, bg=CHAVE, highlightthickness=0)
+        canvas.pack()
+        fora_da_barra(win)
+        self.emoji = {"win": win, "canvas": canvas, "dados": emojis.EMOJIS[nome], "inicio": time.time(),
+                      "P": P, "lado": lado, "direcao": random.choice((-1, 1))}
+        if com_frase and not self.balao and not self.falas:
+            self.comentar(random.choice(emojis.EMOJIS[nome]["frases"]), duracao=4)
+        self.animar_emoji()
+
+    def animar_emoji(self):
+        """Sobe ~40px balançando de leve, trocando os quadros, e some no fim."""
+        e = self.emoji
+        if not e:
+            return
+        passou = time.time() - e["inicio"]
+        if passou > 2.6:
+            e["win"].destroy()
+            self.emoji = None
+            return
+        P, lado, dados = e["P"], e["lado"], e["dados"]
+        quadro = dados["quadros"][int(passou / 0.3) % len(dados["quadros"])]
+        c = e["canvas"]
+        c.delete("all")
+        for lin, linha in enumerate(quadro):
+            for col, ch in enumerate(linha):
+                if ch != ".":
+                    c.create_rectangle(col * P, lin * P, (col + 1) * P, (lin + 1) * P,
+                                       fill=dados["cores"][ch], width=0)
+        cx = self.x + self.W / 2 + e["direcao"] * self.W * 0.45
+        x = int(cx - lado / 2 + math.sin(passou * 6) * 3)
+        y = int(self.y + FOLGA * self.S - lado - passou * 16)
+        tk.Wm.wm_geometry(e["win"], f"{lado}x{lado}+{x}+{y}")
+        e["win"].attributes("-alpha", 1.0 if passou < 2.0 else max(0.0, (2.6 - passou) / 0.6))
 
     # ---------- avaliação das piadas ----------
     def avaliar(self, fala, nota):

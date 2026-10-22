@@ -17,6 +17,9 @@ terminam e solta piadas sobre o que está na tela.
 - **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
   do Windows), zoa a música de vez em quando e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
   ("pausa", "pula essa"), sem confirmação (via `musica.py`).
+- **Reações com emojis:** de vez em quando sobe um emoji em pixel art do lado dele (café, bug, lâmpada,
+  coração, zzz, check, fogo, nota, ?, raio, disquete, suor), às vezes com uma frase, escolhido pelo que
+  você está fazendo. Pra criar novos, é só desenhar em `emojis.py`.
 - **Sprites:** andando, correndo entre monitores, notebook digitando, pensando, sendo carregado, vendado.
 - **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos.
   Menu no botão direito e no ícone da bandeja.
@@ -50,6 +53,7 @@ Depois:
 | `frases.py` | banco de frases (edite à vontade) |
 | `janelas.py` | lê as janelas abertas no Windows |
 | `abrir.py` | ajudante limitado: só abre site, pesquisa ou programa da lista |
+| `emojis.py` | pacote de reações em pixel art (desenhos, cores, frases e quando aparecem) |
 | `musica.py` | o que está tocando + tocar/pausar/próxima/anterior |
 | `hook/claudinho_notificar.py` | hook "Stop" do Claude Code que manda os avisos |
 | `instalar.py` | instalação num PC novo |

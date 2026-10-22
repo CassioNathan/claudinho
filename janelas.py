@@ -1,0 +1,89 @@
+"""Lê as janelas abertas no Windows (título, programa, posição) sem tirar print."""
+import ctypes
+import ctypes.wintypes as wt
+from pathlib import Path
+
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+dwmapi = ctypes.windll.dwmapi
+
+kernel32.OpenProcess.restype = wt.HANDLE
+user32.GetForegroundWindow.restype = wt.HWND
+ENUM = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+WS_EX_TOOLWINDOW = 0x80
+IGNORAR = {"python.exe", "pythonw.exe", "textinputhost.exe", "applicationframehost.exe",
+           "shellexperiencehost.exe", "searchhost.exe", "startmenuexperiencehost.exe"}
+
+
+def exe_de(hwnd):
+    pid = wt.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(520)
+        n = wt.DWORD(520)
+        if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+            return Path(buf.value).name.lower()
+        return ""
+    finally:
+        kernel32.CloseHandle(h)
+
+
+def oculta(hwnd):
+    cloaked = ctypes.c_int(0)
+    dwmapi.DwmGetWindowAttribute(hwnd, 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+    return bool(cloaked.value)
+
+
+def janela_ativa():
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    return descrever(hwnd)
+
+
+def descrever(hwnd):
+    n = user32.GetWindowTextLengthW(hwnd)
+    buf = ctypes.create_unicode_buffer(n + 1)
+    user32.GetWindowTextW(hwnd, buf, n + 1)
+    r = wt.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(r))
+    return {"hwnd": hwnd, "titulo": buf.value, "exe": exe_de(hwnd),
+            "rect": (r.left, r.top, r.right, r.bottom)}
+
+
+def no_ponto(lista, x, y):
+    """A janela mais à frente que contém o ponto (a lista já vem da frente para trás)."""
+    for j in lista:
+        esq, topo, dir_, base = j["rect"]
+        if esq <= x < dir_ and topo <= y < base:
+            return j
+    return None
+
+
+def listar(area=None):
+    """Janelas visíveis de verdade, da frente para trás. `area` filtra pelo monitor."""
+    achadas = []
+
+    def cb(hwnd, _):
+        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+            return True
+        if not user32.GetWindowTextLengthW(hwnd) or oculta(hwnd):
+            return True
+        if user32.GetWindowLongW(hwnd, -20) & WS_EX_TOOLWINDOW:
+            return True
+        j = descrever(hwnd)
+        esq, topo, dir_, base = j["rect"]
+        if dir_ - esq < 200 or base - topo < 150 or j["exe"] in IGNORAR:
+            return True
+        if area:
+            cx, cy = (esq + dir_) / 2, (topo + base) / 2
+            if not (area[0] <= cx < area[2] and area[1] <= cy < area[3]):
+                return True
+        achadas.append(j)
+        return True
+
+    user32.EnumWindows(ENUM(cb), 0)
+    return achadas

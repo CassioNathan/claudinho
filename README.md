@@ -45,6 +45,9 @@ terminam e solta piadas sobre o que está na tela.
   código morto, reunião que podia ser e-mail, bug que vira borboleta e malhação. Piadas e esquetes
   dividem o mesmo tempo (uma fila só, cerca de 1 em 3 vezes é esquete); clicar, arrastar ou chegar algo
   importante interrompe a esquete na hora.
+- **YouTube Music 🎵:** no chat ("toca Helena do MCR", "bota um Trivium") ou no painel, ele acha a música
+  (ytmusicapi, sem login) e abre no seu navegador já tocando, num rádio que segue com parecidas. Pausa o que
+  estava tocando antes. Play/pausa/próxima/anterior continuam pelos controles de mídia do Windows.
 - **Mini cérebro 🧠:** cada aviso do Claude Code (pedido + resultado) e cada troca do chat viram lembrança no
   SQLite, com busca de texto local (FTS5). Ao perguntar algo parecido com o que já rolou, até 3 lembranças curtas
   (~250 tokens) vão junto; sem nada parecido, não vai nada. Guardar e buscar não usa IA nenhuma. Liga/desliga no painel.

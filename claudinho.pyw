@@ -131,7 +131,9 @@ PROMPT_SISTEMA = (
     "bing|duckduckgo]` ou `python abrir.py programa <nome>` (navegador, chrome, edge, opera, intellij, "
     "vscode, discord, whatsapp, postman, docker, spotify). Para a MÚSICA que ele está ouvindo use "
     "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
-    "sem confirmação. Um comando por vez, sem && nem |. "
+    "sem confirmação. Para TOCAR UMA MÚSICA ou um ARTISTA que ele pedir, use `python musica.py buscar "
+    "\"<música e artista>\"` ou `python musica.py artista \"<artista>\"`: toca no YouTube Music dele e segue "
+    "num rádio parecido. Um comando por vez, sem && nem |. "
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
 
@@ -372,7 +374,8 @@ JOB_FILHOS = _criar_job()
 
 # o ajudante, sozinho, sem encadear nada (&&, |, ;, redirecionamento, subcomando)
 AJUDANTE = re.compile(r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
-                      r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior))")
+                      r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior"
+                      r"|(?:buscar|artista) [^&|;<>`$\r\n]+))")
 # tentativas de abrir coisa por fora do ajudante
 ABRIR_NA_MAO = re.compile(r"(?i)(?:cmd(?:\.exe)?\s+/c\s+)?(?:start|start-process|explorer(?:\.exe)?|invoke-item)\b")
 
@@ -1640,6 +1643,16 @@ class Claudinho:
 
         threading.Thread(target=trabalho, daemon=True).start()
 
+    def tocar_no_youtube_music(self, termo):
+        """Busca e toca no YouTube Music (em thread: a busca leva ~2 s) e conta o que achou."""
+        def trabalho():
+            try:
+                m = musica.tocar_no_youtube_music(termo)
+            except Exception:
+                m = None
+            self.eventos.put(("musica_pedida", termo, m))  # a fila de falas é do laço principal
+        threading.Thread(target=trabalho, daemon=True).start()
+
     def itens_musica(self):
         m = self.musica if self.cfg["ver_musica"] else None
         if not m:
@@ -1755,6 +1768,10 @@ class Claudinho:
             escolhida = acao.split(":", 1)[1] if ":" in acao else ""
             # começa assim que ele estiver livre ("qualquer" = sorteia)
             self.esquete_forcada = escolhida if escolhida in esquetes.ESQUETES else "qualquer"
+        elif acao.startswith("musica_buscar:"):  # painel: "toca isso aqui" no YouTube Music
+            termo = acao.split(":", 1)[1].strip()[:150]
+            if termo:
+                self.tocar_no_youtube_music(termo)
         elif acao == "venda":
             self.aplicar_cfg("vendado", not self.cfg["vendado"])
         elif acao == "painel":
@@ -2715,6 +2732,14 @@ class Claudinho:
                 self.acao_menu(ev[1])
             elif ev[0] == "painel_cfg":
                 self.aplicar_cfg(ev[1], ev[2])
+            elif ev[0] == "musica_pedida":
+                _, termo, m = ev
+                if m:
+                    self.comentar(f"🎵 Bora: {m['titulo']} - {m['artista']}. Depois segue num rádio parecido.",
+                                  duracao=5, prioridade=ESTADO)
+                    self.soltar_emoji("nota")
+                else:
+                    self.comentar(f"Não achei \"{termo}\" no YouTube Music. 🤔", duracao=5, prioridade=ESTADO)
             elif ev[0] == "notificacoes":
                 self.lendo_notificacoes = False
                 _, resumo, ids, erro = ev

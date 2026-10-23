@@ -8,9 +8,16 @@ Também é um ajudante limitado do chat, que roda sem confirmação:
     python musica.py alternar     pausa/toca
     python musica.py proxima      pula pra próxima
     python musica.py anterior     volta pra anterior
+    python musica.py buscar "<música e/ou artista>"   toca no YouTube Music (e segue num rádio parecido)
+    python musica.py artista "<artista>"              toca o mais ouvido do artista (e segue no rádio dele)
+
+Buscar e tocar usa o YouTube Music sem login (ytmusicapi) só pra achar a música; quem toca é o seu
+navegador, logado na sua conta. Antes de abrir, pausa o que estiver tocando pra não sair duas músicas.
 """
 import asyncio
 import sys
+import time
+import webbrowser
 from pathlib import Path
 
 from winrt.windows.media.control import (
@@ -69,6 +76,46 @@ def controlar(acao):
         return False
 
 
+def buscar(termo, artista=False):
+    """A música que o YouTube Music acha pro termo: {'id', 'titulo', 'artista'} ou None.
+    Com `artista=True`, o termo é um artista: pega a música mais ouvida dele."""
+    from ytmusicapi import YTMusic  # só carrega quando precisa (é mais pesadinho)
+    yt = YTMusic()
+    if artista:
+        achados = yt.search(termo, filter="artists", limit=1)
+        if achados:
+            dados = yt.get_artist(achados[0]["browseId"])
+            musicas = (dados.get("songs") or {}).get("results") or []
+            if musicas:
+                m = musicas[0]
+                return {"id": m["videoId"], "titulo": m["title"],
+                        "artista": ", ".join(a["name"] for a in m.get("artists") or []) or dados.get("name", "")}
+    for m in yt.search(termo, filter="songs", limit=5):
+        if m.get("videoId"):
+            return {"id": m["videoId"], "titulo": m["title"],
+                    "artista": ", ".join(a["name"] for a in m.get("artists") or [])}
+    return None
+
+
+def tocar_no_youtube_music(termo, artista=False):
+    """Acha e abre no YouTube Music, já tocando, num rádio a partir da música. Devolve a música ou None."""
+    m = buscar(termo, artista)
+    if not m:
+        return None
+    atual = tocando()
+    if atual and atual["tocando"]:
+        controlar("pausar")  # pra não ficar a música velha e a nova juntas
+        time.sleep(0.3)
+    # list=RDAMVM<id>: rádio do YouTube Music começando por essa música (vai emendando parecidas)
+    url = f"https://music.youtube.com/watch?v={m['id']}&list=RDAMVM{m['id']}"
+    try:
+        import abrir  # abre no navegador padrão e traz a janela pra frente
+        abrir.abrir_site(url)
+    except Exception:
+        webbrowser.open(url)
+    return m
+
+
 def descrever(m):
     if not m:
         return "nada tocando agora"
@@ -84,8 +131,17 @@ def main():
         if not controlar(acao):
             sys.exit("não consegui: nenhum player aberto ou ele não aceita esse comando")
         print(f"feito: {acao}")
+    elif acao in ("buscar", "artista"):
+        termo = " ".join(sys.argv[2:]).strip().strip('"')
+        if not termo:
+            sys.exit(f'uso: python musica.py {acao} "<termo>"')
+        m = tocar_no_youtube_music(termo, artista=acao == "artista")
+        if not m:
+            sys.exit(f"não achei nada no YouTube Music pra: {termo}")
+        print(f"tocando no YouTube Music: {m['titulo']} - {m['artista']} (depois segue num rádio parecido)")
     else:
-        sys.exit(f"recusado: ação '{acao}' não existe (tocando, pausar, tocar, alternar, proxima, anterior)")
+        sys.exit(f"recusado: ação '{acao}' não existe "
+                 "(tocando, pausar, tocar, alternar, proxima, anterior, buscar, artista)")
 
 
 if __name__ == "__main__":

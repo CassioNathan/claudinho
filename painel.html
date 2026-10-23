@@ -274,6 +274,15 @@
         <label class="chave"><input type="checkbox" data-cfg="ver_musica"><span></span></label>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Tocar no YouTube Music</div><div class="desc">Música, artista ou os dois. Toca no seu
+          navegador e depois segue num rádio parecido. (No chat também dá: "toca Helena do MCR".)</div></div>
+        <form id="formMusica" style="display:flex;gap:8px">
+          <input id="termoMusica" placeholder="ex.: Helena My Chemical Romance" autocomplete="off"
+                 style="background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;width:250px;font:13px Inter,'Segoe UI',sans-serif">
+          <button class="botao principal">▶ Tocar</button>
+        </form>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Fica emo quando toca rock 🖤</div><div class="desc">Veste o pacote emo por cima da skin por uns 45 s e solta um desabafo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emo_rock"><span></span></label>
       </div>
@@ -530,6 +539,12 @@ function atualizarVivos() {
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");
 }
 
+document.getElementById("formMusica").onsubmit = ev => {
+  ev.preventDefault();
+  const campo = document.getElementById("termoMusica");
+  if (campo.value.trim()) acao("musica_buscar:" + campo.value.trim(), "procurando… 🎵");
+  campo.value = "";
+};
 document.getElementById("sortear").onclick = () => {
   const novo = {cor: cat.cores[Math.floor(Math.random() * cat.cores.length)].id};
   for (const e of cat.espacos) {

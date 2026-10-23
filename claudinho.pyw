@@ -711,7 +711,13 @@ class Balao:
                                   border_width=2, border_color=LARANJA)
         self.frame.pack(pady=(0, self.CAUDA_H))
 
-        if titulo:
+        if entrada:  # conversa: nome dele e, do lado, o link pra abrir a conversa inteira numa janela maior
+            topo = ctk.CTkFrame(self.frame, fg_color=FUNDO, height=18)
+            topo.pack(fill="x", padx=(16, 42 if len(self.paginas) > 1 else 16), pady=(10, 0))
+            ctk.CTkLabel(topo, text=titulo or "claudinho", font=f(12, "bold"), text_color=LARANJA,
+                         anchor="w", height=18).pack(side="left")
+            self.link(topo, "ver conversa", app.ver_conversa).pack(side="right")
+        elif titulo:
             ctk.CTkLabel(self.frame, text=titulo, font=f(12, "bold"), text_color=LARANJA,
                          anchor="w", height=18).pack(fill="x", padx=16, pady=(10, 0))
         # conversa = última resposta (se tiver) + campo de texto embaixo, tudo no mesmo balão
@@ -722,7 +728,7 @@ class Balao:
                                       anchor="w", text_color=TEXTO, font=f(13))
             margem_dir = 42 if len(self.paginas) > 1 else 16  # espaço pro ✕ no canto
             self.texto.pack(fill="x", padx=(16, margem_dir),
-                            pady=(2 if titulo else 10, 2 if tem_rodape or entrada else 10))
+                            pady=(2 if titulo or entrada else 10, 2 if tem_rodape or entrada else 10))
         self.rodape = None
         if rodape is not None or len(self.paginas) > 1:
             self.rodape = ctk.CTkLabel(self.frame, text="", font=f(11), text_color=APAGADO,
@@ -730,11 +736,15 @@ class Balao:
             self.rodape.pack(fill="x", padx=16, pady=(0, 2 if entrada else 10))
             self.desenhar_rodape()
         if entrada:
+            # anexar um print da janela que você está usando à próxima mensagem
+            self.link_print = self.link(self.frame, "", app.alternar_print, anchor="w")
+            self.link_print.pack(fill="x", padx=16, pady=(4, 0))
+            self.mostrar_print(app.print_anexado)
             self.entry = ctk.CTkEntry(self.frame, width=340 if texto else 280, height=34, corner_radius=10,
                                       border_width=0, fg_color=FUNDO2, text_color=TEXTO,
                                       placeholder_text="responde aqui…" if texto else "pergunta pro claudinho…",
                                       placeholder_text_color=APAGADO, font=f(13))
-            self.entry.pack(padx=10, pady=10)
+            self.entry.pack(padx=10, pady=(4, 10))
         self.botoes = botoes or []
         self.linha_botoes = None
         self.botoes_no_hover = botoes_no_hover
@@ -768,6 +778,19 @@ class Balao:
         self.win.update_idletasks()
         self.posicionar()
         self.win.after(160, self.aparecer)
+
+    def link(self, pai, texto, acao, **kw):
+        """Textinho clicável (o clique não chega no balão, então não passa página)."""
+        rotulo = tk.Label(pai, text=texto, bg=FUNDO, fg=APAGADO, font=("Segoe UI", 9, "underline"),
+                          cursor="hand2", **kw)
+        rotulo.bind("<Button-1>", lambda e: (acao(), "break")[1])
+        rotulo.bind("<Enter>", lambda e: rotulo.configure(fg=LARANJA), add="+")
+        rotulo.bind("<Leave>", lambda e: rotulo.configure(fg=APAGADO), add="+")
+        return rotulo
+
+    def mostrar_print(self, anexado):
+        self.link_print.configure(text=f"📷 print anexado ({anexado['nome']}) · tirar" if anexado
+                                  else "📷 adicionar print da tela")
 
     def mouse_entrou(self, e):
         self.hover = True
@@ -881,6 +904,8 @@ class Claudinho:
         # piadas e notas, avisos do dia e conversa ficam no SQLite (memoria.py)
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
+        self.print_anexado = None  # {"imagem": bloco, "nome": ...} que vai junto da próxima mensagem
+        self.janela_conversa = None
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
         self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
@@ -1583,10 +1608,33 @@ class Claudinho:
     def ultima_resposta(self):
         return self.mem.ultima_resposta()
 
-    def fechar_conversa(self):
+    def fechar_conversa(self, manter_print=False):
         if self.entrada:
             self.entrada.destruir()
             self.entrada = None
+        if not manter_print:  # desistiu da mensagem: o print vai junto
+            self.print_anexado = None
+
+    def alternar_print(self):
+        """Link do balão de conversa: anexa (ou tira) um print da janela que você está usando."""
+        if self.print_anexado:
+            self.print_anexado = None
+        elif self.cfg["vendado"]:  # faixa nos olhos: nada de print, nem pedido
+            self.entrada.link_print.configure(text="🙈 tô vendado, sem print (Win+Shift+Y tira a faixa)")
+            return
+        else:
+            # o balão some um instante pra não sair no print
+            self.entrada.win.attributes("-alpha", 0.0)
+            self.entrada.win.update()
+            try:
+                img, nome = self.print_da_frente()
+            finally:
+                self.entrada.win.attributes("-alpha", 1.0)
+            self.print_anexado = {"imagem": em_jpeg(img, qualidade=85), "nome": nome}
+        self.entrada.mostrar_print(self.print_anexado)
+        self.entrada.win.update_idletasks()
+        self.entrada.posicionar()
+        self.entrada.entry.focus_set()
 
     def alternar_entrada(self):
         if self.entrada:
@@ -1599,7 +1647,7 @@ class Claudinho:
     def abrir_conversa(self, texto, por_clique=False):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
         rascunho = self.entrada.entry.get() if self.entrada else ""
-        self.fechar_conversa()
+        self.fechar_conversa(manter_print=True)  # reabrir o balão não perde o rascunho nem o print
         if self.balao and self.balao.tipo not in ("pensando", "comentario"):
             self.falas.appendleft(self.balao.dados)  # volta para a fila, mostra depois
         self.fechar_balao()
@@ -1623,6 +1671,7 @@ class Claudinho:
             self.entrada.entry.delete(0, "end")
             self.entrada.entry.configure(placeholder_text="calma, ainda tô pensando na outra…")
             return
+        anexado = self.print_anexado
         self.fechar_conversa()
         # agora o Claudinho está em primeiro plano (você acabou de digitar nele): libera a próxima
         # janela que ele abrir (navegador, programa) pra vir pra frente em vez de abrir escondida
@@ -1637,12 +1686,15 @@ class Claudinho:
             fim = "\n".join(f"{'Eu' if q == 'eu' else 'Você'}: {t[:200]}" for q, t in self.mem.fim_da_conversa(anterior))
             if fim:
                 pergunta += f"\n\n(Fim da nossa conversa anterior, só pra continuidade:\n{fim})"
-        self.mem.registrar_mensagem("eu", texto)
+        self.mem.registrar_mensagem("eu", f"[print: {anexado['nome']}] {texto}" if anexado else texto)
         self.ocupado = True
+        if anexado:
+            pergunta = f"(Junto vai um print da janela que estou usando: {anexado['nome']}.)\n\n" + pergunta
         pergunta += self.contexto_das_falas()  # continuidade: ele lembra da piada/aviso que acabou de mostrar
         if self.musica:  # contexto que ele vê mas não precisa comentar
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
-        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pergunta))),
+        imagem = anexado["imagem"] if anexado else None
+        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pergunta, imagem))),
                          daemon=True).start()
 
     def nova_conversa(self):
@@ -1651,6 +1703,50 @@ class Claudinho:
             self.chat.nova_conversa()
             self.falas.appendleft({"tipo": "comentario", "texto": "Conversa nova! Pode mandar.",
                                    "duracao": 3})
+
+    def ver_conversa(self):
+        """Janela maior com a conversa inteira (as últimas conversas também), rolável."""
+        try:
+            if self.janela_conversa and self.janela_conversa.winfo_exists():
+                self.encher_conversa()
+                self.janela_conversa.lift()
+                self.janela_conversa.focus_force()
+                return
+        except tk.TclError:
+            pass
+        win = self.janela_conversa = ctk.CTkToplevel(self.root, fg_color=FUNDO)
+        win.title("Conversa com o Claudinho")
+        win.attributes("-topmost", True)
+        _, (esq, topo, dir_, base), _ = monitor(int(self.x) + self.W // 2, int(self.y) + self.H // 2)
+        w, h = 560, min(680, base - topo - 80)
+        win.geometry(f"{w}x{h}+{(esq + dir_ - w) // 2}+{(topo + base - h) // 2}")
+        caixa = self.caixa_conversa = ctk.CTkTextbox(win, fg_color=FUNDO, text_color=TEXTO, wrap="word",
+                                                     font=ctk.CTkFont("Segoe UI", 13), border_width=0)
+        caixa.pack(fill="both", expand=True, padx=12, pady=12)
+        caixa.tag_config("eu", foreground=APAGADO)
+        caixa.tag_config("claudinho", foreground=LARANJA)
+        caixa.tag_config("separador", foreground=APAGADO, justify="center")
+        self.encher_conversa()
+        fora_da_barra(win)
+        win.after(100, win.focus_force)
+
+    def encher_conversa(self):
+        caixa = self.caixa_conversa
+        caixa.configure(state="normal")
+        caixa.delete("1.0", "end")
+        numero = None
+        for m in self.mem.historico():
+            if m["numero"] != numero:
+                if numero is not None:
+                    caixa.insert("end", f"\n— conversa nova · {m['criado_em'][:16]} —\n\n", "separador")
+                numero = m["numero"]
+            quem = "você" if m["quem"] == "eu" else "claudinho"
+            caixa.insert("end", f"{quem}  {m['criado_em'][11:16]}\n", "eu" if m["quem"] == "eu" else "claudinho")
+            caixa.insert("end", re.sub(r"\*\*|`", "", m["texto"]).strip() + "\n\n")
+        if numero is None:
+            caixa.insert("end", "Ainda não conversamos. Clica em mim e manda uma!", "separador")
+        caixa.configure(state="disabled")
+        caixa.see("end")
 
     # ---------- comentários sobre a tela ----------
     def acompanhar_app_ativo(self):
@@ -1703,6 +1799,28 @@ class Claudinho:
         return ("Algumas coisas que ele pediu pro Claude Code hoje (contexto opcional; só use se combinar "
                 "muito com a tela, e não conte quantas tarefas foram):\n" + "\n".join(linhas))
 
+    def print_da_frente(self):
+        """Print da janela que você está usando (a mais à frente que não é do Claudinho) -> (imagem, nome).
+        Quem chama confere a faixa nos olhos antes."""
+        janela = janelas.janela_ativa()
+        nossas = {int(w.wm_frame(), 16) for w in (self.root,) + ((self.entrada.win,) if self.entrada else ())}
+        if not janela or janela["hwnd"] in nossas or janela["exe"] in janelas.IGNORAR \
+                or janela["rect"][2] - janela["rect"][0] <= 200:
+            # o foco está no Claudinho (você clicou nele): pega a primeira janela de verdade atrás
+            janela = next(iter(janelas.listar()), None)
+        if janela:
+            esq, topo, dir_, base = janela["rect"]
+            _, area_mon, total = monitor((esq + dir_) / 2, (topo + base) / 2)
+            caixa = (max(esq, total[0]), max(topo, total[1]), min(dir_, total[2]), min(base, total[3]))
+            nome = frases.NOMES.get(frases.categoria(janela), janela["exe"].replace(".exe", ""))
+        else:  # sem janela útil: o monitor do mouse inteiro
+            _, _, caixa = monitor(*cursor())
+            nome = "tela"
+        img = ImageGrab.grab(bbox=caixa, all_screens=True)
+        if img.width > 1800:  # texto precisa de resolução: reduz só se for muito grande
+            img = img.resize((1800, round(img.height * 1800 / img.width)))
+        return img, nome
+
     def resumir_tela(self):
         """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
         A resposta cai no balão de conversa, então dá pra continuar perguntando sobre o mesmo print."""
@@ -1712,20 +1830,7 @@ class Claudinho:
         if self.ocupado:
             self.comentar("Calma, ainda tô pensando na outra…", duracao=3)
             return
-        janela = janelas.janela_ativa()
-        nossas = {int(w.wm_frame(), 16) for w in (self.root,) + ((self.entrada.win,) if self.entrada else ())}
-        if (janela and janela["hwnd"] not in nossas and janela["exe"] not in janelas.IGNORAR
-                and janela["rect"][2] - janela["rect"][0] > 200):
-            esq, topo, dir_, base = janela["rect"]
-            _, area_mon, total = monitor((esq + dir_) / 2, (topo + base) / 2)
-            caixa = (max(esq, total[0]), max(topo, total[1]), min(dir_, total[2]), min(base, total[3]))
-            nome = frases.NOMES.get(frases.categoria(janela), janela["exe"].replace(".exe", ""))
-        else:  # sem janela útil na frente: o monitor do mouse inteiro
-            _, _, caixa = monitor(*cursor())
-            nome = "tela"
-        img = ImageGrab.grab(bbox=caixa, all_screens=True)
-        if img.width > 1800:  # texto precisa de resolução: reduz só se for muito grande
-            img = img.resize((1800, round(img.height * 1800 / img.width)))
+        img, nome = self.print_da_frente()
         pedido = ("Este é um print da janela que estou vendo agora (" + nome + "). Me explica o que tem nela "
                   "de forma BEM simplificada: se for um texto longo, resume em poucos tópicos curtos e fáceis; "
                   "se for código ou erro, diz o que é e o que fazer; se for outra coisa, explica em 2-3 frases. "
@@ -1964,6 +2069,11 @@ class Claudinho:
                 texto = f"⚠ {erro}" if erro else re.sub(r"\*\*|`", "", resposta)
                 if not erro:
                     self.mem.registrar_mensagem("claudinho", resposta)
+                    try:  # janela da conversa aberta: já mostra a resposta nova
+                        if self.janela_conversa and self.janela_conversa.winfo_exists():
+                            self.encher_conversa()
+                    except tk.TclError:
+                        pass
                 self.fechar_balao()  # tira o "pensando…"
                 self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
             elif ev[0] == "comentario":

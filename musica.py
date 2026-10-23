@@ -31,6 +31,8 @@ import time
 import webbrowser
 from pathlib import Path
 
+import sistema
+
 from winrt.windows.media.control import (
     GlobalSystemMediaTransportControlsSessionManager as Gerenciador,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
@@ -117,7 +119,7 @@ def pela_extensao(site, comando):
     import json
     import urllib.request
     try:
-        chave = (Path.home() / ".claudinho/ext_token").read_text(encoding="utf-8").strip()
+        chave = (sistema.DADOS / "ext_token").read_text(encoding="utf-8").strip()
         pedido = urllib.request.Request(
             "http://127.0.0.1:47821/ext/enviar", data=json.dumps({"site": site, "comando": comando}).encode(),
             headers={"Content-Type": "application/json", "X-Claudinho-Ext": chave})

@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .claude/
 extensao/config.js
+build/
+dist/
+release/

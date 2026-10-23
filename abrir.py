@@ -16,6 +16,8 @@ import sys
 import time
 import winreg
 from pathlib import Path
+
+import sistema
 from urllib.parse import quote_plus, urlparse
 
 import janelas
@@ -61,7 +63,7 @@ PASTAS_ATALHOS = [
 
 def liberados():
     try:
-        cfg = json.loads((Path.home() / ".claudinho/config.json").read_text(encoding="utf-8"))
+        cfg = json.loads((sistema.DADOS / "config.json").read_text(encoding="utf-8"))
         nomes = cfg.get("programas_liberados")
     except Exception:
         nomes = None

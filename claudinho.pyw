@@ -46,10 +46,11 @@ import skins
 import memoria
 import musica
 import notificacoes
+import sistema
 
 PORTA = 47821
 MAX_PERGUNTAS_CONVERSA = 30  # depois disso (ou no dia seguinte) o chat começa uma conversa nova
-DADOS = Path.home() / ".claudinho"
+DADOS = sistema.DADOS  # ~/.claudinho (cada pessoa tem o seu)
 CONFIG = DADOS / "config.json"  # o resto (piadas, notas, avisos, conversa) fica no claudinho.db
 
 CONFIG_PADRAO = {
@@ -76,7 +77,8 @@ CONFIG_PADRAO = {
     "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
     "atalho_notificacoes": "Win+Shift+N",  # atalho global: resume as notificações do Windows
     # onde o chat lê arquivos sem perguntar; fora daqui (e qualquer comando ou edição) pede confirmação
-    "pastas_leitura": ["D:\\Projetos", "E:\\Stompdesk Projeto"],
+    "pastas_leitura": [],
+    "mestre": {"nome": "", "sobre": ""},  # "Meu Mestre" no painel: quem usa o Claudinho (vira o CLAUDE.md do chat)
 }
 
 FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 30)]
@@ -86,7 +88,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
-                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade"]
+                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -364,12 +366,59 @@ def gravar_json(caminho, dados):
 
 
 def carregar_config():
-    cfg = dict(CONFIG_PADRAO, **ler_json(CONFIG, {}))
+    salvo = ler_json(CONFIG, {})
+    if "mestre" not in salvo:  # versões antigas: o perfil era um CLAUDE.md escrito à mão; vira o "Meu Mestre"
+        salvo["mestre"] = mestre_do_perfil_antigo()
+    cfg = dict(CONFIG_PADRAO, **salvo)
     cfg["visual"] = skins.visual_valido(cfg.get("visual"))
     if cfg["atalho_comentar"] == "Ctrl+Shift+Alt+C":  # padrão antigo, complicado demais
         cfg["atalho_comentar"] = CONFIG_PADRAO["atalho_comentar"]
     gravar_json(CONFIG, cfg)
+    escrever_perfil(cfg["mestre"])
     return cfg
+
+
+_CLAUDE = {"tem": None, "visto": 0.0}
+SEM_CLAUDE = ("Pra isso eu preciso do Claude Code instalado e logado (comando `claude`). "
+              "Sem ele eu sigo com o banco de frases, música, esquetes e o resto. 😉")
+
+
+def tem_claude():
+    """O Claude Code está instalado? (confere de novo a cada minuto: dá pra instalar com ele aberto)"""
+    if time.time() - _CLAUDE["visto"] > 60:
+        _CLAUDE.update(tem=sistema.claude_instalado(), visto=time.time())
+    return _CLAUDE["tem"]
+
+
+def mestre_do_perfil_antigo():
+    try:
+        texto = (DADOS / "CLAUDE.md").read_text(encoding="utf-8")
+    except OSError:
+        return {"nome": "", "sobre": ""}
+    if texto.startswith("# Meu mestre") or texto.strip() == sistema.PERFIL_MODELO.strip():
+        return {"nome": "", "sobre": ""}
+    nome = re.search(r"perfil d[oa] ([^)\n]+)\)", texto)
+    linhas = [l for l in texto.splitlines()
+              if not l.startswith("# ") and not l.startswith("Este arquivo é o perfil")]
+    return {"nome": nome.group(1).strip() if nome else "", "sobre": "\n".join(linhas).strip()[:4000]}
+
+
+def texto_do_mestre(mestre):
+    """Quem é o "mestre" (quem usa o Claudinho), do jeito que vai pro chat e pras piadas.
+    Sem nome: ele não chama ninguém por nome (e não inventa um)."""
+    nome, sobre = (mestre.get("nome") or "").strip(), (mestre.get("sobre") or "").strip()
+    linhas = [f"Nome: {nome}. Chame ele assim de vez em quando." if nome else
+              "O nome dele não foi informado: não chame ele por nome nenhum e não invente um nome."]
+    if sobre:
+        linhas.append("Sobre ele:\n" + sobre)
+    return "\n".join(linhas)
+
+
+def escrever_perfil(mestre):
+    """O CLAUDE.md da pasta do chat (o Claude Code lê sozinho) sai do "Meu Mestre" do painel."""
+    DADOS.mkdir(parents=True, exist_ok=True)
+    (DADOS / "CLAUDE.md").write_text("# Meu mestre (quem usa o Claudinho)\n\n" + texto_do_mestre(mestre) + "\n",
+                                     encoding="utf-8")
 
 
 # ---------------- Claude ----------------
@@ -434,9 +483,17 @@ JOB_FILHOS = _criar_job()
 
 
 # o ajudante, sozinho, sem encadear nada (&&, |, ;, redirecionamento, subcomando)
+def ajudantes(texto):
+    """Empacotado não tem Python: "python abrir.py" vira "sh abrir.sh" (que chama o claudinho-cli.exe)."""
+    if not sistema.EMPACOTADO:
+        return texto
+    return texto.replace("python abrir.py", "sh abrir.sh").replace("python musica.py", "sh musica.sh")
+
+
 AJUDANTE = re.compile(
-    r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
-    r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior|curtir|curtidas"
+    r"(?:python3? (?:\./)?(?=\w+\.py)|sh (?:\./)?(?=\w+\.sh))"
+    r"(?:abrir\.(?:py|sh) (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
+    r"|musica\.(?:py|sh) (?:tocando|pausar|tocar|alternar|proxima|anterior|curtir|curtidas"
     r"|(?:buscar|artista|youtube|banda|videos) [^&|;<>`$\r\n]+"
     r"|(?:tocar_id|assistir) [\"']?[A-Za-z0-9_-]{6,20}[\"']?"
     r"|player (?:pausar|tocar|proxima|anterior|aleatorio|repetir|volume \d{1,3})"
@@ -467,19 +524,24 @@ class ChatClaude:
     def abrir(self):
         exe = shutil.which("claude")
         if not exe:
-            raise RuntimeError("Não achei o comando `claude` no PATH.")
+            raise RuntimeError(SEM_CLAUDE)
         DADOS.mkdir(exist_ok=True)
-        # o ajudante limitado mora na pasta do chat, então o comando é sempre "python abrir.py ..."
-        # ajudantes limitados (o abrir.py usa o janelas.py pra trazer a janela pra frente)
-        for arquivo in ("abrir.py", "janelas.py", "musica.py"):
-            shutil.copy(Path(__file__).with_name(arquivo), DADOS / arquivo)
+        # os ajudantes limitados moram na pasta do chat ("python abrir.py …"; empacotado, "sh abrir.sh …",
+        # um scriptzinho que chama o claudinho-cli.exe — assim ninguém precisa ter Python instalado)
+        if sistema.EMPACOTADO:
+            cli = (sistema.PASTA_APP / "claudinho-cli.exe").as_posix()
+            for nome in ("abrir", "musica"):
+                (DADOS / f"{nome}.sh").write_text(f'#!/bin/sh\nexec "{cli}" {nome} "$@"\n', encoding="utf-8")
+        else:
+            for arquivo in ("abrir.py", "janelas.py", "musica.py", "sistema.py"):
+                shutil.copy(sistema.BASE / arquivo, DADOS / arquivo)
         cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                "--model", "haiku", "--effort", "low",  # rápido: Haiku com pensamento leve
-               "--append-system-prompt", PROMPT_SISTEMA + PERSONALIDADES_CHAT.get(self.personalidade, ""),
+               "--append-system-prompt", ajudantes(PROMPT_SISTEMA + PERSONALIDADES_CHAT.get(self.personalidade, "")),
                "--strict-mcp-config", "--disable-slash-commands",
                "--permission-mode", "default", "--permission-prompt-tool", "stdio",
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
-               "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)",
+               "--allowedTools", ajudantes("WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)"),
                # só as ferramentas que o chat usa: a definição das outras pesava ~7 mil tokens por mensagem
                "--tools", "Bash,Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]
         if self.pastas:  # dentro delas, ler arquivo não pede confirmação
@@ -556,7 +618,7 @@ class ChatClaude:
             if comando and AJUDANTE.fullmatch(comando):
                 decisao = {"behavior": "allow", "updatedInput": entrada}
             elif comando and ABRIR_NA_MAO.match(comando):
-                decisao = {"behavior": "deny", "message": (
+                decisao = {"behavior": "deny", "message": ajudantes(
                     "Para abrir site, pesquisa ou programa use o ajudante, que roda sem confirmação: "
                     "python abrir.py site <url> | python abrir.py pesquisa \"<termo>\" [youtube] | "
                     "python abrir.py programa <nome>. Tente de novo assim.")}
@@ -638,14 +700,10 @@ def trechos_marcantes(palavras):
             if sum(p not in PALAVRAS_COMUNS and len(p) > 2 for p in t) >= 2}
 
 
-def perfil_curto():
-    """Quem é o usuário, do ~/.claudinho/CLAUDE.md (o chat carrega o arquivo sozinho; as piadas
-    rodam no modo enxuto, então vai junto no texto)."""
-    try:
-        texto = (DADOS / "CLAUDE.md").read_text(encoding="utf-8")
-    except OSError:
-        return ""
-    return "\nQuem é o usuário (use pra piada ficar pessoal):\n" + texto[:1800]
+def perfil_curto(mestre):
+    """Quem é o usuário (o "Meu Mestre" do painel). O chat lê o CLAUDE.md sozinho; as piadas rodam no
+    modo enxuto, então vai junto no texto."""
+    return "\nQuem é o usuário (use pra piada ficar pessoal):\n" + texto_do_mestre(mestre)[:1800]
 
 
 def em_jpeg(img, qualidade=80):
@@ -879,7 +937,7 @@ def montar_extensao():
     """Copia a extensão pra ~/.claudinho/extensao com a chave e o ícone (é essa pasta que o navegador carrega)."""
     destino = DADOS / "extensao"
     destino.mkdir(parents=True, exist_ok=True)
-    for arquivo in Path(__file__).with_name("extensao").iterdir():
+    for arquivo in (sistema.BASE / "extensao").iterdir():
         shutil.copy(arquivo, destino / arquivo.name)
     (destino / "config.js").write_text(
         f"self.CLAUDINHO = {json.dumps({'porta': PORTA, 'token': EXT_TOKEN})};\n", encoding="utf-8")
@@ -891,8 +949,7 @@ def extensao_conectada():
     return time.time() - EXT["visto"] < 5
 
 
-PAGINAS = {"/painel": Path(__file__).with_name("painel.html"),
-           "/conversa": Path(__file__).with_name("conversa.html")}
+PAGINAS = {"/painel": sistema.BASE / "painel.html", "/conversa": sistema.BASE / "conversa.html"}
 
 
 def iniciar_servidor(eventos):
@@ -1241,6 +1298,7 @@ class Claudinho:
         global APP
         APP = self  # o servidor local lê o estado pro painel
         self.eventos = eventos
+        self.primeira_vez = not CONFIG.exists()  # nunca rodou neste PC (ou nesta pasta de dados)
         self.cfg = carregar_config()
         # piadas e notas, avisos do dia e conversa ficam no SQLite (memoria.py)
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
@@ -1288,6 +1346,8 @@ class Claudinho:
                                 highlightthickness=0, cursor="hand2")
         self.canvas.pack()
         self.ultimo_quadro = None  # pra só redesenhar quando muda
+        if self.primeira_vez:
+            self.root.after(2500, self.boas_vindas)
 
         _, (esq, topo, dir_, base), _ = monitor(*cursor())
         self.x, self.y = float(dir_ - self.W - 120), float(base - self.H)
@@ -1853,7 +1913,7 @@ class Claudinho:
 
     def e_rock(self, m):
         """A música é rock? Guarda a resposta por artista no banco: o Haiku só é chamado pra artista novo."""
-        if not self.cfg["emo_rock"] or not m.get("artista"):
+        if not self.cfg["emo_rock"] or not m.get("artista") or not tem_claude():
             return False
         generos = self.mem.meta("artistas_rock", {})
         artista = m["artista"].strip().lower()
@@ -1883,7 +1943,7 @@ class Claudinho:
         Em maldoso/TDAH bem menos, que nesses modos a zoeira é sobre a tela."""
         so_tela = self.cfg["modo_maldoso"] or self.cfg["modo_tdah"]
         if (not self.cfg["comentar_tela"] or self.comentando or self.ocupado or self.balao or self.entrada
-                or random.random() > (0.15 if so_tela else 0.45)):
+                or not tem_claude() or random.random() > (0.15 if so_tela else 0.45)):
             return
         self.comentando = True
         maldoso, recentes = self.cfg["modo_maldoso"], self.mem.piadas_recentes(8)
@@ -2032,6 +2092,12 @@ class Claudinho:
             self.abrir_painel()
         elif acao == "conversa":
             self.ver_conversa()
+        elif acao in ("inicio:1", "inicio:0", "aviso:1", "aviso:0"):
+            qual, ligar = acao.split(":")
+            try:
+                (sistema.abrir_com_windows if qual == "inicio" else sistema.ligar_aviso)(ligar == "1")
+            except Exception as e:
+                self.comentar(f"⚠ Não consegui: {e}", prioridade=IMPORTANTE)
         elif acao == "instalar_extensao":
             self.instalar_extensao()
         elif acao == "comentar_agora":
@@ -2073,6 +2139,8 @@ class Claudinho:
             valor = "horizontal" if valor == "horizontal" else "livre"
         elif chave == "personalidade":
             valor = "ultron" if valor == "ultron" else "claudinho"
+        elif chave == "mestre":
+            valor = {"nome": str(valor.get("nome") or "").strip()[:60], "sobre": str(valor.get("sobre") or "").strip()[:4000]}
         else:
             valor = bool(valor)
         if self.cfg.get(chave) == valor:
@@ -2082,6 +2150,12 @@ class Claudinho:
         if chave == "vendado":
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
                           else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
+        elif chave == "mestre":
+            escrever_perfil(valor)
+            self.chat.trocar_personalidade(self.cfg["personalidade"])  # o chat relê o perfil novo
+            nome = valor["nome"]
+            self.comentar(f"Prazer, {nome}! Agora eu sei quem manda aqui. 😎" if nome and nome != (antes or {}).get("nome")
+                          else "Anotado! Agora eu te conheço melhor.", duracao=4, prioridade=ESTADO)
         elif chave == "personalidade":
             self.chat.trocar_personalidade(valor)
             if valor == "ultron":
@@ -2128,6 +2202,8 @@ class Claudinho:
             "musica": musica.descrever(m) if m else None,
             "fila": len(self.falas),
             "lembrancas_total": self.mem.total_lembrancas(),
+            "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
+                        "claude": tem_claude(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
             "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
         }
 
@@ -2543,7 +2619,7 @@ class Claudinho:
         self.prox_comentario = time.time() + random.uniform(a, b) * 60
         if esquetes_ligadas and (not piadas or random.random() < 0.35):
             self.iniciar_esquete()
-        elif random.random() >= self.cfg["chance_haiku"]:
+        elif not tem_claude() or random.random() >= self.cfg["chance_haiku"]:
             _, _, area_total = self.area()
             self.comentar_do_banco(janelas.listar(area_total))
         else:
@@ -2599,6 +2675,9 @@ class Claudinho:
         """Menu ou atalho: lê a central de notificações, o Haiku resume e o balão oferece limpar."""
         if self.lendo_notificacoes:
             return
+        if not tem_claude():
+            self.comentar(SEM_CLAUDE, prioridade=IMPORTANTE)
+            return
         self.lendo_notificacoes = True
 
         def trabalho():
@@ -2619,6 +2698,9 @@ class Claudinho:
     def resumir_tela(self):
         """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
         A resposta cai no balão de conversa, então dá pra continuar perguntando sobre o mesmo print."""
+        if not tem_claude():
+            self.comentar(SEM_CLAUDE, prioridade=IMPORTANTE)
+            return
         if self.cfg["vendado"]:
             self.comentar("Tô vendado, não dá pra ler nada! Tira a faixa (Win+Shift+Y) que eu leio.", duracao=5,
                           prioridade=ESTADO)
@@ -2690,7 +2772,7 @@ class Claudinho:
         alvo, ponto = self.sortear_alvo(area_total)
         eu, retrato = tuple(int(v) for v in self.centro()), self.retrato()
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
-                    if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto()
+                    if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto(self.cfg["mestre"])
         if maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
             contexto += SO_O_QUE_ESTA_NA_TELA
         else:
@@ -3186,6 +3268,11 @@ class Claudinho:
                 texto, assunto = r
                 pid = self.lembrar_piada(texto, "haiku", assunto=assunto, alvo=alvo)
                 self.comentar(texto, {"origem": "haiku", "id": pid})
+
+    def boas_vindas(self):
+        self.comentar("Oi! Eu sou o Claudinho. 👋 Abri o painel pra você me conhecer: lá dá pra dizer quem você é, "
+                      "me vestir e escolher se eu abro junto com o Windows.", duracao=15, prioridade=IMPORTANTE)
+        self.abrir_janela_web("/painel?bemvindo=1", "Claudinho · Painel", 1040, 760)
 
     def rodar(self):
         if (DADOS / "extensao" / "manifest.json").exists():

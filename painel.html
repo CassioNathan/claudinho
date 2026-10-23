@@ -170,6 +170,10 @@
   .caminho { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
   .caminho code { background: #1a1918; border-radius: 8px; padding: 7px 10px; color: var(--texto); font: 12.5px Consolas, monospace;
                   flex: 1; overflow-x: auto; white-space: nowrap; }
+  .rotulo { display: block; font-weight: 600; margin-bottom: 6px; }
+  .campo { width: 100%; background: #232220; border: 1px solid #45443f; border-radius: 10px; color: var(--texto);
+           padding: 10px 12px; font: 13.5px/1.5 Inter, "Segoe UI", sans-serif; resize: vertical; }
+  .campo:focus { outline: none; border-color: var(--laranja); }
   .toast {
     position: fixed; right: 26px; bottom: 24px; background: #2f3b2f; color: #cdeccd; border: 1px solid #456b45;
     padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; opacity: 0; transform: translateY(8px);
@@ -188,6 +192,7 @@
     <div><h1>Claudinho</h1><small>configurações</small></div>
   </div>
   <nav id="nav">
+    <a data-alvo="mestre"><span class="ic">👑</span>Meu Mestre</a>
     <a data-alvo="visual"><span class="ic">🎨</span>Visual</a>
     <a data-alvo="movimento"><span class="ic">🚶</span>Movimento</a>
     <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
@@ -196,6 +201,7 @@
     <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
+    <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
   </nav>
   <div class="cartao-ext">
     <div class="topo-ext">🧩 <b>Extensão do navegador</b></div>
@@ -206,6 +212,22 @@
 </aside>
 
 <main id="principal">
+  <section id="mestre">
+    <h2>👑 Meu Mestre</h2>
+    <p class="sub">Quem é você, pra ele te conhecer no chat e nas piadas. Sem nome, ele não chama ninguém por nome.</p>
+    <div class="cartao" style="padding:16px 18px">
+      <label class="rotulo">Nome</label>
+      <input id="mestreNome" class="campo" placeholder="como ele deve te chamar" maxlength="60" autocomplete="off">
+      <label class="rotulo" style="margin-top:14px">Sobre você</label>
+      <textarea id="mestreSobre" class="campo" rows="7" maxlength="4000"
+        placeholder="onde trabalha, o que faz, ferramentas e projetos, do que você gosta, que tipo de piada curte…"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+        <span class="desc" id="mestreConta"></span>
+        <button class="botao principal" id="salvarMestre">Salvar</button>
+      </div>
+    </div>
+  </section>
+
   <section id="visual">
     <h2>🎨 Visual</h2>
     <p class="sub">Uma cor e um adereço por espaço. Combina do jeito que quiser — ele já usa na hora.</p>
@@ -377,7 +399,56 @@
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
     <div id="pastas"></div>
   </section>
+  <section id="sistema">
+    <h2>🖥️ Sistema</h2>
+    <p class="sub">Como ele roda neste PC.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Abrir junto com o Windows</div><div class="desc">Cria um atalho na pasta Inicializar.</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div>
+          <div class="desc" id="descAviso">Registra um aviso no ~/.claude/settings.json (com backup antes).</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Claude Code</div><div class="desc" id="descClaude">—</div></div>
+        <span class="status-ext" id="statusClaude">—</span>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Versão</div><div class="desc" id="descDados">—</div></div>
+        <span class="valor" id="versao">—</span>
+      </div>
+    </div>
+  </section>
 </main>
+
+<div class="fundo-modal" id="bemvindo" hidden>
+  <div class="modal">
+    <h3>👋 Oi! Eu sou o Claudinho</h3>
+    <p>Sou um mascotinho que mora na sua tela: ando por aí, faço piada do que você está fazendo, apronto umas esquetes,
+       toco música e converso com você (com o Claude Code instalado).</p>
+    <b>Pra começar:</b>
+    <ol>
+      <li>Em <b>👑 Meu Mestre</b>, me conta quem você é (sem nome eu não te chamo por nome nenhum).</li>
+      <li>Em <b>🎨 Visual</b>, me veste do jeito que quiser.</li>
+      <li>Se quiser, ligue aqui:</li>
+    </ol>
+    <div class="cartao" style="margin:8px 0 14px">
+      <div class="linha">
+        <div class="info"><div class="titulo">Abrir junto com o Windows</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
+      </div>
+    </div>
+    <p>Clicar em mim abre a conversa; botão direito abre o menu. Este painel fica em <b>Configurações e skins ⚙️</b>.</p>
+    <div style="text-align:right"><button class="botao principal" id="comecar">Bora!</button></div>
+  </div>
+</div>
 
 <div class="fundo-modal" id="instrucoes" hidden>
   <div class="modal">
@@ -593,6 +664,34 @@ function atualizarVivos() {
   document.getElementById("pastaExt").textContent = ext.pasta;
 }
 
+function montarSistema() {
+  const sis = estado.sistema;
+  for (const el of document.querySelectorAll("input[data-sistema]")) {
+    el.checked = !!sis[el.dataset.sistema];
+    el.disabled = el.dataset.sistema === "aviso" && !sis.claude && !sis.aviso;
+    el.onchange = () => acao(`${el.dataset.sistema}:${el.checked ? 1 : 0}`, el.checked ? "ligado ✓" : "desligado ✓");
+  }
+  document.getElementById("statusClaude").textContent = sis.claude ? "encontrado ✓" : "não encontrado";
+  document.getElementById("statusClaude").className = "status-ext" + (sis.claude ? " ok" : "");
+  document.getElementById("descClaude").textContent = sis.claude
+    ? "Chat, piadas olhando a tela, resumos e avisos funcionando."
+    : "Sem ele, funciona o resto (banco de frases, música, esquetes, skins…). Instale e faça login no Claude Code pra liberar o chat e a IA.";
+  document.getElementById("versao").textContent = "v" + sis.versao;
+  document.getElementById("descDados").textContent = "Seus dados ficam em " + sis.dados;
+}
+function montarMestre() {
+  const m = estado.cfg.mestre || {nome: "", sobre: ""};
+  const nome = document.getElementById("mestreNome"), sobre = document.getElementById("mestreSobre");
+  nome.value = m.nome; sobre.value = m.sobre;
+  const contar = () => document.getElementById("mestreConta").textContent = `${sobre.value.length} / 4000`;
+  sobre.oninput = contar; contar();
+  document.getElementById("salvarMestre").onclick = () => mudar("mestre", {nome: nome.value.trim(), sobre: sobre.value.trim()});
+}
+document.getElementById("comecar").onclick = () => {
+  document.getElementById("bemvindo").hidden = true;
+  document.getElementById("mestre").scrollIntoView();
+  document.getElementById("mestreNome").focus();
+};
 document.getElementById("instalarExt").onclick = () => {
   acao("instalar_extensao", "preparei a extensão ✓");
   document.getElementById("instrucoes").hidden = false;
@@ -624,7 +723,7 @@ const principal = document.getElementById("principal");
 for (const a of document.querySelectorAll("nav a"))
   a.onclick = () => document.getElementById(a.dataset.alvo).scrollIntoView();
 principal.addEventListener("scroll", () => {
-  let atual = "visual";
+  let atual = "mestre";
   for (const s of document.querySelectorAll("section")) if (s.offsetTop - principal.scrollTop < 140) atual = s.id;
   for (const a of document.querySelectorAll("nav a")) a.classList.toggle("ativo", a.dataset.alvo === atual);
 });
@@ -654,12 +753,14 @@ async function carregar(primeira) {
     estado = novo;
     if (primeira) {
       cat = estado.skins; sprite = estado.sprite; visual = estado.cfg.visual;
-      montarVisual(); montarResto(); animar();
+      montarVisual(); montarResto(); montarMestre(); montarSistema(); animar();
+      if (location.search.includes("bemvindo")) document.getElementById("bemvindo").hidden = false;
       document.querySelector("nav a").classList.add("ativo");
     } else {
       // mudou lá no Claudinho (atalho da faixa, por exemplo): só atualiza os interruptores e o que está vivo
       for (const el of document.querySelectorAll("input[data-cfg]")) el.checked = !!estado.cfg[el.dataset.cfg];
       if (mudouVisual) { visual = estado.cfg.visual; montarVisual(); }
+      montarSistema();
       atualizarVivos();
     }
   } catch (e) {

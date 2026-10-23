@@ -76,26 +76,31 @@ terminam e solta piadas sobre o que está na tela.
   "ver conversa" com o histórico inteiro. Notificação ou outro programa pulando na frente não fecha
   a conversa; só clicar fora.
 
-## Instalar num PC novo
+## Instalar (quem só quer usar)
 
-Precisa de: Windows, Python 3.11+ e o [Claude Code](https://claude.com/claude-code) instalado.
+Baixe o `Claudinho-<versão>-windows.zip` em **Releases**, descompacte onde quiser e abra o `Claudinho.exe`.
+Não precisa de Python. Na primeira vez ele abre o painel: conte quem você é em **Meu Mestre** e, se quiser,
+ligue em **Sistema** "abrir junto com o Windows" e o aviso do Claude Code.
+
+- O chat, as piadas olhando a tela e os resumos usam o [Claude Code](https://claude.com/claude-code)
+  (instale, rode `claude` e faça `/login`). Sem ele, o resto funciona: banco de frases, música, esquetes, skins.
+- Pra desinstalar: desligue as opções em Sistema, feche (botão direito > Sair) e apague a pasta.
+  Os dados ficam em `%USERPROFILE%\.claudinho`.
+- Sem assinatura digital, o Windows pode mostrar "O Windows protegeu o computador": "Mais informações" > "Executar assim mesmo".
+
+## Desenvolver / gerar a release
+
+Precisa de Python 3.11+. Pra rodar do código:
 
 ```bash
 git clone https://github.com/CassioNathan/claudinho.git
 cd claudinho
-python instalar.py --iniciar
+python instalar.py --iniciar   # dependências, hook e atalho de inicialização
 ```
 
-O instalador:
-1. instala as dependências;
-2. registra o hook de aviso no `~/.claude/settings.json`, com backup;
-3. cria o seu perfil em `~/.claudinho/CLAUDE.md`;
-4. com `--iniciar`, faz ele abrir junto com o Windows.
-
-Depois:
-1. Logue o Claude Code: rode `claude` no terminal e digite `/login` (conta com assinatura).
-2. Abra o Claudinho: duplo clique em `claudinho.pyw`.
-3. Edite `~/.claudinho/CLAUDE.md` contando quem você é. Ele usa isso no chat e nas piadas.
+Pra gerar a release: `pip install pyinstaller` e `python empacotar.py` → `dist/Claudinho/` (dois exes: o
+`Claudinho.exe` e o `claudinho-cli.exe`, o ajudante que o chat e o hook usam) e o zip em `release/`.
+A versão fica em `sistema.py` (`VERSAO`).
 
 ## Onde fica cada coisa
 
@@ -108,9 +113,12 @@ Depois:
 | `emojis.py` | pacote de reações em pixel art (desenhos, cores, frases e quando aparecem) |
 | `musica.py` | o que está tocando + tocar/pausar/próxima/anterior |
 | `hook/claudinho_notificar.py` | hook "Stop" do Claude Code que manda os avisos |
-| `instalar.py` | instalação num PC novo |
-| `~/.claudinho/config.json` | configurações (movimento, frequência, modos, atalho, pastas de leitura) |
-| `~/.claudinho/CLAUDE.md` | seu perfil |
+| `instalar.py` | instalação pra quem roda do código |
+| `sistema.py` | versão, caminhos (código ou empacotado), atalho de inicialização e o aviso do Claude Code |
+| `cli.py` | o ajudante de linha de comando (vira `claudinho-cli.exe`) |
+| `claudinho.spec` / `empacotar.py` | o build do PyInstaller e o zip da release |
+| `~/.claudinho/config.json` | configurações (movimento, frequência, modos, Meu Mestre, skin, pastas de leitura) |
+| `~/.claudinho/CLAUDE.md` | o perfil que o chat lê (gerado a partir do "Meu Mestre" do painel) |
 | `memoria.py` | banco SQLite: piadas (com contexto e nota), avisos do dia, conversa; migrações versionadas |
 | `~/.claudinho/claudinho.db` | o banco em si (este PC) |
 

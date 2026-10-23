@@ -1351,7 +1351,8 @@ class Claudinho:
             if falando:
                 return
             if self.alvo is None:
-                if agora < self.pausa_ate:
+                # numa esquete que anda (robô, bug), quem escolhe o destino é a esquete: nada de passear por aí
+                if agora < self.pausa_ate or self.anda_na_esquete():
                     return
                 self.alvo = self.novo_alvo(area)
 

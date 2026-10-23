@@ -1485,20 +1485,36 @@ class Claudinho:
             for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
                 px(col, 4 if sobe else 5, corpo)
                 px(col, 5 if sobe else 6, corpo)
-        elif martelando:  # a mão do lado do robô trabalha (martelo sobe e desce, solda firme, parafuso gira)
-            mao = 10 if self.esquete["robo"]["x"] > self.x else 0
-            if trabalho == "martelo":
-                desce = (self.t // 3) % 2
-                linhas = (2, 3) if not desce else (4, 5)
-            elif trabalho == "solda":
-                linhas = (3, 4)
-            else:  # parafuso: mexidinha curta
-                linhas = (3, 4) if (self.t // 2) % 2 else (2, 3)
-            for lin in linhas:
-                px(mao, lin, corpo)
+        elif martelando:  # braço esticado pro lado do robô, com a ferramenta da vez na mão
+            lado = 1 if self.esquete["robo"]["x"] > self.x else -1
+            mao = 10 if lado == 1 else 0
             outra = 0 if mao == 10 else 10
             px(outra, 3, corpo)
             px(outra, 4, corpo)
+            if trabalho == "martelo":  # levanta o martelo… e PÁ
+                if (self.t // 3) % 2 == 0:
+                    px(mao, 3, corpo)
+                    px(mao + lado, 2, corpo)  # braço pra cima e pra fora
+                    px(mao + lado, 1, CABO)
+                    px(mao + lado, 0, PESO)  # cabeça do martelo lá em cima
+                    px(mao + 2 * lado, 0, PESO)
+                else:
+                    px(mao, 4, corpo)
+                    px(mao + lado, 4, corpo)  # braço esticado batendo
+                    px(mao + 2 * lado, 4, CABO)
+                    px(mao + 3 * lado, 3, PESO)
+                    px(mao + 3 * lado, 4, PESO)
+                    px(mao + 3 * lado, 5, PESO)
+            elif trabalho == "solda":  # maçarico firme, ponta piscando
+                px(mao, 4, corpo)
+                px(mao + lado, 4, corpo)
+                px(mao + 2 * lado, 4, PESO)
+                px(mao + 3 * lado, 4, "#bfe6ff" if self.t % 2 else "#ffffff")
+            else:  # parafuso: chave de fenda girando (o cabo pisca entre as cores)
+                px(mao, 4, corpo)
+                px(mao + lado, 4, corpo)
+                px(mao + 2 * lado, 4, PALHA if (self.t // 2) % 2 else "#c0392b")
+                px(mao + 3 * lado, 4, BARRA)
         elif esq == "malhando":  # um braço levanta o halter, depois o outro
             erguido = 0 if (self.t // 12) % 2 == 0 else 10
             for col in (0, 10):
@@ -2781,7 +2797,7 @@ class Claudinho:
         _, area, _ = self.area()
         # o robô fica do lado que tem espaço (e com espaço pra ele trabalhar dos dois lados)
         lado = -1 if self.x - area[0] > area[2] - (self.x + self.W) else 1
-        x = limitar(self.x + lado * self.W * 1.6, area[0] + self.W, area[2] - 2 * self.W)
+        x = limitar(self.x + lado * self.W * 1.0, area[0] + self.W, area[2] - 2 * self.W)
         win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -2857,7 +2873,7 @@ class Claudinho:
             _, area, _ = self.area()
             r = e["robo"]
             e["ponto"] = 1 - e["ponto"]
-            alvo_x = r["x"] + (-1 if e["ponto"] == 0 else 1) * self.W * 0.95
+            alvo_x = r["x"] + (-1 if e["ponto"] == 0 else 1) * self.W * 0.82  # colado no robô (com espaço pro braço)
             self.alvo = self.limitar_na_area(alvo_x, r["y"], area)
             e["acao"] = random.choice([a for a in ("martelo", "solda", "parafuso") if a != e["acao"]])
             e["ate_ponto"] = agora + random.uniform(2.0, 3.2)

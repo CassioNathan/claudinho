@@ -76,6 +76,9 @@ CONFIG_PADRAO = {
 }
 
 FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 30)]
+# prioridade das falas: estado (vendei, modo ligado…) é descartável; importante (aviso, o que você pediu,
+# erro) nunca é atropelado e passa na frente das outras
+ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
@@ -1063,11 +1066,10 @@ class Claudinho:
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
-        self.esquete, self.prox_esquete = None, time.time() + random.uniform(120, 240)  # idle: deploy, café…
-        if os.environ.get("CLAUDINHO_ESQUETE"):  # testando uma esquete: a primeira vem logo
-            self.prox_esquete = time.time() + 5
+        self.esquete = None  # idle: deploy, café… (sai do mesmo timer das piadas)
         self.ultima_esquete = None
-        self.esquete_forcada = None  # escolhida no painel ("Esquete agora")
+        # escolhida no painel ("Esquete agora"); CLAUDINHO_ESQUETE=inseto (por ex.) testa uma logo de cara
+        self.esquete_forcada = os.environ.get("CLAUDINHO_ESQUETE")
         self.frente = -1  # lado pra onde está virado (franja, aba do boné… seguem)
         self.emo_ate, self.emo_musica = 0, None  # rock tocando: modo emo até essa hora
         self.musica = None  # o que está tocando, atualizado em segundo plano
@@ -1189,7 +1191,7 @@ class Claudinho:
                     return
                 self.alvo = self.novo_alvo(area)
 
-        vel = self.S * 2.6 if self.modo == "correndo" else max(2, self.S * 0.45)
+        vel = self.S * 2.6 if self.modo == "correndo" or self.cacando() else max(2, self.S * 0.45)
         dx, dy = self.alvo[0] - self.x, self.alvo[1] - self.y
         dist = (dx * dx + dy * dy) ** 0.5
         if abs(dx) > 1:
@@ -1226,7 +1228,7 @@ class Claudinho:
 
     def chegou(self):
         if self.modo == "comentar" and self.comentario_pendente:
-            self.falas.append({"tipo": "comentario", "texto": self.comentario_pendente, "duracao": 8})
+            self.comentar(self.comentario_pendente)
         self.comentario_pendente = None
         self.modo, self.alvo = "passeio", None
         self.pausa_ate = time.time() + random.uniform(1.5, 6)
@@ -1238,7 +1240,7 @@ class Claudinho:
         visual = self.cfg["visual"]
         corpo = skins.cor_do_corpo(visual["cor"], self.t)
         olho = skins.CORES[visual["cor"]]["olho"]
-        correndo = self.movendo and self.modo == "correndo"
+        correndo = self.movendo and (self.modo == "correndo" or self.cacando())
         carregado = bool(self.arrasto and self.arrasto["moveu"])  # sendo levado pelo mouse
         pousando = time.time() < self.pouso_ate
         if pousando:
@@ -1747,10 +1749,9 @@ class Claudinho:
                              daemon=True).start()
         elif acao == "esquete_agora" or acao.startswith("esquete:"):
             self.largar_esquete()
-            self.esquete_forcada = acao.split(":", 1)[1] if ":" in acao else None
-            if self.esquete_forcada not in esquetes.ESQUETES:
-                self.esquete_forcada = None
-            self.prox_esquete = 0  # começa assim que ele estiver livre
+            escolhida = acao.split(":", 1)[1] if ":" in acao else ""
+            # começa assim que ele estiver livre ("qualquer" = sorteia)
+            self.esquete_forcada = escolhida if escolhida in esquetes.ESQUETES else "qualquer"
         elif acao == "venda":
             self.aplicar_cfg("vendado", not self.cfg["vendado"])
         elif acao == "painel":
@@ -1799,12 +1800,13 @@ class Claudinho:
         self.mudar_cfg(chave, valor)
         if chave == "vendado":
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
-                          else "Voltei a enxergar! Nossa, que tela bonita.")
+                          else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
         elif chave == "modo_tdah":
             self.comentar("Modo TDAH ligado. Falando nisso, você sabia que polvo tem três corações?"
-                          if valor else "Ok, foco. Voltei pro assunto.")
+                          if valor else "Ok, foco. Voltei pro assunto.", duracao=4, prioridade=ESTADO)
         elif chave == "modo_maldoso":
-            self.comentar("Modo maldoso ligado. Prepara o psicológico." if valor else "Tá bom, volto a ser fofo.")
+            self.comentar("Modo maldoso ligado. Prepara o psicológico." if valor else "Tá bom, volto a ser fofo.",
+                          duracao=4, prioridade=ESTADO)
         elif chave == "comentar_a_cada_minutos":
             self.prox_comentario = time.time() + random.uniform(*valor) * 60
         elif chave == "ver_musica" and not valor:
@@ -2032,6 +2034,17 @@ class Claudinho:
             self.fechar_balao()
         if self.balao and self.balao.expirou():
             self.fechar_balao()
+        # fala de estado velha (ficou esperando a conversa ou uma resposta) não vale mais nada
+        for velha in [f for f in self.falas if f.get("prioridade", FALA) == ESTADO and time.time() - f["criada"] > 15]:
+            self.falas.remove(velha)
+        # chegou algo mais importante: o balão de agora sai da frente, a não ser que você esteja lendo
+        # (fala de estado sai sempre; aviso/coisa que você pediu nunca é atropelado)
+        if self.balao and self.falas and self.balao.tipo not in ("pensando", "permissao"):
+            atual = (self.balao.dados or {}).get("prioridade", FALA)
+            nova = self.falas[0].get("prioridade", FALA)
+            lendo = self.balao.hover or self.balao.interagiu or self.mouse_no_mascote
+            if atual == ESTADO or (nova > atual and atual < IMPORTANTE and not lendo):
+                self.fechar_balao()
         livre = self.balao is None or self.balao.tipo == "pensando"
         if livre and not self.entrada and self.falas:
             # pergunta tem prioridade: enquanto pensa, os avisos esperam
@@ -2156,8 +2169,7 @@ class Claudinho:
         if not self.ocupado:
             self.mem.nova_conversa()  # a memória do dia e as piadas ficam
             self.chat.nova_conversa()
-            self.falas.appendleft({"tipo": "comentario", "texto": "Conversa nova! Pode mandar.",
-                                   "duracao": 3})
+            self.comentar("Conversa nova! Pode mandar.", duracao=3, prioridade=ESTADO)
 
     def ver_conversa(self):
         """Janela maior com a conversa inteira (as últimas conversas também), rolável."""
@@ -2220,15 +2232,17 @@ class Claudinho:
         return (time.time() - self.app_desde) / 60
 
     def talvez_comentar(self):
+        """A vez dele de fazer algo à toa: piada ou esquete saem do mesmo timer (mesma fila, tipos diferentes)."""
         self.acompanhar_app_ativo()
-        if not self.cfg["comentar_tela"] or self.comentando or time.time() < self.prox_comentario:
+        piadas, esquetes_ligadas = self.cfg["comentar_tela"], self.cfg["esquetes"]
+        if not (piadas or esquetes_ligadas) or self.comentando or time.time() < self.prox_comentario:
             return
         if self.ocupado or self.balao or self.entrada or self.falas or self.esquete or self.modo != "passeio":
             return
         a, b = self.cfg["comentar_a_cada_minutos"]
         self.prox_comentario = time.time() + random.uniform(a, b) * 60
-        if self.cfg["esquetes"] and random.random() < 0.25:  # às vezes, no lugar da piada, uma esquete
-            self.prox_esquete = 0
+        if esquetes_ligadas and (not piadas or random.random() < 0.35):
+            self.iniciar_esquete()
         elif random.random() >= self.cfg["chance_haiku"]:
             _, _, area_total = self.area()
             self.comentar_do_banco(janelas.listar(area_total))
@@ -2297,16 +2311,18 @@ class Claudinho:
     def limpar_notificacoes(self, ids):
         self.fechar_balao()
         threading.Thread(target=lambda: notificacoes.limpar(ids), daemon=True).start()
-        self.comentar(f"Prontinho, limpei {len(ids)} notificaç{'ão' if len(ids) == 1 else 'ões'}! ✨", duracao=4)
+        self.comentar(f"Prontinho, limpei {len(ids)} notificaç{'ão' if len(ids) == 1 else 'ões'}! ✨", duracao=4,
+                      prioridade=ESTADO)
 
     def resumir_tela(self):
         """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
         A resposta cai no balão de conversa, então dá pra continuar perguntando sobre o mesmo print."""
         if self.cfg["vendado"]:
-            self.comentar("Tô vendado, não dá pra ler nada! Tira a faixa (Win+Shift+Y) que eu leio.")
+            self.comentar("Tô vendado, não dá pra ler nada! Tira a faixa (Win+Shift+Y) que eu leio.", duracao=5,
+                          prioridade=ESTADO)
             return
         if self.ocupado:
-            self.comentar("Calma, ainda tô pensando na outra…", duracao=3)
+            self.comentar("Calma, ainda tô pensando na outra…", duracao=3, prioridade=ESTADO)
             return
         img, nome = self.print_da_frente()
         pedido = ("Este é um print da janela que estou vendo agora (" + nome + "). Me explica o que tem nela "
@@ -2327,7 +2343,8 @@ class Claudinho:
         if self.comentando:
             return
         if self.cfg["vendado"]:
-            self.comentar("Tô vendado, não dá pra ver nada! Tira a faixa no menu se quiser que eu olhe.")
+            self.comentar("Tô vendado, não dá pra ver nada! Tira a faixa no menu se quiser que eu olhe.", duracao=5,
+                          prioridade=ESTADO)
             return
         self.olhando_forcado = True
         if self.balao and self.balao.tipo == "comentario":
@@ -2421,18 +2438,34 @@ class Claudinho:
                 return True
         return False
 
-    def comentar(self, texto, piada=None, duracao=8):
-        """Comenta de onde está. `piada` (origem etc.) marca que é piada: aí dá pra avaliar."""
-        self.falas.append({"tipo": "comentario", "texto": texto, "duracao": duracao, "piada": piada})
+    def comentar(self, texto, piada=None, duracao=8, prioridade=FALA):
+        """Comenta de onde está. `piada` (origem etc.) marca que é piada: aí dá pra avaliar.
+        `prioridade`: ESTADO (vendei, modo ligado…: some se vier outra coisa), FALA (piada, comentário)
+        ou IMPORTANTE (aviso, coisa que você pediu, erro: nunca é atropelada)."""
+        self.enfileirar({"tipo": "comentario", "texto": texto, "duracao": duracao, "piada": piada},
+                        prioridade)
+
+    def enfileirar(self, fala, prioridade=FALA, na_frente=False):
+        """Põe a fala na fila na ordem de prioridade (as mais importantes passam na frente das menores).
+        Fala de estado substitui outra de estado que ainda nem apareceu: só vale a última."""
+        fala.update(prioridade=prioridade, criada=time.time())
+        if prioridade == ESTADO:
+            for velha in [f for f in self.falas if f.get("prioridade", FALA) == ESTADO]:
+                self.falas.remove(velha)
+        pos = next((i for i, f in enumerate(self.falas)
+                    if f.get("prioridade", FALA) < prioridade or (na_frente and f.get("prioridade", FALA) == prioridade)),
+                   len(self.falas))
+        self.falas.insert(pos, fala)
 
     # ---------- reações (emojis que sobem flutuando) ----------
     # ---------- esquetes (idle: deploy do nada, café, cochilo…) ----------
     def cuidar_da_esquete(self):
         agora = time.time()
-        tocando = bool(self.musica and self.musica["tocando"])
         if self.esquete:
             # você chamou (clicou, arrastou, pediu algo) ou ele saiu correndo: larga tudo, sem fala de fim
-            if self.ocupado or self.arrasto or self.entrada or self.modo != "passeio" or not self.visivel:
+            chegou_importante = any(f.get("prioridade", FALA) == IMPORTANTE for f in self.falas)
+            if (self.ocupado or self.arrasto or self.entrada or chegou_importante or self.lendo_notificacoes
+                    or self.modo != "passeio" or not self.visivel):
                 self.largar_esquete()
             elif self.esquete["nome"] == "inseto":
                 self.cuidar_do_inseto(agora)
@@ -2444,16 +2477,18 @@ class Claudinho:
                 if emoji and self.cfg["emojis"]:
                     self.soltar_emoji(emoji)
             return
-        if not (self.cfg["esquetes"] or self.esquete_forcada) or agora < self.prox_esquete:
-            return
-        if (self.balao or self.entrada or self.falas or self.ocupado or self.arrasto or self.emoji
+        # "Esquete agora" (painel): roda assim que ele estiver livre
+        if self.esquete_forcada and not (
+                self.balao or self.entrada or self.falas or self.ocupado or self.arrasto or self.emoji
                 or self.comentando or self.lendo_notificacoes or self.modo != "passeio" or not self.visivel):
-            return
-        self.prox_esquete = agora + random.uniform(240, 540)  # uma a cada 4–9 min
-        # CLAUDINHO_ESQUETE=inseto (por ex.) fixa qual roda: pra testar uma esquete nova
-        nome = self.ultima_esquete = (self.esquete_forcada or os.environ.get("CLAUDINHO_ESQUETE")
-                                      or esquetes.sortear(self.ultima_esquete, tocando))
-        self.esquete_forcada = None
+            self.iniciar_esquete()
+
+    def iniciar_esquete(self):
+        agora = time.time()
+        tocando = bool(self.musica and self.musica["tocando"])
+        escolhida, self.esquete_forcada = self.esquete_forcada, None
+        nome = self.ultima_esquete = (escolhida if escolhida in esquetes.ESQUETES
+                                      else esquetes.sortear(self.ultima_esquete, tocando))
         self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
                         "musica": tocando}
         self.alvo = None  # para onde está
@@ -2465,6 +2500,10 @@ class Claudinho:
             self.soltar_emoji(emoji)
         if nome == "inseto":
             self.criar_inseto()
+
+    def cacando(self):
+        """Indo atrás do bug da esquete do inseto (vai correndo)."""
+        return bool(self.esquete and self.esquete.get("fase_inseto") == "cacando")
 
     def largar_esquete(self):
         if self.esquete and self.esquete.get("inseto"):
@@ -2659,16 +2698,18 @@ class Claudinho:
                 self.lendo_notificacoes = False
                 _, resumo, ids, erro = ev
                 if erro:
-                    self.comentar(f"⚠ Não consegui ler as notificações: {erro[:200]}")
+                    self.comentar(f"⚠ Não consegui ler as notificações: {erro[:200]}", prioridade=IMPORTANTE)
                 elif not ids:
-                    self.comentar("Central de notificações limpinha, nada pra ver! ✨", duracao=5)
+                    self.comentar("Central de notificações limpinha, nada pra ver! ✨", duracao=5,
+                                  prioridade=IMPORTANTE)
                 else:  # na frente da fila: foi você que pediu
-                    self.falas.appendleft({"tipo": "notificacoes", "texto": resumo, "duracao": 90, "ids": ids})
+                    self.enfileirar({"tipo": "notificacoes", "texto": resumo, "duracao": 90, "ids": ids},
+                                    IMPORTANTE, na_frente=True)
             elif ev[0] == "atalho_ocupado":
-                self.comentar(f"O atalho {ev[1]} já é usado por outro programa. "
+                self.comentar(prioridade=IMPORTANTE, texto=f"O atalho {ev[1]} já é usado por outro programa. "
                               "Troca o \"atalho_comentar\" no config.json.")
             elif ev[0] == "aviso":
-                self.falas.append({"tipo": "aviso", "dados": ev[1]})
+                self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
                 self.lembrar_do_dia(ev[1])
             elif ev[0] == "resposta":
                 self.usou_ferramenta = False

@@ -42,8 +42,11 @@ terminam e solta piadas sobre o que está na tela.
   git push --force suando, café, cochilo, alongamento, dancinha, caça ao bug (aparece uma joaninha,
   ele vai lá e come: "Removi um bug 😄"), build quebrado com nuvem de chuva, servidor pegando fogo,
   patinho de borracha, npm install que vira caixa gigante, pizza (só de noite), joguinho, faxina de
-  código morto, reunião que podia ser e-mail, bug que vira borboleta e malhação. Às vezes uma esquete
-  entra no lugar de uma piada. Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
+  código morto, reunião que podia ser e-mail, bug que vira borboleta e malhação. Piadas e esquetes
+  dividem o mesmo tempo (uma fila só, cerca de 1 em 3 vezes é esquete); clicar, arrastar ou chegar algo
+  importante interrompe a esquete na hora.
+- **Prioridade das falas:** aviso, coisa que você pediu e erro nunca são atropelados (nem enquanto você lê);
+  piada sai da frente pra eles; mensagem de estado (vendei, modo ligado…) é descartável e é trocada na hora. Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
   Pra testar uma específica: `CLAUDINHO_ESQUETE=inseto` antes de abrir.
 - **Emo no rock 🖤:** começou uma música de rock, ele vira emo uns 45 s (franja, mecha rosa,
   munhequeira, headbang) e solta um desabafo. Quem decide se é rock é o Haiku, uma vez por artista (fica guardado).

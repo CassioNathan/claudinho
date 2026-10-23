@@ -30,11 +30,12 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 import pystray
-from PIL import Image, ImageDraw, ImageGrab
+from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
 import frases
 import janelas
 import emojis
+import esquetes
 import memoria
 import musica
 import notificacoes
@@ -56,6 +57,7 @@ CONFIG_PADRAO = {
     "vendado": False,                    # faixa nos olhos: não tira print da tela (só banco de frases)
     "ver_musica": True,                  # sabe o que está tocando (piadas, chat e menu com controles)
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
+    "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
@@ -75,6 +77,9 @@ POEIRA = "#b9b4a8"
 NB_BASE = "#3b3a37"   # notebook: base/teclado
 NB_TAMPA = "#a8a59d"  # notebook: tampa (vista de trás)
 NB_TECLA = "#f4efe4"
+CANECA = "#e8e2d4"   # esquete do café
+CAFE = "#6b4226"
+SUOR = "#8ec5ff"     # gotinha do git push --force
 VENDA = "#2f3f63"         # faixa nos olhos (pano azul-marinho)
 VENDA_BRILHO = "#4a5d8a"
 FUNDO = "#262624"
@@ -761,8 +766,14 @@ class Balao:
             self.desenhar_rodape()
         if entrada:
             # anexar um print da janela que você está usando à próxima mensagem
-            self.link_print = self.link(self.frame, "", app.alternar_print, anchor="w")
-            self.link_print.pack(fill="x", padx=16, pady=(4, 0))
+            # miniatura do print (só aparece com print anexado) + o link, na mesma linha
+            linha_print = tk.Frame(self.frame, bg=FUNDO)
+            linha_print.pack(fill="x", padx=16, pady=(4, 0))
+            self.mini = tk.Label(linha_print, bg=FUNDO, bd=0, highlightthickness=1,
+                                 highlightbackground=APAGADO, cursor="hand2")
+            self.mini.bind("<Button-1>", lambda e: (app.alternar_print(), "break")[1])
+            self.link_print = self.link(linha_print, "", app.alternar_print, anchor="w")
+            self.link_print.pack(side="left", fill="x")
             self.mostrar_print(app.print_anexado)
             self.entry = ctk.CTkEntry(self.frame, width=340 if texto else 280, height=34, corner_radius=10,
                                       border_width=0, fg_color=FUNDO2, text_color=TEXTO,
@@ -813,8 +824,14 @@ class Balao:
         return rotulo
 
     def mostrar_print(self, anexado):
-        self.link_print.configure(text=f"📷 print anexado ({anexado['nome']}) · tirar" if anexado
+        self.link_print.configure(text=f"print anexado ({anexado['nome']}) · tirar" if anexado
                                   else "📷 adicionar print da tela")
+        if anexado and anexado.get("mini"):
+            self.foto_mini = ImageTk.PhotoImage(anexado["mini"], master=self.win)  # guarda a referência
+            self.mini.configure(image=self.foto_mini)
+            self.mini.pack(side="left", padx=(0, 6), before=self.link_print)
+        else:
+            self.mini.pack_forget()
 
     def mouse_entrou(self, e):
         self.hover = True
@@ -950,6 +967,8 @@ class Claudinho:
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
+        self.esquete, self.prox_esquete = None, time.time() + random.uniform(120, 240)  # idle: deploy, café…
+        self.ultima_esquete = None
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
         self.S = escala()
@@ -1012,6 +1031,7 @@ class Claudinho:
             self.cuidar_dos_baloes()
             self.talvez_comentar()
             self.talvez_emoji()
+            self.cuidar_da_esquete()
             self.animar_emoji()
             self.desenhar()
         finally:
@@ -1059,7 +1079,7 @@ class Claudinho:
 
         if self.modo == "passeio":
             # parado quando fala, e também quando está trabalhando no notebook
-            falando = (self.balao and self.balao.tipo != "pensando") or self.entrada or self.ocupado
+            falando = (self.balao and self.balao.tipo != "pensando") or self.entrada or self.ocupado or self.esquete
             if falando:
                 return
             if self.alvo is None:
@@ -1124,6 +1144,12 @@ class Claudinho:
             pulo = self.t % 2
         else:
             pulo = 0
+        esq = self.esquete["nome"] if self.esquete and not carregado else None
+        fase = (time.time() - self.esquete["inicio"]) / esquetes.ESQUETES[esq]["duracao"] if esq else 0
+        if esq == "cochilo":  # respirando devagar
+            pulo = -1 if (self.t // 14) % 2 else 0
+        elif esq == "danca":
+            pulo = 1 if self.t % 6 < 3 else 0
         oy = (FOLGA - pulo) * S
 
         def px(col, lin, cor):
@@ -1131,14 +1157,26 @@ class Claudinho:
             c.create_rectangle(x0, oy + lin * S, x0 + S, oy + (lin + 1) * S, fill=cor, width=0)
 
         # notebook: abre aos poucos quando começa a trabalhar e fecha quando termina (transição)
-        alvo_nb = 1.0 if self.ocupado and not self.movendo else 0.0
+        nb = esquetes.ESQUETES[esq].get("notebook") if esq else None  # True ou (de, até) na esquete
+        no_notebook = self.ocupado or (nb is True and fase < 0.9) or (isinstance(nb, tuple) and nb[0] <= fase < nb[1])
+        alvo_nb = 1.0 if no_notebook and not self.movendo else 0.0
         self.notebook += max(-0.15, min(0.15, alvo_nb - self.notebook))
         digitando = self.notebook >= 0.99
+        bracos_soltos = digitando or carregado or esq in ("alongar", "danca")
 
         for lin, linha in enumerate(CORPO):
             for col, ch in enumerate(linha):
-                if ch == "X" and not ((digitando or carregado) and col in (0, 10)):  # bracinhos saem do lugar
+                if ch == "X" and not (bracos_soltos and col in (0, 10)):  # bracinhos saem do lugar
                     px(col, lin, LARANJA)
+        if esq == "alongar":  # bracinhos sobem devagar, ficam lá em cima e descem
+            linhas = (-2, -1) if 0.15 < fase < 0.75 else ((0, 1) if 0.05 < fase < 0.9 else (3, 4))
+            for col in (0, 10):
+                for lin in linhas:
+                    px(col, lin, LARANJA)
+        elif esq == "danca":  # um bracinho em cima, o outro embaixo, trocando no ritmo
+            for col, cima in ((0, self.t % 6 < 3), (10, self.t % 6 >= 3)):
+                px(col, -1 if cima else 4, LARANJA)
+                px(col, 0 if cima else 5, LARANJA)
         if carregado:  # bracinhos pra cima, sacudindo ("uiii!")
             for col in (0, 10):
                 topo = 1 if (self.t + col) % 4 < 2 else 2
@@ -1157,11 +1195,21 @@ class Claudinho:
             olhar_x = 0 if abs(mx - cx) < self.W else (1 if mx > cx else -1)
             olhar_y = 0 if abs(my - cy) < self.H else (1 if my > cy else -1)
         pensando = self.olhando_forcado and not self.ocupado  # Win+Y: olhando a tela e pensando
+        if esq and fase < esquetes.ESQUETES[esq].get("pensa_ate", 0):  # "tive uma ideia": pensa antes de trabalhar
+            pensando = True
         if pensando and not self.movendo:  # pensando: olhinhos pra cima, de lado
             olhar_x, olhar_y = 1, -1
         if self.notebook > 0.5:  # no notebook: olhando pra tela dele
             olhar_x, olhar_y = 0, 1
+        if esq == "danca":
+            olhar_x, olhar_y = (-1 if self.t % 12 < 6 else 1), 0
+        elif esq == "cafe":
+            olhar_x, olhar_y = 1, 0  # olhando pra caneca
         piscando = time.time() < self.piscar_ate
+        # cochilando, se espreguiçando ou no gole do café: olhinho fechado (só a linha de baixo)
+        gole = esq == "cafe" and (time.time() - self.esquete["inicio"]) % 3 < 1.1
+        if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole:
+            piscando = True
         l1, l2 = OLHOS_Y[olhar_y]
         if self.cfg["vendado"]:  # faixa nos olhos, com o nó balançando atrás da cabeça
             for col in range(1, 10):
@@ -1225,8 +1273,42 @@ class Claudinho:
                     lado = meio + n * 2
                     c.create_rectangle(x0, y0, x0 + lado, y0 + lado, fill=POEIRA, width=0)
 
+        if esq:
+            self.desenhar_esquete(esq, fase, oy)
+
         if random.random() < 0.012:
             self.piscar_ate = time.time() + 0.18
+
+    def desenhar_esquete(self, esq, fase, oy):
+        """Os acessórios das esquetes: caneca com fumaça, zzz, gota de suor, notinhas."""
+        c, S, t = self.canvas, self.S, self.t
+
+        def quadrado(col, lin, cor, lado=1.0):
+            x0, y0 = (col + MARGEM) * S, oy + lin * S
+            c.create_rectangle(x0, y0, x0 + lado * S, y0 + lado * S, fill=cor, width=0)
+
+        if esq == "cafe":
+            topo = 2 if (time.time() - self.esquete["inicio"]) % 3 < 1.1 else 3  # gole: levanta a caneca
+            for col in (11, 12):
+                quadrado(col, topo, CAFE)
+                quadrado(col, topo + 1, CANECA)
+                quadrado(col, topo + 2, CANECA)
+            quadrado(13, topo + 1, CANECA, 0.6)  # alça
+            if topo == 3:  # fumacinha subindo e balançando
+                for k in range(2):
+                    quadrado(11.2 + ((t // 4 + k) % 2) * 0.8, 1.6 - k * 0.9, POEIRA, 0.45)
+        elif esq == "cochilo":  # zzz subindo em diagonal, cada um maior
+            for k in range(3):
+                p = (t / 6 + k * 3) % 9
+                lado = 0.35 + p * 0.06
+                quadrado(10.5 + p * 0.3, 0.2 - p * 0.25, POEIRA, lado)
+        elif esq == "push_force" and fase > 0.3:  # gotinha de suor escorrendo da cabeça
+            quadrado(10.6, -0.4 + (t // 3 % 4) * 0.45, SUOR, 0.5)
+        elif esq == "danca":  # notinha subindo do lado
+            sobe = (t // 3) % 4 * 0.4
+            quadrado(11.5, 0.6 - sobe, NB_TECLA, 0.6)  # bolinha da nota
+            quadrado(12.0, -0.4 - sobe, NB_TECLA, 0.25)  # haste
+            quadrado(12.0, -0.15 - sobe, NB_TECLA, 0.25)
 
     # ---------- mouse ----------
     def apertou(self, e):
@@ -1329,6 +1411,7 @@ class Claudinho:
             ("Avaliar piadas (boa/ruim)", "avaliacao", lambda: self.cfg["modo_avaliacao"]),
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             ("Reações com emojis ✨", "emojis", lambda: self.cfg["emojis"]),
+            ("Esquetes quando está à toa ☕", "esquetes", lambda: self.cfg["esquetes"]),
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
@@ -1431,6 +1514,12 @@ class Claudinho:
             self.mudar_cfg("ver_musica", not self.cfg["ver_musica"])
             if not self.cfg["ver_musica"]:
                 self.musica = None
+        elif acao == "esquetes":
+            self.mudar_cfg("esquetes", not self.cfg["esquetes"])
+            if self.cfg["esquetes"]:
+                self.prox_esquete = 0  # mostra uma já
+            else:
+                self.esquete = None
         elif acao == "emojis":
             self.mudar_cfg("emojis", not self.cfg["emojis"])
             if self.cfg["emojis"]:
@@ -1684,7 +1773,9 @@ class Claudinho:
                 img, nome = self.print_da_frente()
             finally:
                 self.entrada.win.attributes("-alpha", 1.0)
-            self.print_anexado = {"imagem": em_jpeg(img, qualidade=85), "nome": nome}
+            mini = img.copy()
+            mini.thumbnail((40, 22))  # do tamanho da linha do link: o balão quase não cresce
+            self.print_anexado = {"imagem": em_jpeg(img, qualidade=85), "nome": nome, "mini": mini}
         self.entrada.mostrar_print(self.print_anexado)
         self.entrada.win.update_idletasks()
         self.entrada.posicionar()
@@ -2029,10 +2120,43 @@ class Claudinho:
         self.falas.append({"tipo": "comentario", "texto": texto, "duracao": duracao, "piada": piada})
 
     # ---------- reações (emojis que sobem flutuando) ----------
+    # ---------- esquetes (idle: deploy do nada, café, cochilo…) ----------
+    def cuidar_da_esquete(self):
+        agora = time.time()
+        tocando = bool(self.musica and self.musica["tocando"])
+        if self.esquete:
+            # você chamou (clicou, arrastou, pediu algo) ou ele saiu correndo: larga tudo, sem fala de fim
+            if self.ocupado or self.arrasto or self.entrada or self.modo != "passeio" or not self.visivel:
+                self.esquete = None
+            elif agora >= self.esquete["ate"]:
+                fim, emoji = esquetes.final(self.esquete["nome"])
+                self.esquete = None
+                if fim:
+                    self.comentar(fim, duracao=5)
+                if emoji and self.cfg["emojis"]:
+                    self.soltar_emoji(emoji)
+            return
+        if not self.cfg["esquetes"] or agora < self.prox_esquete:
+            return
+        if (self.balao or self.entrada or self.falas or self.ocupado or self.arrasto or self.emoji
+                or self.comentando or self.lendo_notificacoes or self.modo != "passeio" or not self.visivel):
+            return
+        self.prox_esquete = agora + random.uniform(240, 540)  # uma a cada 4–9 min
+        nome = self.ultima_esquete = esquetes.sortear(self.ultima_esquete, tocando)
+        self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
+                        "musica": tocando}
+        self.alvo = None  # para onde está
+        inicio = esquetes.fala(nome, "inicio", tocando)
+        if inicio:
+            self.comentar(inicio, duracao=4)
+        emoji = esquetes.ESQUETES[nome].get("emoji_inicio")
+        if emoji and self.cfg["emojis"]:
+            self.soltar_emoji(emoji)
+
     def talvez_emoji(self):
         if not self.cfg["emojis"] or self.emoji or time.time() < self.prox_emoji:
             return
-        if self.balao or self.entrada or self.ocupado or self.arrasto or not self.visivel:
+        if self.balao or self.entrada or self.ocupado or self.arrasto or self.esquete or not self.visivel:
             return
         self.prox_emoji = time.time() + random.uniform(60, 180)
         ativa = next((j for j in janelas.listar() if j["exe"] == self.app_atual), None)

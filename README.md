@@ -29,7 +29,10 @@ terminam e solta piadas sobre o que está na tela.
   (dá pra continuar perguntando sobre o mesmo print);
   `Win+Shift+N` resume as notificações da central do Windows, com botão pra limpar as que ele leu.
   Menu no botão direito e no ícone da bandeja.
-- **Conversa:** no balão dá pra anexar um print da janela que você está usando e abrir
+- **Esquetes (à toa):** de vez em quando, parado, ele apronta: "Tive uma ideia!", saca o notebook,
+  trabalha e conta o resultado (às vezes um app novo, às vezes "acabaram meus tokens"); deploy do nada,
+  git push --force suando, café, cochilo, alongamento e dancinha. Liga/desliga no menu.
+- **Conversa:** no balão dá pra anexar um print (aparece uma miniatura dele) da janela que você está usando e abrir
   "ver conversa" com o histórico inteiro. Notificação ou outro programa pulando na frente não fecha
   a conversa; só clicar fora.
 

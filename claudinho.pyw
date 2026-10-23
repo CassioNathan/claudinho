@@ -659,7 +659,9 @@ class Balao:
             tem_rodape = rodape is not None or len(self.paginas) > 1
             self.texto = ctk.CTkLabel(self.frame, text=self.paginas[0], wraplength=340, justify="left",
                                       anchor="w", text_color=TEXTO, font=f(13))
-            self.texto.pack(fill="x", padx=16, pady=(2 if titulo else 10, 2 if tem_rodape or entrada else 10))
+            margem_dir = 42 if len(self.paginas) > 1 else 16  # espaço pro ✕ no canto
+            self.texto.pack(fill="x", padx=(16, margem_dir),
+                            pady=(2 if titulo else 10, 2 if tem_rodape or entrada else 10))
         self.rodape = None
         if rodape is not None or len(self.paginas) > 1:
             self.rodape = ctk.CTkLabel(self.frame, text="", font=f(11), text_color=APAGADO,
@@ -690,6 +692,14 @@ class Balao:
         w, h = self.CAUDA_W, self.CAUDA_H
         self.cauda.create_polygon(0, 0, w, 0, w // 2, h, fill=FUNDO, outline="")
         self.cauda.create_line(0, 0, w // 2, h, w, 0, fill=LARANJA, width=2)
+
+        # mais de uma página: ✕ no canto pra fechar (clicar no texto só avança, em círculo)
+        self.interagiu = False  # já mexeu nas páginas: aí não some sozinho e fecha com clique fora
+        if len(self.paginas) > 1:
+            fechar = tk.Label(self.frame, text="✕", bg=FUNDO, fg=APAGADO, font=("Segoe UI", 10),
+                              cursor="hand2", padx=4)
+            fechar.place(relx=1.0, x=-10, y=6, anchor="ne")
+            fechar.bind("<Button-1>", lambda e: (self.fechar_pelo_x(), "break")[1])
 
         self.win.bind("<Enter>", self.mouse_entrou)
         self.win.bind("<Leave>", self.mouse_saiu)
@@ -723,20 +733,36 @@ class Balao:
         partes = [self.rodape_base] if self.rodape_base else []
         if len(self.paginas) > 1:
             n, total = self.pagina + 1, len(self.paginas)
-            partes.append(f"clique pra continuar ▸ {n}/{total}" if n < total else f"fim · {n}/{total}")
+            partes.append(f"clique pra continuar ▸ {n}/{total}" if n < total
+                          else f"clique pra voltar ao início ↺ {n}/{total}")
         self.rodape.configure(text="  ·  ".join(partes))
 
     def clicou(self, e):
         if self.entry is not None and str(e.widget).startswith(str(self.entry)):
             return  # clique no campo de texto: só digita
-        if self.pagina + 1 < len(self.paginas):  # próxima página
-            self.pagina += 1
+        if len(self.paginas) > 1:  # avança em círculo: da última volta pra primeira (fecha no ✕ ou clicando fora)
+            self.pagina = (self.pagina + 1) % len(self.paginas)
             self.texto.configure(text=self.paginas[self.pagina])
             self.desenhar_rodape()
-            if self.ate is not None:  # tempo novo para ler a página
-                self.ate = time.time() + max(self.duracao or 0, 6 + len(self.paginas[self.pagina]) / 15)
+            self.interagiu = True
+            self.ate = None  # está lendo: não some sozinho
         elif self.entry is None and not self.botoes:  # conversa e confirmação não fecham no clique
             self.app.fechar_balao()
+
+    def fechar_pelo_x(self):
+        if self.entry is not None:
+            self.app.fechar_conversa()
+        else:
+            self.app.fechar_balao()
+
+    def clique_fora(self):
+        """Botão do mouse apertado fora deste balão (e fora do mascote)?"""
+        if not (user32.GetAsyncKeyState(0x01) & 0x8000):
+            return False
+        x, y = cursor()
+        dentro = self.win.winfo_rootx() <= x < self.win.winfo_rootx() + self.win.winfo_width() and \
+            self.win.winfo_rooty() <= y < self.win.winfo_rooty() + self.win.winfo_height()
+        return not dentro and not self.app.mouse_no_mascote
 
     def aparecer(self):
         try:
@@ -1418,6 +1444,8 @@ class Claudinho:
                 self.fechar_balao()
         if self.conversa_deve_fechar():
             self.fechar_conversa()
+        if self.balao and self.balao.interagiu and self.balao.clique_fora():  # leu as páginas e clicou fora
+            self.fechar_balao()
         if self.balao and self.balao.expirou():
             self.fechar_balao()
         livre = self.balao is None or self.balao.tipo == "pensando"

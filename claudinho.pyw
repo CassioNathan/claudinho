@@ -113,7 +113,8 @@ CONTROLE, VERDE = "#4a4a55", "#3fbf6b"
 CABO, PALHA = "#8b5a2b", "#d8b25a"
 FONE = "#2c2c2c"
 PESO, BARRA = "#3a3936", "#9b978d"
-ROBO, ROBO_ESCURO = "#9aa3ad", "#6c7480"  # o mini Claudinho robô do projeto secreto
+ROBO, ROBO_ESCURO = "#9aa3ad", "#6c7480"  # o Claudinho robô do projeto secreto
+FLAGRA_SUSTO, FLAGRA_PUF, FLAGRA_FIM = 1.6, 3.0, 5.5  # "!" → puf (robô some) → assobia → acaba
 CANECA = "#e8e2d4"   # esquete do café
 CAFE = "#6b4226"
 SUOR = "#8ec5ff"     # gotinha do git push --force
@@ -707,8 +708,6 @@ OLHAR_ESQUETE = {
     "reuniao": lambda f, t: (0, 0),
     "borboleta": lambda f, t: (-1 if f < 0.45 else 1, -1),
     "malhando": lambda f, t: (-1 if (t // 12) % 2 == 0 else 1, -1),
-    # de olho no robô → olha pra você (pego no flagra) → esconde o robô → olha pro alto, disfarçando
-    "construindo": lambda f, t: (-1, 1) if f < 0.62 else (0, 0) if f < 0.72 else (-1, 0) if f < 0.82 else (1, -1),
 }
 
 
@@ -1348,7 +1347,7 @@ class Claudinho:
         if self.modo == "passeio":
             # parado quando fala, e também quando está trabalhando no notebook
             falando = (self.balao and self.balao.tipo != "pensando") or self.entrada or self.ocupado \
-                or (self.esquete and self.esquete.get("fase_inseto") != "cacando")  # caçando o bug: anda
+                or (self.esquete and not self.anda_na_esquete())  # caçando o bug / montando o robô: anda
             if falando:
                 return
             if self.alvo is None:
@@ -1356,7 +1355,7 @@ class Claudinho:
                     return
                 self.alvo = self.novo_alvo(area)
 
-        vel = self.S * 2.6 if self.modo == "correndo" or self.cacando() else max(2, self.S * 0.45)
+        vel = self.S * 2.6 if self.modo == "correndo" or self.anda_na_esquete() else max(2, self.S * 0.45)
         dx, dy = self.alvo[0] - self.x, self.alvo[1] - self.y
         dist = (dx * dx + dy * dy) ** 0.5
         if abs(dx) > 1:
@@ -1405,7 +1404,7 @@ class Claudinho:
         visual = self.cfg["visual"]
         corpo = skins.cor_do_corpo(visual["cor"], self.t)
         olho = skins.CORES[visual["cor"]]["olho"]
-        correndo = self.movendo and (self.modo == "correndo" or self.cacando())
+        correndo = self.movendo and (self.modo == "correndo" or self.anda_na_esquete())
         carregado = bool(self.arrasto and self.arrasto["moveu"])  # sendo levado pelo mouse
         pousando = time.time() < self.pouso_ate
         if pousando:
@@ -1433,7 +1432,7 @@ class Claudinho:
             pulo = -1 if (self.t // 14) % 2 else 0
         elif esq == "danca":
             pulo = 1 if self.t % 6 < 3 else 0
-        elif esq == "construindo" and 0.62 <= fase < 0.67:  # levou um susto: você estava olhando!
+        elif esq == "construindo" and (self.depois_do_flagra() or 99) < 0.4:  # levou um susto: você estava olhando!
             pulo = 1
         elif esq == "build_quebrou":  # encolhido debaixo da chuva
             pulo = -1
@@ -1455,7 +1454,8 @@ class Claudinho:
         alvo_nb = 1.0 if no_notebook and not self.movendo else 0.0
         self.notebook += max(-0.15, min(0.15, alvo_nb - self.notebook))
         digitando = self.notebook >= 0.99
-        martelando = esq == "construindo" and fase < 0.62
+        trabalho = self.esquete.get("acao") if esq == "construindo" and self.esquete.get("montando") else None
+        martelando = bool(trabalho) and not self.movendo
         bracos_soltos = digitando or carregado or martelando or esq in ("alongar", "danca", "fogo", "jogo", "malhando")
 
         for lin, linha in enumerate(CORPO):
@@ -1484,12 +1484,20 @@ class Claudinho:
             for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
                 px(col, 4 if sobe else 5, corpo)
                 px(col, 5 if sobe else 6, corpo)
-        elif martelando:  # bracinho esquerdo martelando o robô; o direito parado
-            batida = (self.t // 3) % 2
-            px(0, 2 + 2 * batida, corpo)
-            px(0, 3 + 2 * batida, corpo)
-            px(10, 3, corpo)
-            px(10, 4, corpo)
+        elif martelando:  # a mão do lado do robô trabalha (martelo sobe e desce, solda firme, parafuso gira)
+            mao = 10 if self.esquete["robo"]["x"] > self.x else 0
+            if trabalho == "martelo":
+                desce = (self.t // 3) % 2
+                linhas = (2, 3) if not desce else (4, 5)
+            elif trabalho == "solda":
+                linhas = (3, 4)
+            else:  # parafuso: mexidinha curta
+                linhas = (3, 4) if (self.t // 2) % 2 else (2, 3)
+            for lin in linhas:
+                px(mao, lin, corpo)
+            outra = 0 if mao == 10 else 10
+            px(outra, 3, corpo)
+            px(outra, 4, corpo)
         elif esq == "malhando":  # um braço levanta o halter, depois o outro
             erguido = 0 if (self.t // 12) % 2 == 0 else 10
             for col in (0, 10):
@@ -1523,6 +1531,11 @@ class Claudinho:
             olhar_x, olhar_y = (-1 if self.t % 12 < 6 else 1), 0
         elif esq == "cafe":
             olhar_x, olhar_y = 1, 0  # olhando pra caneca
+        elif esq == "construindo":  # de olho no robô → olha pra você (flagra) → olha pro robô sumindo → disfarça
+            lado_robo = 1 if self.esquete["robo"]["x"] > self.x else -1
+            dt = self.depois_do_flagra()
+            olhar_x, olhar_y = ((lado_robo, 0) if dt is None else (0, 0) if dt < FLAGRA_SUSTO
+                                else (lado_robo, 0) if dt < FLAGRA_PUF else (-lado_robo, -1))
         elif esq in OLHAR_ESQUETE:
             olhar_x, olhar_y = OLHAR_ESQUETE[esq](fase, self.t)
         piscando = time.time() < self.piscar_ate
@@ -2710,6 +2723,8 @@ class Claudinho:
                 self.largar_esquete()
             elif self.esquete["nome"] == "inseto":
                 self.cuidar_do_inseto(agora)
+            elif self.esquete["nome"] == "construindo":
+                self.cuidar_da_construcao(agora)
             elif agora >= self.esquete["ate"]:
                 fim, emoji = esquetes.final(self.esquete["nome"], self.cfg["personalidade"] == "ultron")
                 self.esquete = None
@@ -2742,45 +2757,131 @@ class Claudinho:
             self.soltar_emoji(emoji)
         if nome == "inseto":
             self.criar_inseto()
+        elif nome == "construindo":
+            self.criar_robo()
 
     def desenhar_projeto_secreto(self, fase, quadrado):
-        """Mini Claudinho robô montado de baixo pra cima à esquerda dele, com faíscas; depois o "!", a poeira
-        de quando ele some com o robô e a notinha do assobio."""
-        t = self.t
-        if fase < 0.72:
-            pecas = [(-3, 7), (-1, 7), (-3, 6), (-2, 6), (-1, 6), (-3, 5), (-2, 5), (-1, 5), (-3, 4), (-2, 4),
-                     (-1, 4), (-2, 3)]  # pernas, corpo, cabeça, antena
-            prontas = len(pecas) if fase >= 0.6 else int(len(pecas) * max(0.0, fase - 0.05) / 0.55)
-            for col, lin in pecas[:prontas]:
-                quadrado(col, lin, ROBO if lin != 3 else ROBO_ESCURO)
-            if prontas == len(pecas):  # olhos vermelhos acendendo (e piscando)
-                cor = "#ff3b30" if t % 8 < 6 else "#7a1a14"
-                quadrado(-3, 5, cor)
-                quadrado(-1, 5, cor)
-            if 0.05 < fase < 0.6 and t % 3 == 0:  # faíscas da martelada
-                quadrado(-0.6 + (t % 2) * 0.3, 3.5 + (t % 4) * 0.5, FOGO_3, 0.35)
-                quadrado(-0.2, 4.2 + (t % 3) * 0.4, "#fff3b0", 0.25)
-        if 0.62 <= fase < 0.74:  # "!" em cima da cabeça
+        """O que fica em volta dele: o "!" do flagra e a notinha do assobio disfarçando."""
+        dt = self.depois_do_flagra()
+        if dt is None:
+            return
+        if dt < FLAGRA_SUSTO:
             quadrado(11.2, -1.6, "#f4efe4", 0.5)
             quadrado(11.2, -1.1, "#f4efe4", 0.5)
             quadrado(11.2, -0.1, "#f4efe4", 0.5)
-        if 0.72 <= fase < 0.82:  # puf! a poeira de quando o robô some
-            abre = (fase - 0.72) / 0.1
-            for col, lin in ((-2, 5.5), (-3, 6.3), (-1, 6.5), (-2.5, 4.4), (-1.4, 4.6)):
-                quadrado(col - abre * 0.4, lin - abre * 0.6, POEIRA, 0.5 + abre * 0.4)
-        if fase >= 0.82:  # assobiando, como se nada tivesse acontecido
-            sobe = (t // 3) % 4 * 0.4
+        if dt >= FLAGRA_PUF:
+            sobe = (self.t // 3) % 4 * 0.4
             quadrado(11.5, 0.6 - sobe, NB_TECLA, 0.6)
             quadrado(12.0, -0.4 - sobe, NB_TECLA, 0.25)
             quadrado(12.0, -0.15 - sobe, NB_TECLA, 0.25)
+
+    # ----- esquete do projeto secreto: monta um Claudinho robô do tamanho dele, de lá pra cá -----
+    def criar_robo(self):
+        _, area, _ = self.area()
+        # o robô fica do lado que tem espaço (e com espaço pra ele trabalhar dos dois lados)
+        lado = -1 if self.x - area[0] > area[2] - (self.x + self.W) else 1
+        x = limitar(self.x + lado * self.W * 1.6, area[0] + self.W, area[2] - 2 * self.W)
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-transparentcolor", CHAVE)
+        win.config(bg=CHAVE)
+        canvas = tk.Canvas(win, width=self.W, height=self.H, bg=CHAVE, highlightthickness=0)
+        canvas.pack()
+        fora_da_barra(win)
+        tk.Wm.wm_geometry(win, f"{self.W}x{self.H}+{int(x)}+{int(self.y)}")
+        self.esquete.update(robo={"win": win, "canvas": canvas, "x": x, "y": self.y},
+                            montando=True, ponto=0, ate_ponto=0, acao=None)
+        self.desenhar_robo(0.0)
+
+    def desenhar_robo(self, fase):
+        """O Claudinho robô: mesmo corpo dele em metal, montado de baixo pra cima; olhos acendem no fim;
+        faíscas no lado em que ele está trabalhando; poeira quando some."""
+        r, S = self.esquete["robo"], self.S
+        c = r["canvas"]
+        c.delete("all")
+        oy = FOLGA * S
+
+        def px(col, lin, cor, lado=1.0):
+            x0, y0 = (col + MARGEM) * S, oy + lin * S
+            c.create_rectangle(x0, y0, x0 + lado * S, y0 + lado * S, fill=cor, width=0)
+
+        dt = self.depois_do_flagra()
+        if dt is not None and dt >= FLAGRA_SUSTO:  # puf! só a poeira, abrindo e sumindo
+            abre = min(1.0, (dt - FLAGRA_SUSTO) / (FLAGRA_PUF - FLAGRA_SUSTO))
+            if abre < 1:
+                for col, lin in ((3, 3), (6, 2), (8, 4), (2, 5), (5, 5), (7, 1), (4, 1)):
+                    px(col - abre * 1.5 * (col < 5) + abre * 1.5 * (col >= 5), lin - abre * 1.2, POEIRA, 1 + abre)
+            return
+        pecas = [(col, lin) for lin in (7, 6) for col in PERNAS] + \
+                [(col, lin) for lin in range(len(CORPO) - 1, -1, -1) for col, ch in enumerate(CORPO[lin]) if ch == "X"] + \
+                [(5, -1)]  # antena
+        prontas = len(pecas) if fase >= 0.58 or dt is not None else int(len(pecas) * max(0.0, fase - 0.04) / 0.54)
+        for col, lin in pecas[:prontas]:
+            px(col, lin, ROBO_ESCURO if lin == -1 or (lin in (3, 4) and col in (0, 10)) else ROBO)
+        if prontas == len(pecas):
+            vermelho = "#ff3b30" if self.t % 8 < 6 else "#7a1a14"
+            px(5, -1.8, vermelho, 0.8)  # bolinha da antena
+            l1, l2 = OLHOS_Y[0]
+            for col in OLHOS_X[0]:
+                px(col, l1, vermelho)
+                px(col, l2, vermelho)
+        acao = self.esquete.get("acao")
+        if acao and not self.movendo and dt is None and self.t % 2 == 0:  # faíscas do lado onde ele trabalha
+            borda = -0.8 if self.x < r["x"] else 10.9
+            cores = {"martelo": (FOGO_3, "#fff3b0"), "solda": ("#bfe6ff", "#ffffff"), "parafuso": (POEIRA, "#d0cbc0")}[acao]
+            for k in range(3):
+                px(borda + ((self.t + k) % 3 - 1) * 0.4, 2 + ((self.t * 3 + k * 5) % 9) * 0.4, cores[k % 2], 0.35)
+
+    def depois_do_flagra(self):
+        """Segundos desde que ele percebeu que você estava olhando (None = ainda montando)."""
+        flagra = self.esquete and self.esquete.get("flagra")
+        return time.time() - flagra if flagra else None
+
+    def cuidar_da_construcao(self, agora):
+        e = self.esquete
+        fase = (agora - e["inicio"]) / esquetes.ESQUETES["construindo"]["duracao"]
+        dt = self.depois_do_flagra()
+        if dt is not None and dt >= FLAGRA_FIM:  # terminou: robô já sumiu, fala de disfarce
+            self.largar_esquete()
+            fim, emoji = esquetes.final("construindo", self.cfg["personalidade"] == "ultron")
+            if fim:
+                self.comentar(fim, duracao=5)
+            return
+        if e["montando"] and fase >= 0.6 and not self.movendo:  # robô pronto (e ele num dos lados)… e aí percebe você
+            e.update(montando=False, acao=None, flagra=agora)
+            self.alvo, self.pausa_ate = None, agora + 10
+        if e["montando"] and agora >= e["ate_ponto"] and not self.movendo:
+            # próximo lugar de trabalho: um lado do robô ou o outro, e uma ação diferente
+            _, area, _ = self.area()
+            r = e["robo"]
+            e["ponto"] = 1 - e["ponto"]
+            alvo_x = r["x"] + (-1 if e["ponto"] == 0 else 1) * self.W * 0.95
+            self.alvo = self.limitar_na_area(alvo_x, r["y"], area)
+            e["acao"] = random.choice([a for a in ("martelo", "solda", "parafuso") if a != e["acao"]])
+            e["ate_ponto"] = agora + random.uniform(2.0, 3.2)
+        if e["montando"] and self.movendo:
+            e["robo"]["win"].lift()  # trocando de lado: ele passa por trás do robô, não por cima
+        if dt is not None and dt >= FLAGRA_PUF and not e.get("sumiu"):
+            e["sumiu"] = True
+            e["robo"]["win"].withdraw()
+        if not e.get("sumiu"):
+            self.desenhar_robo(fase)
 
     def cacando(self):
         """Indo atrás do bug da esquete do inseto (vai correndo)."""
         return bool(self.esquete and self.esquete.get("fase_inseto") == "cacando")
 
+    def anda_na_esquete(self):
+        """Esquetes em que ele se move (sempre correndo, com pressa): caçando o bug, ou indo de um lado pro outro
+        do robô que está montando escondido."""
+        return self.cacando() or bool(self.esquete and self.esquete.get("montando"))
+
     def largar_esquete(self):
         if self.esquete and self.esquete.get("inseto"):
             self.esquete["inseto"]["win"].destroy()
+        if self.esquete and self.esquete.get("robo"):
+            self.esquete["robo"]["win"].destroy()
         self.esquete = None
 
     # ----- esquete do inseto: aparece um bichinho perto, ele vai lá e come -----

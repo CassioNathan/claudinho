@@ -25,7 +25,7 @@ ESQUETES = {
                 "Foi só um bug visual. Pode esquecer."],
     },
     "construindo": {  # monta um mini Claudinho robô do lado, percebe que você viu e some com ele (fases no claudinho.pyw)
-        "duracao": 13,
+        "duracao": 18,  # a montagem; o flagra e o disfarce vêm depois (contados a partir dele)
         "inicio": [],  # ele acha que ninguém está olhando
         "fim": ["Construindo? Eu? Nada não.", "Que robô? Não tem robô nenhum aqui.", "Você não viu nada. ♪",
                 "Era… um projeto escolar. É. Isso."],

@@ -53,6 +53,9 @@ terminam e solta piadas sobre o que está na tela.
   aba do YouTube. O fundo da extensão pergunta ao Claudinho (127.0.0.1) a cada segundo, com uma chave própria
   (`~/.claudinho/ext_token`); só navega dentro de music.youtube.com e www.youtube.com. Sem extensão ou sem aba
   aberta, abre aba nova como antes. O navegador exige o modo do desenvolvedor ligado pra extensão carregada de pasta.
+- **Personalidade 🤖:** no painel, "Claudinho" ou "Ultron" (IA vilã teatral, frases próprias): muda o tom das piadas
+  do Haiku, o banco de frases e o jeito de falar no chat (que continua ajudando de verdade; vai nas instruções fixas
+  do chat, sem custo por mensagem). Combina com a cor Metal de olhos vermelhos / pacote Ultron.
 - **Autoconfiança 😎:** ele sabe como está (cor, adereços, emo, venda) e onde aparece no print. De vez em quando a
   piada é ele se gabando (no Haiku e no banco de frases), comenta quando você troca a roupa dele, e se aparecer o
   logo do Claude/Claude Code na tela ele reage ("esse sou eu", "meu irmão gêmeo", "isso é um espelho?").

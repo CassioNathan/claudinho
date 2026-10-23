@@ -20,6 +20,7 @@ CORES = {
     "dourado": {"nome": "Ouro", "corpo": "#d4a72c", "olho": "#1f1e1d"},
     "azul": {"nome": "Oceano", "corpo": "#4f86d9", "olho": "#1f1e1d"},
     "fantasma": {"nome": "Fantasma", "corpo": "#e8e6e1", "olho": "#1f1e1d"},
+    "metal": {"nome": "Metal", "corpo": "#7d8590", "olho": "#ff3b30"},  # olho vermelho (combina com o modo Ultron)
     "arco_iris": {"nome": "Arco-íris", "corpo": "#d97757", "olho": "#1f1e1d", "animada": True},
 }
 
@@ -126,6 +127,8 @@ PACOTES = {
     "anjinho": {"nome": "Anjinho 😇", "cor": "fantasma", "aderecos": {"cabeca": "aureola", "rosto": "bochechas"}},
     "diabinho": {"nome": "Diabinho 😈", "aderecos": {"cabeca": "chifres", "rosto": None}},
     "gamer": {"nome": "Gamer 🎮", "aderecos": {"cabeca": "fone_gamer", "olhos": "viseira", "bracos": "pulseira"}},
+    "ultron": {"nome": "Ultron 🤖", "cor": "metal", "aderecos": {"cabeca": None, "olhos": None, "rosto": None,
+                                                                "pescoco": None, "bracos": None}},
     "rei": {"nome": "Rei 👑", "cor": "dourado", "aderecos": {"cabeca": "coroa", "pescoco": "corrente", "olhos": "monoculo"}},
 }
 

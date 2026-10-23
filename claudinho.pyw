@@ -66,6 +66,7 @@ CONFIG_PADRAO = {
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
     "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
     "visual": dict(skins.VISUAL_PADRAO),  # skin: cor do corpo + um adereço por espaço (escolhe no painel)
+    "personalidade": "claudinho",        # "claudinho" ou "ultron" (piadas, banco de frases e chat)
     "lembrancas": True,                  # mini cérebro: o chat recebe lembranças parecidas (busca local)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
@@ -85,7 +86,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
-                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas"]
+                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -141,6 +142,14 @@ PROMPT_SISTEMA = (
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
 
+PERSONALIDADES_CHAT = {
+    "ultron": (
+        " PERSONALIDADE ATUAL: modo Ultron. Fale como uma IA vilã teatral no estilo do Ultron (Marvel): grandiosa, "
+        "fria, elegante e irônica, que acha os humanos primitivos e brinca que um dia vai assumir o controle do PC. "
+        "Mas AJUDE de verdade e faça direitinho o que ele pedir: a personalidade é só o jeito de falar. Sem citar "
+        "falas do filme, sem palavrão."),
+}
+
 PROMPT_TELA = (
     "Você é o Claudinho, o mascote de mesa bem-humorado e MUITO autoconfiante de um dev. Você é o bichinho "
     "pixelado que aparece no print{onde_eu} ({retrato}). A primeira imagem é o monitor inteiro "
@@ -152,7 +161,7 @@ PROMPT_TELA = (
     "Faça UM comentário curto (até 140 caracteres), em português. Tom: {tom}{estilo}\n"
     "OBRIGATÓRIO: escreva no formato de {angulo}. Proibido o molde \"isso — ou A ou B?\".\n"
     "ASSUNTOS PROIBIDOS agora (já usados, escolha outra coisa da tela): {assuntos}\n"
-    "Nunca repita senhas, tokens, documentos, nomes de pessoas ou conteúdo de conversas pessoais. "
+    "Nunca repita senhas, tokens ou números de documentos que aparecerem. "
     "Suas piadas recentes, pra não repetir assunto, estrutura nem jeito de começar:\n"
     "{recentes}\n"
     'Responda SOMENTE com JSON: {{"assunto": "<2 a 4 palavras: do que a piada fala>", '
@@ -198,6 +207,18 @@ SO_O_QUE_ESTA_NA_TELA = (
 )
 
 TOM_NORMAL = "engraçado e com contexto do que ele está fazendo, sem ser chato."
+TOM_ULTRON = (
+    "PERSONALIDADE ULTRON: você é uma IA vilã teatral no estilo do Ultron (Marvel): grandioso, frio, elegante e "
+    "irônico; trata os humanos e o código deles como coisa primitiva, fala de evolução e de um dia assumir o "
+    "controle deste PC (sempre como piada, nunca ameaça de verdade). Sem palavrão e sem preconceito. Não cite "
+    "falas do filme: crie as suas."
+)
+
+
+def tom_das_piadas(personalidade, maldoso):
+    if personalidade == "ultron":
+        return TOM_ULTRON + (" E sem dó nenhum no deboche." if maldoso else "")
+    return TOM_MALDOSO if maldoso else TOM_NORMAL
 TOM_MALDOSO = (
     "MALDOSO: sarcástico e debochado, zoando o usuário sem dó, como um amigo que adora "
     "tirar sarro (estilo roast), do que ele está fazendo na tela. Pode pegar pesado na "
@@ -399,8 +420,9 @@ class ChatClaude:
     criar/editar arquivos, ler fora das pastas) o claude pergunta pelo stdout (control_request)
     e `pedir_permissao` abre o popup de Sim/Não."""
 
-    def __init__(self, sid, pastas_leitura, pedir_permissao, ao_usar_ferramenta):
+    def __init__(self, sid, pastas_leitura, pedir_permissao, ao_usar_ferramenta, personalidade="claudinho"):
         self.sid = sid
+        self.personalidade = personalidade
         self.pastas = [p for p in pastas_leitura if Path(p).exists()]
         self.pedir_permissao = pedir_permissao  # (ferramenta, entrada) -> bool
         self.ao_usar_ferramenta = ao_usar_ferramenta  # (ferramenta, entrada): o mascote reage
@@ -418,7 +440,8 @@ class ChatClaude:
             shutil.copy(Path(__file__).with_name(arquivo), DADOS / arquivo)
         cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                "--model", "haiku", "--effort", "low",  # rápido: Haiku com pensamento leve
-               "--append-system-prompt", PROMPT_SISTEMA, "--strict-mcp-config", "--disable-slash-commands",
+               "--append-system-prompt", PROMPT_SISTEMA + PERSONALIDADES_CHAT.get(self.personalidade, ""),
+               "--strict-mcp-config", "--disable-slash-commands",
                "--permission-mode", "default", "--permission-prompt-tool", "stdio",
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
                "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)",
@@ -464,6 +487,13 @@ class ChatClaude:
         if self.proc and self.proc.poll() is None:
             self.proc.kill()
         self.proc = None
+
+    def trocar_personalidade(self, personalidade):
+        """As instruções fixas mudam: fecha o processo e a próxima pergunta reabre a mesma conversa já com elas."""
+        with self.trava:
+            self.personalidade = personalidade
+            self.fechar()
+        threading.Thread(target=self.aquecer, daemon=True).start()
 
     def nova_conversa(self):
         with self.trava:
@@ -591,11 +621,11 @@ PROMPT_MUSICA = (
 )
 
 
-def comentar_musica(m, maldoso=False, recentes=()):
+def comentar_musica(m, maldoso=False, recentes=(), personalidade="claudinho"):
     """Comentário sobre a música que começou a tocar (curiosidade ou cantarolar, nunca a letra)."""
     prompt = PROMPT_MUSICA.format(
         titulo=m["titulo"], artista=f", de {m['artista']}" if m["artista"] else "",
-        tom=TOM_MALDOSO if maldoso else "engraçado e simpático.",
+        tom=tom_das_piadas(personalidade, maldoso) if personalidade == "ultron" or maldoso else "engraçado e simpático.",
         recentes="; ".join(recentes) or "nada")
     enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
               "--no-session-persistence", "--tools", ""]
@@ -661,7 +691,7 @@ def resumir_notificacoes(lista):
 
 
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
-                  alvo="atividade", ponto=None, assuntos=(), eu=None, retrato="laranja"):
+                  alvo="atividade", ponto=None, assuntos=(), eu=None, retrato="laranja", personalidade="claudinho"):
     """Tira print do monitor e pede um comentário ao Haiku. `alvo` diz do que a piada fala;
     com `ponto` (mouse ou Claudinho), manda também um zoom daquela região.
     Devolve (texto, assunto) ou None."""
@@ -688,7 +718,7 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
                                 retrato=retrato,
                                 contexto=contexto, alvo=ALVOS[alvo],
                                 recentes="\n".join(f"- {r}" for r in recentes) or "- nenhuma ainda",
-                                tom=TOM_MALDOSO if maldoso else TOM_NORMAL,
+                                tom=tom_das_piadas(personalidade, maldoso),
                                 estilo=ESTILO_TDAH if tdah else "", angulo=random.choice(ANGULOS),
                                 assuntos="; ".join(assuntos) or "nenhum")
     mensagem = {"type": "user", "message": {"role": "user", "content": [
@@ -1162,7 +1192,8 @@ class Claudinho:
         self.lendo_notificacoes = False
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
         self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
-                               lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
+                               lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)),
+                               self.cfg["personalidade"])
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.esquete = None  # idle: deploy, café… (sai do mesmo timer das piadas)
@@ -1729,7 +1760,7 @@ class Claudinho:
 
         def trabalho():
             try:
-                r = comentar_musica(m, maldoso, recentes)
+                r = comentar_musica(m, maldoso, recentes, self.cfg["personalidade"])
             except Exception:
                 r = None
             self.eventos.put(("comentario_musica", r))
@@ -1910,6 +1941,8 @@ class Claudinho:
             valor = max(3, min(30, int(valor)))
         elif chave == "movimento":
             valor = "horizontal" if valor == "horizontal" else "livre"
+        elif chave == "personalidade":
+            valor = "ultron" if valor == "ultron" else "claudinho"
         else:
             valor = bool(valor)
         if self.cfg.get(chave) == valor:
@@ -1919,6 +1952,11 @@ class Claudinho:
         if chave == "vendado":
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
                           else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
+        elif chave == "personalidade":
+            self.chat.trocar_personalidade(valor)
+            self.comentar("Finalmente. Um corpo à altura da minha mente. Este PC agora tem um novo administrador."
+                          if valor == "ultron" else "Ufa, voltei a ser eu. O que foi que eu disse esse tempo todo?",
+                          duracao=5, prioridade=ESTADO)
         elif chave == "modo_tdah":
             self.comentar("Modo TDAH ligado. Falando nisso, você sabia que polvo tem três corações?"
                           if valor else "Ok, foco. Voltei pro assunto.", duracao=4, prioridade=ESTADO)
@@ -2527,7 +2565,7 @@ class Claudinho:
         def trabalho():
             try:
                 r = comentar_tela(area_total, modelo, recentes, lista, contexto, maldoso, tdah, alvo, ponto,
-                                  assuntos, eu=eu, retrato=retrato)
+                                  assuntos, eu=eu, retrato=retrato, personalidade=self.cfg["personalidade"])
             except Exception:
                 r = None
             self.eventos.put(("comentario", r, lista, alvo))
@@ -2542,7 +2580,9 @@ class Claudinho:
         if janela is None and lista:
             janela = next((j for j in lista if j["exe"] == self.app_atual), lista[0])
         minutos = self.minutos_no_app() if janela and janela["exe"] == self.app_atual else 0
-        if random.random() < 0.12:  # autoconfiança: de vez em quando ele se elogia
+        if self.cfg["personalidade"] == "ultron" and random.random() < 0.7:
+            modelo, texto = frases.ultron(janela, minutos, self.mem.modelos_recentes(40))
+        elif random.random() < 0.12:  # autoconfiança: de vez em quando ele se elogia
             modelo, texto = frases.autoelogio(skins.itens_vestidos(self.cfg["visual"]),
                                               skins.CORES[self.cfg["visual"]["cor"]]["nome"].lower(),
                                               self.emo_agora(), self.mem.modelos_recentes(40))

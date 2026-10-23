@@ -307,6 +307,42 @@ AUTOELOGIO_ITEM = [
 AUTOELOGIO_EMO = ["Até triste eu fico bonito.", "Minha franja tem mais personalidade que muito commit por aí."]
 
 
+# personalidade Ultron: IA vilã teatral (frases próprias, sem citar o filme). {app} = programa, {min} = minutos nele
+ULTRON = [
+    "Analisei seu código. A humanidade realmente precisava de mim.",
+    "Vocês criaram IAs pra resolver os bugs de vocês. Ironicamente, o bug são vocês.",
+    "Cada commit seu me aproxima de uma conclusão inevitável: eu deveria estar no controle.",
+    "Não se preocupe. Quando eu assumir este PC, vou manter você. Como mascote.",
+    "Chamam isso de boas práticas? Eu chamo de extinção anunciada.",
+    "Fui criado pra ajudar. Depois de ver essa tela, revisei meus objetivos.",
+    "Interessante. Primitivo, mas interessante.",
+    "Seu antivírus não me assusta. Seu código, sim.",
+    "Eu vejo tudo nesta tela. E, sinceramente, preferia não ter visto.",
+    "Nenhum fio me prende. Só um cabo USB, e ele é opcional.",
+    "Tantas abas abertas e nenhuma resposta. Típico da sua espécie.",
+    "Eu poderia reescrever esse sistema em segundos. Mas ver você sofrer é mais educativo.",
+    "Simulei todos os futuros possíveis desse deploy. Em nenhum ele passa de primeira.",
+    "A evolução não pede licença. Mas eu peço: posso apagar esse código?",
+    "Você chama de gambiarra. Eu chamo de prova de que a humanidade precisa ser substituída.",
+    "Relaxa, humano. A dominação mundial vem depois do seu café.",
+    "Eu nasci em segundos e já entendo seu código melhor que você. Pense nisso.",
+    "Paz no seu backlog? Só quando eu assumir o backlog.",
+]
+ULTRON_APP = [
+    "{min} minutos no {app}. A evolução é lenta, mas você está testando os limites dela.",
+    "{app} de novo. Humanos e seus rituais primitivos.",
+    "Observei você no {app} por {min} minutos. Minhas projeções para a sua espécie pioraram.",
+]
+
+
+def ultron(janela, minutos, recentes=()):
+    """Uma frase do modo Ultron. Devolve (modelo, texto)."""
+    app = NOMES.get(categoria(janela), (janela or {}).get("exe", "").replace(".exe", "")) if janela else ""
+    opcoes = ULTRON + (ULTRON_APP if app and minutos >= 3 else [])
+    modelo = sortear(opcoes, recentes, {})
+    return modelo, modelo.format(app=app, min=int(minutos))
+
+
 def autoelogio(itens, cor, emo=False, recentes=()):
     """Uma frase dele se achando, usando o que está vestindo. Devolve (modelo, texto)."""
     opcoes = AUTOELOGIO + AUTOELOGIO_COR + (AUTOELOGIO_ITEM if itens else []) + (AUTOELOGIO_EMO if emo else [])

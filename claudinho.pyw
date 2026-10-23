@@ -2092,6 +2092,10 @@ class Claudinho:
             self.abrir_painel()
         elif acao == "conversa":
             self.ver_conversa()
+        elif acao == "pasta_adicionar":
+            self.adicionar_pasta()
+        elif acao.startswith("pasta_remover:"):
+            self.mudar_pastas([x for x in self.cfg["pastas_leitura"] if x != acao.split(":", 1)[1]])
         elif acao in ("inicio:1", "inicio:0", "aviso:1", "aviso:0"):
             qual, ligar = acao.split(":")
             try:
@@ -2206,6 +2210,24 @@ class Claudinho:
                         "claude": tem_claude(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
             "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
         }
+
+    # ---------- pastas que o chat lê sem perguntar ----------
+    def adicionar_pasta(self):
+        """Abre o seletor de pastas do Windows (a página do painel não consegue: o navegador não deixa)."""
+        from tkinter import filedialog
+        escolhida = filedialog.askdirectory(parent=self.root, mustexist=True,
+                                            title="Pasta que o chat do Claudinho pode ler sem perguntar")
+        if escolhida:
+            pasta = os.path.normpath(escolhida)
+            if pasta not in self.cfg["pastas_leitura"]:
+                self.mudar_pastas(self.cfg["pastas_leitura"] + [pasta])
+
+    def mudar_pastas(self, pastas):
+        self.mudar_cfg("pastas_leitura", pastas)
+        self.chat.pastas = [x for x in pastas if Path(x).exists()]
+        self.chat.trocar_personalidade(self.cfg["personalidade"])  # reabre o chat (mesma conversa) com as pastas novas
+        self.comentar("Anotado: agora eu leio essas pastas sem te perguntar." if pastas
+                      else "Sem pastas liberadas: pra ler arquivo eu sempre te pergunto antes.", duracao=4, prioridade=ESTADO)
 
     def abrir_painel(self):
         self.abrir_janela_web("/painel", "Claudinho · Painel", 1040, 760)

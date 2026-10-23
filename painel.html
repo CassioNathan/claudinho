@@ -174,6 +174,8 @@
   .campo { width: 100%; background: #232220; border: 1px solid #45443f; border-radius: 10px; color: var(--texto);
            padding: 10px 12px; font: 13.5px/1.5 Inter, "Segoe UI", sans-serif; resize: vertical; }
   .campo:focus { outline: none; border-color: var(--laranja); }
+  .tirar-pasta { background: none; border: 0; color: var(--apagado); cursor: pointer; margin-left: 4px; font-size: 12px; }
+  .tirar-pasta:hover { color: #e8452c; }
   .toast {
     position: fixed; right: 26px; bottom: 24px; background: #2f3b2f; color: #cdeccd; border: 1px solid #456b45;
     padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; opacity: 0; transform: translateY(8px);
@@ -398,6 +400,7 @@
     <div class="cartao" id="listaAtalhos"></div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
     <div id="pastas"></div>
+    <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
   </section>
   <section id="sistema">
     <h2>🖥️ Sistema</h2>
@@ -647,11 +650,30 @@ function montarResto() {
   document.getElementById("listaAtalhos").innerHTML = Object.entries(estado.atalhos).map(([k, v]) =>
     `<div class="linha"><div class="info"><div class="titulo">${nomesAtalhos[k] || k}</div></div>` +
     v.split("+").map(p => `<kbd>${p}</kbd>`).join(" + ") + `</div>`).join("");
-  document.getElementById("pastas").innerHTML = estado.pastas.map(p => `<span class="pasta">${p}</span>`).join("");
+  montarPastas();
+  document.getElementById("addPasta").onclick = () => acao("pasta_adicionar", "escolha a pasta na janela que abriu 📂");
   for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
   atualizarVivos();
 }
+function montarPastas() {
+  const caixa = document.getElementById("pastas");
+  const assinatura = JSON.stringify(estado.pastas);
+  if (caixa.dataset.assinatura === assinatura) return;  // não remonta à toa (o painel atualiza a cada 3 s)
+  caixa.dataset.assinatura = assinatura;
+  caixa.innerHTML = estado.pastas.length ? "" : '<span class="desc">Nenhuma: pra ler arquivo ele sempre pergunta antes.</span>';
+  for (const pasta of estado.pastas) {
+    const item = document.createElement("span");
+    item.className = "pasta";
+    item.textContent = pasta + " ";
+    const x = document.createElement("button");
+    x.className = "tirar-pasta"; x.textContent = "✕"; x.title = "tirar";
+    x.onclick = () => acao("pasta_remover:" + pasta, "tirei ✓");
+    item.appendChild(x);
+    caixa.appendChild(item);
+  }
+}
 function atualizarVivos() {
+  montarPastas();
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");

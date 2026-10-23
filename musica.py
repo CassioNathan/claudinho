@@ -18,6 +18,7 @@ navegador, logado na sua conta. Com a extensão do Claudinho instalada, usa a ab
 sem ela (ou sem aba aberta), abre uma nova. Pausa o que estiver tocando pra não sair duas músicas.
 """
 import asyncio
+import os
 import sys
 import time
 import webbrowser
@@ -118,10 +119,18 @@ def pela_extensao(site, comando):
         return False
 
 
-def abrir_aba_nova(url):
+def abrir_aba_nova(url, focar=True):
+    """Aba nova no navegador padrão. `focar=False`: devolve o foco pra janela que você estava usando."""
     try:
-        import abrir  # abre no navegador padrão e traz a janela pra frente
-        abrir.abrir_site(url)
+        import abrir
+        if focar:
+            abrir.abrir_site(url)  # abre e traz o navegador pra frente
+            return
+        import ctypes
+        antes = ctypes.windll.user32.GetForegroundWindow()
+        os.startfile(url)
+        time.sleep(1.5)  # o navegador costuma pular pra frente ao abrir aba: devolve o foco
+        abrir.forcar_frente(antes)
     except Exception:
         webbrowser.open(url)
 
@@ -141,21 +150,21 @@ def tocar_no_youtube_music(termo, artista=False):
         controlar("pausar")
         time.sleep(0.3)
     if not na_aba:
-        abrir_aba_nova(url)
+        abrir_aba_nova(url, focar=False)  # música toca em segundo plano: não rouba o foco
     m["na_aba"] = na_aba
     return m
 
 
 def tocar_no_youtube(termo):
-    """Pesquisa no YouTube e abre o primeiro vídeo (na aba aberta, se tiver a extensão). Devolve True se
-    usou a aba que já estava aberta."""
+    """Pesquisa no YouTube e abre o primeiro vídeo, sempre numa aba nova e na frente (vídeo é pra ver).
+    Devolve True se foi pela extensão (que também abre o primeiro resultado sozinha)."""
     from urllib.parse import quote_plus
     # #claudinho-tocar: a extensão abre o primeiro resultado sozinha (sem ela, fica a lista da pesquisa)
     url = f"https://www.youtube.com/results?search_query={quote_plus(termo)}#claudinho-tocar"
     atual = tocando()
     if atual and atual["tocando"]:
         controlar("pausar")
-    if pela_extensao("youtube", {"acao": "abrir", "url": url, "focar": True}):
+    if pela_extensao("youtube", {"acao": "abrir", "url": url, "nova": True, "focar": True}):
         return True
     abrir_aba_nova(url)
     return False
@@ -190,7 +199,7 @@ def main():
         if not termo:
             sys.exit('uso: python musica.py youtube "<o que procurar>"')
         na_aba = tocar_no_youtube(termo)
-        print(f"abri no YouTube o primeiro vídeo de: {termo} ({'na aba aberta' if na_aba else 'numa aba nova'})")
+        print(f"abri no YouTube, numa aba nova, o primeiro vídeo de: {termo}")
     elif acao == "curtir":
         if not pela_extensao("ytmusic", {"acao": "curtir"}):
             sys.exit("não consegui: precisa do YouTube Music aberto e da extensão do Claudinho no navegador")

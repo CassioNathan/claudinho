@@ -155,10 +155,18 @@
   .status-ext { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 10px; font-size: 11.5px;
                 background: #3a3935; color: var(--apagado); }
   .status-ext.ok { background: rgba(111,191,115,.16); color: #9fdca2; }
-  .instrucoes { background: #232220; border: 1px dashed #4a4843; border-radius: 12px; padding: 12px 16px; margin: 4px 0 12px;
-                color: var(--apagado); font-size: 13px; }
-  .instrucoes b { color: var(--texto); }
-  .instrucoes ol { margin: 8px 0; padding-left: 20px; } .instrucoes li { margin: 5px 0; }
+  .cartao-ext { margin-top: auto; background: #2a2927; border: 1px solid #36352f; border-radius: 12px; padding: 11px 12px;
+                display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
+  .cartao-ext .status-ext { align-self: flex-start; margin: 0; }
+  .cartao-ext .botao { padding: 7px 10px; font-size: 12.5px; }
+  .rodape-lateral { margin-top: 0 !important; }
+  .fundo-modal { position: fixed; inset: 0; background: rgba(15,14,13,.7); display: grid; place-items: center; z-index: 4; }
+  .fundo-modal[hidden] { display: none; }
+  .modal { background: var(--cartao); border: 1px solid #3d3c38; border-radius: 16px; padding: 20px 24px; width: min(560px, 90vw);
+           color: var(--apagado); font-size: 13.5px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .modal h3 { color: var(--texto); margin: 0 0 8px; font-size: 17px; }
+  .modal b { color: var(--texto); }
+  .modal ol { margin: 8px 0; padding-left: 20px; } .modal li { margin: 6px 0; }
   .caminho { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
   .caminho code { background: #1a1918; border-radius: 8px; padding: 7px 10px; color: var(--texto); font: 12.5px Consolas, monospace;
                   flex: 1; overflow-x: auto; white-space: nowrap; }
@@ -189,6 +197,11 @@
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
   </nav>
+  <div class="cartao-ext">
+    <div class="topo-ext">🧩 <b>Extensão do navegador</b></div>
+    <div class="status-ext" id="statusExt">—</div>
+    <button class="botao" id="instalarExt">Instalar extensão</button>
+  </div>
   <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span></div>
 </aside>
 
@@ -293,22 +306,6 @@
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Extensão para navegador 🧩</div>
-          <div class="desc">Com ela, ele toca na aba do YouTube Music / YouTube que já está aberta (sem aba nova), curte a música e
-            abre o primeiro vídeo de uma pesquisa. <span id="statusExt" class="status-ext">—</span></div></div>
-        <button class="botao" id="instalarExt">Instalar extensão</button>
-      </div>
-      <div class="instrucoes" id="instrucoes" hidden>
-        <b>Falta só carregar no navegador</b> (ele não deixa instalar sozinho — é uma vez só):
-        <ol>
-          <li>Na página de extensões que abriu, ligue o <b>Modo do desenvolvedor</b>.</li>
-          <li>Clique em <b>Carregar sem compactação</b> (ou "Load unpacked").</li>
-          <li>Escolha esta pasta (já abri ela no Explorer):
-            <div class="caminho"><code id="pastaExt"></code><button class="botao" id="copiarPasta">Copiar</button></div></li>
-        </ol>
-        Pronto: com o YouTube Music aberto, o status aqui em cima vira <b>conectada</b>.
-      </div>
-      <div class="linha">
         <div class="info"><div class="titulo">Fica emo quando toca rock 🖤</div><div class="desc">Veste o pacote emo por cima da skin por uns 45 s e solta um desabafo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emo_rock"><span></span></label>
       </div>
@@ -375,6 +372,22 @@
   </section>
 </main>
 
+<div class="fundo-modal" id="instrucoes" hidden>
+  <div class="modal">
+    <h3>🧩 Extensão do navegador</h3>
+    <p>Com ela, a música troca na aba do YouTube Music que já está aberta (sem roubar o foco), ele curte a música, e vídeo
+       do YouTube abre numa aba nova já no primeiro resultado.</p>
+    <b>Falta só carregar no navegador</b> (ele não deixa programa instalar sozinho — é uma vez só):
+    <ol>
+      <li>Na página de extensões que abriu, ligue o <b>Modo do desenvolvedor</b>.</li>
+      <li>Clique em <b>Carregar sem compactação</b> (ou "Load unpacked").</li>
+      <li>Escolha esta pasta (já abri ela no Explorer):
+        <div class="caminho"><code id="pastaExt"></code><button class="botao" id="copiarPasta">Copiar</button></div></li>
+    </ol>
+    <p>Pronto: com o YouTube Music aberto, o cantinho da lateral vira <b>conectada</b>. Depois ela se atualiza sozinha.</p>
+    <div style="text-align:right"><button class="botao principal" id="fecharModal">Entendi</button></div>
+  </div>
+</div>
 <div class="toast" id="toast">salvo ✓</div>
 <div class="offline" id="offline"><div><b>O Claudinho não respondeu</b>Ele está aberto? Esta janela volta sozinha quando ele voltar.</div></div>
 
@@ -564,9 +577,12 @@ function atualizarVivos() {
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");
   const ext = estado.extensao, st = document.getElementById("statusExt");
-  const abertas = [ext.abas.ytmusic ? "YouTube Music" : "", ext.abas.youtube ? "YouTube" : ""].filter(Boolean);
-  st.textContent = !ext.conectada ? "não conectada" : abertas.length ? `conectada · ${abertas.join(" e ")} aberto` : "conectada";
+  const abasMusic = (ext.abas.ytmusic || 0) - (ext.abas.player_opera ? 1 : 0);
+  const abertas = [ext.abas.player_opera ? "player do Opera" : "", abasMusic > 0 ? "YouTube Music" : "",
+                   ext.abas.youtube ? "YouTube" : ""].filter(Boolean);
+  st.textContent = !ext.conectada ? "não conectada" : abertas.length ? `conectada · ${abertas.join(" e ")}` : "conectada ✓";
   st.className = "status-ext" + (ext.conectada ? " ok" : "");
+  document.getElementById("instalarExt").textContent = ext.conectada ? "Reinstalar" : "Instalar extensão";
   document.getElementById("pastaExt").textContent = ext.pasta;
 }
 
@@ -574,6 +590,7 @@ document.getElementById("instalarExt").onclick = () => {
   acao("instalar_extensao", "preparei a extensão ✓");
   document.getElementById("instrucoes").hidden = false;
 };
+document.getElementById("fecharModal").onclick = () => document.getElementById("instrucoes").hidden = true;
 document.getElementById("copiarPasta").onclick = async () => {
   await navigator.clipboard.writeText(document.getElementById("pastaExt").textContent);
   avisar("caminho copiado ✓");

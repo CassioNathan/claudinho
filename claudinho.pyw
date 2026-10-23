@@ -782,6 +782,27 @@ EXT_TOKEN = chave_da_extensao()
 EXT = {"fila": [], "abas": {}, "visto": 0.0, "trava": threading.Lock()}
 
 
+def versao_da_extensao():
+    """Versão da cópia em ~/.claudinho/extensao (a que o navegador carrega). Se for mais nova que a rodando,
+    a extensão se recarrega e passa a usar ela."""
+    try:
+        return json.loads((DADOS / "extensao" / "manifest.json").read_text(encoding="utf-8"))["version"]
+    except Exception:
+        return None
+
+
+def montar_extensao():
+    """Copia a extensão pra ~/.claudinho/extensao com a chave e o ícone (é essa pasta que o navegador carrega)."""
+    destino = DADOS / "extensao"
+    destino.mkdir(parents=True, exist_ok=True)
+    for arquivo in Path(__file__).with_name("extensao").iterdir():
+        shutil.copy(arquivo, destino / arquivo.name)
+    (destino / "config.js").write_text(
+        f"self.CLAUDINHO = {json.dumps({'porta': PORTA, 'token': EXT_TOKEN})};\n", encoding="utf-8")
+    desenhar_icone(128).save(destino / "icone.png")
+    return destino
+
+
 def extensao_conectada():
     return time.time() - EXT["visto"] < 5
 
@@ -828,12 +849,17 @@ def iniciar_servidor(eventos):
                         if self.path == "/ext/buscar":
                             EXT["abas"], EXT["visto"] = dados.get("abas") or {}, agora
                             comandos, EXT["fila"] = EXT["fila"], []
-                            return self.responder(200, json.dumps({"comandos": comandos}).encode("utf-8"))
+                            # a versão dos arquivos que o Claudinho copiou: se mudou, a extensão se recarrega
+                            corpo = {"comandos": comandos, "versao": versao_da_extensao()}
+                            return self.responder(200, json.dumps(corpo).encode("utf-8"))
                         if self.path == "/ext/enviar":
                             site = dados.get("site")
-                            aberta = extensao_conectada() and (EXT["abas"].get(site) or 0) > 0
+                            comando = dados.get("comando") or {}
+                            # "abrir" a extensão faz mesmo sem aba daquele site (ela cria uma); o resto precisa da aba
+                            aberta = extensao_conectada() and (
+                                (EXT["abas"].get(site) or 0) > 0 or comando.get("acao") == "abrir")
                             if aberta:
-                                EXT["fila"].append(dict(dados.get("comando") or {}, site=site, criado=agora))
+                                EXT["fila"].append(dict(comando, site=site, criado=agora))
                             return self.responder(200, json.dumps({"entregue": aberta}).encode("utf-8"))
                     return self.responder(404)
                 if self.path.startswith("/api/"):
@@ -1964,13 +1990,7 @@ class Claudinho:
     def instalar_extensao(self):
         """Monta a extensão em ~/.claudinho/extensao (com a chave e o ícone), abre a pasta e a página de
         extensões do navegador padrão. O navegador não deixa instalar sozinho: você carrega a pasta lá."""
-        destino = DADOS / "extensao"
-        destino.mkdir(parents=True, exist_ok=True)
-        for arquivo in Path(__file__).with_name("extensao").iterdir():
-            shutil.copy(arquivo, destino / arquivo.name)
-        (destino / "config.js").write_text(
-            f"self.CLAUDINHO = {json.dumps({'porta': PORTA, 'token': EXT_TOKEN})};\n", encoding="utf-8")
-        desenhar_icone(128).save(destino / "icone.png")
+        destino = montar_extensao()
         os.startfile(destino)
         exe = abrir.navegador_padrao()[0] if len(abrir.navegador_padrao()) == 1 else ""
         pagina = {"opera.exe": "opera://extensions", "chrome.exe": "chrome://extensions",
@@ -2843,6 +2863,11 @@ class Claudinho:
                 self.comentar(texto, {"origem": "haiku", "id": pid})
 
     def rodar(self):
+        if (DADOS / "extensao" / "manifest.json").exists():
+            try:
+                montar_extensao()
+            except Exception as e:
+                print("não consegui atualizar a extensão:", e, file=sys.stderr)
         # painel que ficou aberto de um Claudinho anterior não fala mais com este: fecha
         threading.Thread(target=self.fechar_painel, daemon=True).start()
         self.root.mainloop()

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claudinho",
-  "version": "1.0",
+  "version": "1.2",
   "description": "Deixa o Claudinho tocar música e vídeo nas abas do YouTube Music e do YouTube que já estão abertas.",
   "icons": {"128": "icone.png"},
   "permissions": ["alarms"],

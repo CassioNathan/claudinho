@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Claudinho · Painel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fundo: #1c1b19;
+    --lateral: #22211f;
+    --cartao: #2a2927;
+    --cartao2: #33322f;
+    --linha: #3d3c38;
+    --texto: #ece9e1;
+    --apagado: #9b978d;
+    --laranja: #d97757;
+    --laranja2: #e8906f;
+    --verde: #6fbf73;
+    --raio: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--fundo); color: var(--texto);
+    font: 14px/1.45 Inter, "Segoe UI", system-ui, sans-serif;
+    display: grid; grid-template-columns: 232px 1fr; overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--linha); border-radius: 10px; border: 3px solid var(--fundo); }
+
+  /* ---------- lateral ---------- */
+  aside {
+    background: var(--lateral); border-right: 1px solid #2f2e2b;
+    display: flex; flex-direction: column; padding: 22px 14px; gap: 4px;
+  }
+  .marca { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
+  .marca canvas { image-rendering: pixelated; }
+  .marca h1 { font: 15px Silkscreen, monospace; margin: 0; letter-spacing: .5px; }
+  .marca small { color: var(--apagado); font-size: 11.5px; display: block; margin-top: 2px; }
+  nav a {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+    color: var(--apagado); text-decoration: none; font-weight: 500; cursor: pointer; transition: .15s;
+  }
+  nav a:hover { background: #2c2b28; color: var(--texto); }
+  nav a.ativo { background: rgba(217, 119, 87, .14); color: var(--laranja2); }
+  nav a .ic { width: 20px; text-align: center; }
+  .rodape-lateral { margin-top: auto; padding: 12px; color: var(--apagado); font-size: 12px; }
+  .rodape-lateral .musica { color: var(--texto); display: block; margin-top: 4px; white-space: nowrap;
+                            overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------- conteúdo ---------- */
+  main { overflow-y: auto; padding: 30px 38px 60px; scroll-behavior: smooth; }
+  section { margin-bottom: 38px; scroll-margin-top: 20px; }
+  section > h2 { font-size: 20px; margin: 0 0 4px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+  section > p.sub { color: var(--apagado); margin: 0 0 16px; }
+  .cartao { background: var(--cartao); border: 1px solid #34332f; border-radius: var(--raio); padding: 6px 18px; }
+  .linha {
+    display: flex; align-items: center; gap: 18px; padding: 14px 0; border-bottom: 1px solid #34332f;
+  }
+  .linha:last-child { border-bottom: 0; }
+  .linha .info { flex: 1; min-width: 0; }
+  .linha .titulo { font-weight: 600; }
+  .linha .desc { color: var(--apagado); font-size: 12.5px; margin-top: 2px; }
+
+  /* interruptor */
+  .chave { position: relative; width: 44px; height: 26px; flex: none; }
+  .chave input { opacity: 0; width: 0; height: 0; }
+  .chave span {
+    position: absolute; inset: 0; background: #45443f; border-radius: 26px; cursor: pointer; transition: .2s;
+  }
+  .chave span::before {
+    content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%;
+    background: #f4efe4; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
+  .chave input:checked + span { background: var(--laranja); }
+  .chave input:checked + span::before { transform: translateX(18px); }
+
+  /* botões em grupo */
+  .segmentos { display: inline-flex; background: #232220; border: 1px solid #3a3935; border-radius: 10px; padding: 3px; }
+  .segmentos button {
+    background: none; border: 0; color: var(--apagado); padding: 7px 13px; border-radius: 8px; cursor: pointer;
+    font: 500 13px Inter, "Segoe UI", sans-serif; transition: .15s;
+  }
+  .segmentos button:hover { color: var(--texto); }
+  .segmentos button.ativo { background: var(--laranja); color: #fff; }
+
+  input[type=range] { -webkit-appearance: none; width: 220px; height: 6px; background: #45443f; border-radius: 6px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--laranja);
+    border: 3px solid #f4efe4; cursor: pointer;
+  }
+  .valor { color: var(--laranja2); font-weight: 600; min-width: 64px; text-align: right; font-size: 13px; }
+
+  .botao {
+    background: var(--cartao2); color: var(--texto); border: 1px solid #45443f; border-radius: 10px;
+    padding: 9px 14px; font: 600 13px Inter, "Segoe UI", sans-serif; cursor: pointer; transition: .15s;
+  }
+  .botao:hover { border-color: var(--laranja); color: var(--laranja2); }
+  .botao.principal { background: var(--laranja); border-color: var(--laranja); color: #fff; }
+  .botao.principal:hover { background: var(--laranja2); color: #fff; }
+
+  /* ---------- visual ---------- */
+  .visual { display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: start; }
+  .palco {
+    position: sticky; top: 0; background: radial-gradient(120% 90% at 50% 0%, #3a2e28 0%, #2a2927 60%);
+    border: 1px solid #3b3833; border-radius: 18px; padding: 22px 18px 18px; text-align: center;
+  }
+  .palco canvas { image-rendering: pixelated; display: block; margin: 6px auto 0; }
+  .chao { height: 10px; margin: -4px auto 14px; width: 170px; border-radius: 50%;
+          background: radial-gradient(closest-side, rgba(0,0,0,.45), transparent); }
+  .palco .nome-skin { font: 13px Silkscreen, monospace; color: var(--laranja2); }
+  .palco .dica { color: var(--apagado); font-size: 12px; margin-top: 6px; }
+  .palco .acoes { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+
+  .grupo { margin-bottom: 18px; }
+  .grupo h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--apagado);
+              margin: 0 0 9px; font-weight: 600; }
+  .cores { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cor {
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer; border: 3px solid transparent;
+    outline: 2px solid transparent; transition: .15s; position: relative;
+  }
+  .cor:hover { transform: translateY(-2px); }
+  .cor.ativo { outline-color: var(--laranja); border-color: var(--fundo); }
+  .cor.arco { background: conic-gradient(#e8452c, #f2c94c, #6fbf73, #4f86d9, #8e6cc8, #e58fb0, #e8452c); }
+  .pacotes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pacote {
+    background: #232220; border: 1px solid #3a3935; color: var(--texto); border-radius: 20px; padding: 7px 13px;
+    cursor: pointer; font: 500 13px Inter, "Segoe UI", sans-serif; transition: .15s;
+  }
+  .pacote:hover { border-color: var(--laranja); }
+  .opcoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 9px; }
+  .opcao {
+    background: #232220; border: 2px solid #34332f; border-radius: 12px; padding: 8px 4px 7px; cursor: pointer;
+    text-align: center; transition: .15s; font-size: 11.5px; color: var(--apagado);
+  }
+  .opcao:hover { border-color: #5a5852; color: var(--texto); }
+  .opcao.ativo { border-color: var(--laranja); color: var(--texto); background: rgba(217,119,87,.08); }
+  .opcao canvas { image-rendering: pixelated; display: block; margin: 0 auto 5px; }
+  .opcao .nada { height: 50px; display: grid; place-items: center; font-size: 22px; opacity: .45; }
+
+  .esquetes { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 8px; }
+  .esquetes .botao { text-align: left; font-weight: 500; }
+
+  kbd {
+    background: #232220; border: 1px solid #45443f; border-bottom-width: 3px; border-radius: 7px;
+    padding: 3px 8px; font: 600 12px Inter, monospace; color: var(--texto);
+  }
+  .pasta { font-family: Consolas, monospace; font-size: 12.5px; color: var(--texto);
+           background: #232220; border-radius: 8px; padding: 6px 10px; display: inline-block; margin: 3px 4px 3px 0; }
+
+  .toast {
+    position: fixed; right: 26px; bottom: 24px; background: #2f3b2f; color: #cdeccd; border: 1px solid #456b45;
+    padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; opacity: 0; transform: translateY(8px);
+    transition: .25s; pointer-events: none;
+  }
+  .toast.ver { opacity: 1; transform: none; }
+  .offline { position: fixed; inset: 0; background: rgba(20,19,18,.88); display: none; place-items: center;
+             text-align: center; color: var(--apagado); font-size: 15px; z-index: 5; }
+  .offline b { color: var(--texto); display: block; font-size: 18px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="marca">
+    <canvas id="logo" width="51" height="30"></canvas>
+    <div><h1>Claudinho</h1><small>configurações</small></div>
+  </div>
+  <nav id="nav">
+    <a data-alvo="visual"><span class="ic">🎨</span>Visual</a>
+    <a data-alvo="movimento"><span class="ic">🚶</span>Movimento</a>
+    <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
+    <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
+    <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
+    <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
+    <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
+  </nav>
+  <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span></div>
+</aside>
+
+<main id="principal">
+  <section id="visual">
+    <h2>🎨 Visual</h2>
+    <p class="sub">Uma cor e um adereço por espaço. Combina do jeito que quiser — ele já usa na hora.</p>
+    <div class="visual">
+      <div class="palco">
+        <div class="nome-skin" id="nomeSkin">clássico</div>
+        <canvas id="previa" width="272" height="160"></canvas>
+        <div class="chao"></div>
+        <div class="dica">ele olha pros dois lados pra você ver a frente dos adereços</div>
+        <div class="acoes">
+          <button class="botao" id="sortear">🎲 Sortear</button>
+          <button class="botao" id="limparVisual">Tirar tudo</button>
+        </div>
+      </div>
+      <div>
+        <div class="grupo"><h3>Cor</h3><div class="cores" id="cores"></div></div>
+        <div class="grupo"><h3>Pacotes prontos</h3><div class="pacotes" id="pacotes"></div></div>
+        <div id="espacos"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="movimento">
+    <h2>🚶 Movimento</h2>
+    <p class="sub">Por onde ele anda.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda ou só de lado, em cima da barra de tarefas.</div></div>
+        <div class="segmentos" data-cfg="movimento">
+          <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button>
+        </div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Seguir o mouse entre monitores</div><div class="desc">Se o mouse vai pra outro monitor, ele sai correndo atrás.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="seguir_mouse_entre_monitores"><span></span></label>
+      </div>
+    </div>
+  </section>
+
+  <section id="piadas">
+    <h2>😂 Piadas</h2>
+    <p class="sub">Os comentários sobre o que está na sua tela.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Comentar o que está na tela</div><div class="desc">Desligado, ele fica quietinho (o Win+Y ainda funciona).</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="comentar_tela"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Frequência</div><div class="desc">De quanto em quanto tempo ele solta uma.</div></div>
+        <div class="segmentos" id="frequencias"></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Banco de frases ↔ Haiku olhando a tela</div><div class="desc">O banco não gasta nada; o Haiku vê um print e acerta mais.</div></div>
+        <input type="range" min="0" max="100" step="5" id="chance"><span class="valor" id="chanceValor"></span>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Comentário maldoso 😈</div><div class="desc">Zoeira ácida de amigo.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="modo_maldoso"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Modo TDAH 🐿️</div><div class="desc">Começa num assunto e termina em outro.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="modo_tdah"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Avaliar piadas</div><div class="desc">Botões boa/ruim ao passar o mouse; ele aprende com as notas.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="modo_avaliacao"><span></span></label>
+      </div>
+    </div>
+  </section>
+
+  <section id="esquetes">
+    <h2>🎭 Esquetes</h2>
+    <p class="sub">O que ele apronta quando está à toa. Clique numa pra ver agora.</p>
+    <div class="cartao" style="margin-bottom:14px">
+      <div class="linha">
+        <div class="info"><div class="titulo">Esquetes quando está à toa</div><div class="desc">Uma a cada 4–9 minutos, e às vezes no lugar de uma piada.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="esquetes"><span></span></label>
+      </div>
+    </div>
+    <div class="esquetes" id="listaEsquetes"></div>
+  </section>
+
+  <section id="extras">
+    <h2>🎵 Música e extras</h2>
+    <p class="sub">Os detalhes que deixam ele mais vivo.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Saber o que estou ouvindo</div><div class="desc">Comenta a música nova e mostra os controles no menu.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="ver_musica"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Fica emo quando toca rock 🖤</div><div class="desc">Veste o pacote emo por cima da skin por uns 45 s e solta um desabafo.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="emo_rock"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Reações com emojis ✨</div><div class="desc">Emojis de pixel que sobem do lado dele.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="emojis"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Faixa nos olhos 🙈</div><div class="desc">Não tira nenhum print da tela, só banco de frases.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="vendado"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
+        <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="acoes">
+    <h2>🧰 Ações</h2>
+    <p class="sub">Coisas pra fazer agora.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Nova conversa</div><div class="desc">O chat começa do zero (as piadas e a memória do dia ficam).</div></div>
+        <button class="botao" data-acao="nova">Começar</button>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Resumir minhas notificações 🔔</div><div class="desc">Lê a central do Windows e oferece limpar.</div></div>
+        <button class="botao" data-acao="notificacoes">Resumir</button>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Aviso de teste</div><div class="desc">Mostra como fica quando um chat do Claude Code termina.</div></div>
+        <button class="botao" data-acao="teste">Testar</button>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Limpar a fila de falas</div><div class="desc" id="fila">—</div></div>
+        <button class="botao" data-acao="limpar">Limpar</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="atalhos">
+    <h2>⌨️ Atalhos</h2>
+    <p class="sub">Funcionam de qualquer lugar. Pra trocar, edite o config.json em ~/.claudinho.</p>
+    <div class="cartao" id="listaAtalhos"></div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
+    <div id="pastas"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast">salvo ✓</div>
+<div class="offline" id="offline"><div><b>O Claudinho não respondeu</b>Ele está aberto? Esta janela volta sozinha quando ele voltar.</div></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+let estado = null, cat = null, sprite = null, visual = null;
+
+// ---------- conversa com o Claudinho ----------
+async function api(caminho, corpo) {
+  const r = await fetch(caminho, {
+    method: corpo ? "POST" : "GET",
+    headers: {"X-Token": TOKEN, "Content-Type": "application/json"},
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  if (!r.ok) throw new Error(r.status);
+  return r.status === 204 ? null : r.json();
+}
+let tToast;
+function avisar(texto = "salvo ✓") {
+  const t = document.getElementById("toast");
+  t.textContent = texto; t.classList.add("ver");
+  clearTimeout(tToast); tToast = setTimeout(() => t.classList.remove("ver"), 1300);
+}
+async function mudar(chave, valor) {
+  estado.cfg[chave] = valor;
+  await api("/api/config", {chave, valor});
+  avisar();
+}
+async function acao(nome, texto) {
+  await api("/api/acao", {acao: nome});
+  avisar(texto || "feito ✓");
+}
+
+// ---------- desenho do Claudinho (mesma grade do claudinho.pyw) ----------
+function hsv(h) {  // arco-íris
+  const f = (n, k = (n + h * 6) % 6) => 0.92 - 0.92 * 0.55 * Math.max(Math.min(k, 4 - k, 1), 0);
+  const c = x => Math.round(x * 255).toString(16).padStart(2, "0");
+  return "#" + c(f(5)) + c(f(3)) + c(f(1));
+}
+function corDoCorpo(id, t) {
+  const c = cat.cores.find(c => c.id === id) || cat.cores[0];
+  return c.animada ? hsv((t % 120) / 120) : c.corpo;
+}
+function pixelsDoAdereco(a, t, olhando) {
+  let lista = a.pixels.slice();
+  if (a.pisca && t % 10 < 5) lista.push(a.pisca);
+  if (a.rgb) { const cor = hsv((t % 40) / 40); lista = lista.concat(a.rgb.map(([c, l]) => [c, l, cor])); }
+  if (a.varredura) lista.push([1 + Math.floor(t / 2) % 9, a.varredura, "#b8f6ff"]);
+  if (a.frente && ({esquerda: -1, direita: 1})[a.frente] !== olhando) lista = lista.map(([c, l, cor]) => [10 - c, l, cor]);
+  return lista;
+}
+function desenhar(canvas, v, t, olhando = -1, piscando = false, escala = null) {
+  const ctx = canvas.getContext("2d");
+  const S = escala || canvas.width / (11 + 2 * sprite.margem);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const oy = sprite.folga * S;
+  const px = (col, lin, cor) => { ctx.fillStyle = cor; ctx.fillRect((col + sprite.margem) * S, oy + lin * S, S, S); };
+  const corpo = corDoCorpo(v.cor, t);
+  const olho = (cat.cores.find(c => c.id === v.cor) || cat.cores[0]).olho;
+  sprite.corpo.forEach((linha, l) => [...linha].forEach((ch, c) => { if (ch === "X") px(c, l, corpo); }));
+  const [l1, l2] = sprite.olhos_y["0"];
+  for (const c of sprite.olhos_x[String(olhando)]) { if (!piscando) px(c, l1, olho); px(c, l2, olho); }
+  for (const e of ["rosto", "pescoco", "olhos", "cabeca", "bracos"]) {
+    const a = v[e] && cat.aderecos.find(a => a.id === v[e]);
+    if (a) pixelsDoAdereco(a, t, olhando).forEach(([c, l, cor]) => px(c, l, cor));
+  }
+  sprite.pernas.forEach(c => { px(c, 6, corpo); px(c, 7, corpo); });
+}
+
+// ---------- montar a tela ----------
+function nomeDaSkin(v) {
+  const pac = cat.pacotes.find(p => Object.entries(p.aderecos).every(([e, id]) => (v[e] || null) === id) && (!p.cor || p.cor === v.cor));
+  if (pac) return pac.nome.replace(/[^\p{L}\p{N} ]/gu, "").trim().toLowerCase();
+  const usados = ["cabeca", "olhos", "rosto", "pescoco", "bracos"].filter(e => v[e]).length;
+  const cor = (cat.cores.find(c => c.id === v.cor) || {}).nome || "";
+  return usados ? `${cor.toLowerCase()} + ${usados} adereço${usados > 1 ? "s" : ""}` : cor.toLowerCase();
+}
+function salvarVisual(novo) {
+  visual = novo;
+  mudar("visual", visual);
+  montarVisual();
+}
+function montarVisual() {
+  document.getElementById("nomeSkin").textContent = nomeDaSkin(visual);
+  const cores = document.getElementById("cores");
+  cores.innerHTML = "";
+  for (const c of cat.cores) {
+    const b = document.createElement("div");
+    b.className = "cor" + (c.animada ? " arco" : "") + (visual.cor === c.id ? " ativo" : "");
+    if (!c.animada) b.style.background = c.corpo;
+    b.title = c.nome;
+    b.onclick = () => salvarVisual({...visual, cor: c.id});
+    cores.appendChild(b);
+  }
+  const pacotes = document.getElementById("pacotes");
+  pacotes.innerHTML = "";
+  for (const p of cat.pacotes) {
+    const b = document.createElement("button");
+    b.className = "pacote"; b.textContent = p.nome;
+    b.onclick = () => salvarVisual({...visual, ...p.aderecos, ...(p.cor ? {cor: p.cor} : {})});
+    pacotes.appendChild(b);
+  }
+  const espacos = document.getElementById("espacos");
+  espacos.innerHTML = "";
+  for (const e of cat.espacos) {
+    const g = document.createElement("div");
+    g.className = "grupo";
+    g.innerHTML = `<h3>${e.nome}</h3>`;
+    const grade = document.createElement("div");
+    grade.className = "opcoes";
+    const opcoes = [{id: null, nome: "Nenhum"}, ...cat.aderecos.filter(a => a.espaco === e.id)];
+    for (const a of opcoes) {
+      const o = document.createElement("div");
+      o.className = "opcao" + ((visual[e.id] || null) === a.id ? " ativo" : "");
+      if (a.id) {
+        const cv = document.createElement("canvas");
+        cv.width = 85; cv.height = 50; cv.dataset.aderecos = a.id; cv.dataset.espaco = e.id;
+        o.appendChild(cv);
+      } else {
+        o.innerHTML = `<div class="nada">∅</div>`;
+      }
+      o.appendChild(document.createTextNode(a.nome));
+      o.onclick = () => salvarVisual({...visual, [e.id]: a.id});
+      grade.appendChild(o);
+    }
+    g.appendChild(grade);
+    espacos.appendChild(g);
+  }
+}
+function montarResto() {
+  for (const el of document.querySelectorAll("input[data-cfg]")) {
+    el.checked = !!estado.cfg[el.dataset.cfg];
+    el.onchange = () => mudar(el.dataset.cfg, el.checked);
+  }
+  for (const g of document.querySelectorAll(".segmentos[data-cfg]")) {
+    for (const b of g.children) {
+      b.classList.toggle("ativo", estado.cfg[g.dataset.cfg] === b.dataset.v);
+      b.onclick = () => { mudar(g.dataset.cfg, b.dataset.v); montarResto(); };
+    }
+  }
+  const freq = document.getElementById("frequencias");
+  freq.innerHTML = "";
+  for (const f of estado.frequencias) {
+    const b = document.createElement("button");
+    b.textContent = `${f.nome} · ${f.de}–${f.ate} min`;
+    const atual = estado.cfg.comentar_a_cada_minutos;
+    b.className = atual[0] === f.de && atual[1] === f.ate ? "ativo" : "";
+    b.onclick = () => { mudar("comentar_a_cada_minutos", [f.de, f.ate]); montarResto(); };
+    freq.appendChild(b);
+  }
+  const chance = document.getElementById("chance"), cv = document.getElementById("chanceValor");
+  const mostrarChance = v => cv.textContent = v == 0 ? "só banco" : v == 100 ? "só Haiku" : `${v}% Haiku`;
+  chance.value = Math.round(estado.cfg.chance_haiku * 100); mostrarChance(chance.value);
+  chance.oninput = () => mostrarChance(chance.value);
+  chance.onchange = () => mudar("chance_haiku", chance.value / 100);
+  const aviso = document.getElementById("aviso"), av = document.getElementById("avisoValor");
+  aviso.value = estado.cfg.aviso_segundos; av.textContent = `${aviso.value} s`;
+  aviso.oninput = () => av.textContent = `${aviso.value} s`;
+  aviso.onchange = () => mudar("aviso_segundos", +aviso.value);
+
+  const lista = document.getElementById("listaEsquetes");
+  lista.innerHTML = "";
+  const aleatoria = document.createElement("button");
+  aleatoria.className = "botao principal"; aleatoria.textContent = "🎲 Uma qualquer";
+  aleatoria.onclick = () => acao("esquete_agora", "lá vai ✓");
+  lista.appendChild(aleatoria);
+  for (const e of estado.esquetes) {
+    const b = document.createElement("button");
+    b.className = "botao"; b.textContent = e.nome;
+    b.onclick = () => acao("esquete:" + e.id, "lá vai ✓");
+    lista.appendChild(b);
+  }
+  const nomesAtalhos = {atalho_comentar: "Comentar a tela agora", atalho_venda: "Pôr/tirar a faixa nos olhos",
+                        atalho_resumir: "Resumir/explicar a janela da frente", atalho_notificacoes: "Resumir as notificações"};
+  document.getElementById("listaAtalhos").innerHTML = Object.entries(estado.atalhos).map(([k, v]) =>
+    `<div class="linha"><div class="info"><div class="titulo">${nomesAtalhos[k] || k}</div></div>` +
+    v.split("+").map(p => `<kbd>${p}</kbd>`).join(" + ") + `</div>`).join("");
+  document.getElementById("pastas").innerHTML = estado.pastas.map(p => `<span class="pasta">${p}</span>`).join("");
+  for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
+  atualizarVivos();
+}
+function atualizarVivos() {
+  document.getElementById("musica").textContent = estado.musica || "nada";
+  document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
+}
+
+document.getElementById("sortear").onclick = () => {
+  const novo = {cor: cat.cores[Math.floor(Math.random() * cat.cores.length)].id};
+  for (const e of cat.espacos) {
+    const opcoes = cat.aderecos.filter(a => a.espaco === e.id);
+    novo[e.id] = Math.random() < 0.55 ? opcoes[Math.floor(Math.random() * opcoes.length)].id : null;
+  }
+  salvarVisual(novo);
+};
+document.getElementById("limparVisual").onclick = () =>
+  salvarVisual({cor: visual.cor, cabeca: null, olhos: null, rosto: null, pescoco: null, bracos: null});
+
+// navegação: rola até a seção e marca onde você está
+const principal = document.getElementById("principal");
+for (const a of document.querySelectorAll("nav a"))
+  a.onclick = () => document.getElementById(a.dataset.alvo).scrollIntoView();
+principal.addEventListener("scroll", () => {
+  let atual = "visual";
+  for (const s of document.querySelectorAll("section")) if (s.offsetTop - principal.scrollTop < 140) atual = s.id;
+  for (const a of document.querySelectorAll("nav a")) a.classList.toggle("ativo", a.dataset.alvo === atual);
+});
+
+// ---------- animação: piscar, olhar pros lados, pulinho ----------
+let t = 0;
+function animar() {
+  t++;
+  if (cat) {
+    const olhando = Math.floor(t / 40) % 2 ? 1 : -1;  // troca de lado a cada ~2,7 s
+    const piscando = t % 70 > 66;
+    desenhar(document.getElementById("previa"), visual, t, olhando, piscando, 16);
+    desenhar(document.getElementById("logo"), visual, t, olhando, piscando, 3);
+    for (const cv of document.querySelectorAll("canvas[data-aderecos]")) {
+      desenhar(cv, {...visual, cabeca: null, olhos: null, rosto: null, pescoco: null, bracos: null,
+                    [cv.dataset.espaco]: cv.dataset.aderecos}, t, olhando, false, 5);
+    }
+  }
+  setTimeout(() => requestAnimationFrame(animar), 66);
+}
+
+async function carregar(primeira) {
+  try {
+    const novo = await api("/api/estado");
+    document.getElementById("offline").style.display = "none";
+    const mudouVisual = !estado || JSON.stringify(novo.cfg.visual) !== JSON.stringify(visual);
+    estado = novo;
+    if (primeira) {
+      cat = estado.skins; sprite = estado.sprite; visual = estado.cfg.visual;
+      montarVisual(); montarResto(); animar();
+      document.querySelector("nav a").classList.add("ativo");
+    } else {
+      // mudou lá no Claudinho (atalho da faixa, por exemplo): só atualiza os interruptores e o que está vivo
+      for (const el of document.querySelectorAll("input[data-cfg]")) el.checked = !!estado.cfg[el.dataset.cfg];
+      if (mudouVisual) { visual = estado.cfg.visual; montarVisual(); }
+      atualizarVivos();
+    }
+  } catch (e) {
+    document.getElementById("offline").style.display = "grid";
+  }
+}
+carregar(true).then(() => setInterval(() => estado ? carregar(false) : carregar(true), 3000));
+</script>
+</body>
+</html>

@@ -16,11 +16,13 @@ import queue
 import math
 import random
 import re
+import secrets
 import shutil
 import subprocess
 import sys
 import threading
 import unicodedata
+import webbrowser
 import time
 import tkinter as tk
 from collections import deque
@@ -34,9 +36,11 @@ import pystray
 from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
 import frases
+import abrir
 import janelas
 import emojis
 import esquetes
+import skins
 import memoria
 import musica
 import notificacoes
@@ -59,6 +63,7 @@ CONFIG_PADRAO = {
     "ver_musica": True,                  # sabe o que está tocando (piadas, chat e menu com controles)
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
     "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
+    "visual": dict(skins.VISUAL_PADRAO),  # skin: cor do corpo + um adereço por espaço (escolhe no painel)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
@@ -71,6 +76,17 @@ CONFIG_PADRAO = {
 }
 
 FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 30)]
+# o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
+CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
+                 "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
+                 "emo_rock", "esquetes", "aviso_segundos"]
+NOMES_ESQUETES = {
+    "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
+    "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
+    "danca": "🕺 Dancinha", "build_quebrou": "🌧️ Build quebrou", "fogo": "🔥 Servidor pegando fogo",
+    "pato": "🦆 Patinho de borracha", "npm": "📦 npm install", "pizza": "🍕 Pizza", "jogo": "🎮 Joguinho",
+    "limpeza": "🧹 Faxina", "reuniao": "📞 Reunião", "borboleta": "🦋 Bug virou feature", "malhando": "🏋️ Malhando",
+}
 
 CHAVE = "#010203"  # cor que vira transparente nas janelas
 LARANJA = "#d97757"
@@ -89,8 +105,6 @@ CONTROLE, VERDE = "#4a4a55", "#3fbf6b"
 CABO, PALHA = "#8b5a2b", "#d8b25a"
 FONE = "#2c2c2c"
 PESO, BARRA = "#3a3936", "#9b978d"
-CABELO = "#141414"   # modo emo
-ROSA = "#e0457b"
 CANECA = "#e8e2d4"   # esquete do café
 CAFE = "#6b4226"
 SUOR = "#8ec5ff"     # gotinha do git push --force
@@ -283,6 +297,7 @@ def gravar_json(caminho, dados):
 
 def carregar_config():
     cfg = dict(CONFIG_PADRAO, **ler_json(CONFIG, {}))
+    cfg["visual"] = skins.visual_valido(cfg.get("visual"))
     if cfg["atalho_comentar"] == "Ctrl+Shift+Alt+C":  # padrão antigo, complicado demais
         cfg["atalho_comentar"] = CONFIG_PADRAO["atalho_comentar"]
     gravar_json(CONFIG, cfg)
@@ -612,10 +627,6 @@ OLHAR_ESQUETE = {
     "borboleta": lambda f, t: (-1 if f < 0.45 else 1, -1),
     "malhando": lambda f, t: (-1 if (t // 12) % 2 == 0 else 1, -1),
 }
-FRANJA = [  # (coluna, linha) do cabelo emo: topo da cabeça e a franja caindo de lado, tapando um olho
-    *[(c, -1) for c in range(2, 10)], *[(c, 0) for c in range(1, 10)],
-    *[(c, 1) for c in range(1, 6)], *[(c, 2) for c in range(1, 5)], (1, 3), (2, 3)]
-MECHA = [(7, -1), (6, 0), (5, 1)]  # mecha rosa
 
 
 def resumir_notificacoes(lista):
@@ -724,16 +735,52 @@ class ServidorUnico(ThreadingHTTPServer):
     daemon_threads = True
 
 
+APP = None  # o Claudinho rodando (o painel lê o estado dele)
+# a API do painel só responde com este token (vai embutido na página): outro site aberto no navegador
+# não consegue mexer no Claudinho, porque não lê a página e não sabe o token
+TOKEN = secrets.token_urlsafe(16)
+PAINEL_HTML = Path(__file__).with_name("painel.html")
+
+
 def iniciar_servidor(eventos):
     class Receptor(BaseHTTPRequestHandler):
+        def responder(self, codigo, corpo=b"", tipo="application/json"):
+            self.send_response(codigo)
+            self.send_header("Content-Type", tipo + "; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(corpo)
+
+        def token_ok(self):
+            return secrets.compare_digest(self.headers.get("X-Token", ""), TOKEN)
+
+        def do_GET(self):
+            if self.path.split("?")[0] == "/painel":
+                html = PAINEL_HTML.read_text(encoding="utf-8").replace("__TOKEN__", TOKEN)
+                self.responder(200, html.encode("utf-8"), "text/html")
+            elif self.path == "/api/estado" and self.token_ok() and APP:
+                self.responder(200, json.dumps(APP.estado_painel(), ensure_ascii=False).encode("utf-8"))
+            else:
+                self.responder(404)
+
         def do_POST(self):
             try:
                 n = int(self.headers.get("Content-Length", 0))
-                eventos.put(("aviso", json.loads(self.rfile.read(n) or b"{}")))
-                self.send_response(204)
+                dados = json.loads(self.rfile.read(n) or b"{}")
+                if self.path.startswith("/api/"):
+                    if not self.token_ok():
+                        return self.responder(403)
+                    if self.path == "/api/config":
+                        eventos.put(("painel_cfg", dados["chave"], dados["valor"]))
+                    elif self.path == "/api/acao":
+                        eventos.put(("menu", str(dados["acao"])))
+                    else:
+                        return self.responder(404)
+                else:  # o hook do Claude Code avisando que um chat terminou
+                    eventos.put(("aviso", dados))
+                self.responder(204)
             except Exception:
-                self.send_response(400)
-            self.end_headers()
+                self.responder(400)
 
         def log_message(self, *args):
             pass
@@ -1001,6 +1048,8 @@ class Balao:
 # ---------------- o mascote ----------------
 class Claudinho:
     def __init__(self, eventos):
+        global APP
+        APP = self  # o servidor local lê o estado pro painel
         self.eventos = eventos
         self.cfg = carregar_config()
         # piadas e notas, avisos do dia e conversa ficam no SQLite (memoria.py)
@@ -1018,6 +1067,8 @@ class Claudinho:
         if os.environ.get("CLAUDINHO_ESQUETE"):  # testando uma esquete: a primeira vem logo
             self.prox_esquete = time.time() + 5
         self.ultima_esquete = None
+        self.esquete_forcada = None  # escolhida no painel ("Esquete agora")
+        self.frente = -1  # lado pra onde está virado (franja, aba do boné… seguem)
         self.emo_ate, self.emo_musica = 0, None  # rock tocando: modo emo até essa hora
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
@@ -1184,6 +1235,9 @@ class Claudinho:
     def desenhar(self):
         c, S = self.canvas, self.S
         c.delete("all")
+        visual = self.cfg["visual"]
+        corpo = skins.cor_do_corpo(visual["cor"], self.t)
+        olho = skins.CORES[visual["cor"]]["olho"]
         correndo = self.movendo and self.modo == "correndo"
         carregado = bool(self.arrasto and self.arrasto["moveu"])  # sendo levado pelo mouse
         pousando = time.time() < self.pouso_ate
@@ -1230,43 +1284,43 @@ class Claudinho:
         for lin, linha in enumerate(CORPO):
             for col, ch in enumerate(linha):
                 if ch == "X" and not (bracos_soltos and col in (0, 10)):  # bracinhos saem do lugar
-                    px(col, lin, LARANJA)
+                    px(col, lin, corpo)
         if esq == "alongar":  # bracinhos sobem devagar, ficam lá em cima e descem
             linhas = (-2, -1) if 0.15 < fase < 0.75 else ((0, 1) if 0.05 < fase < 0.9 else (3, 4))
             for col in (0, 10):
                 for lin in linhas:
-                    px(col, lin, LARANJA)
+                    px(col, lin, corpo)
         elif esq == "danca":  # um bracinho em cima, o outro embaixo, trocando no ritmo
             for col, cima in ((0, self.t % 6 < 3), (10, self.t % 6 >= 3)):
-                px(col, -1 if cima else 4, LARANJA)
-                px(col, 0 if cima else 5, LARANJA)
+                px(col, -1 if cima else 4, corpo)
+                px(col, 0 if cima else 5, corpo)
         elif esq == "fogo":  # desespero (bracinhos pra cima, rápido); depois segura o balde do lado do fogo
             if fase < 0.6:
                 for col in (0, 10):
                     cima = (self.t + col) % 2 == 0
-                    px(col, -1 if cima else 0, LARANJA)
-                    px(col, 0 if cima else 1, LARANJA)
+                    px(col, -1 if cima else 0, corpo)
+                    px(col, 0 if cima else 1, corpo)
             else:
                 for col, lin in ((0, 2), (0, 3), (10, 3), (10, 4)):
-                    px(col, lin, LARANJA)
+                    px(col, lin, corpo)
         elif esq == "jogo":  # apertando os botões do controle feito louco
             for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
-                px(col, 4 if sobe else 5, LARANJA)
-                px(col, 5 if sobe else 6, LARANJA)
+                px(col, 4 if sobe else 5, corpo)
+                px(col, 5 if sobe else 6, corpo)
         elif esq == "malhando":  # um braço levanta o halter, depois o outro
             erguido = 0 if (self.t // 12) % 2 == 0 else 10
             for col in (0, 10):
                 for lin in ((-1, 0) if col == erguido else (3, 4)):
-                    px(col, lin, LARANJA)
+                    px(col, lin, corpo)
         if carregado:  # bracinhos pra cima, sacudindo ("uiii!")
             for col in (0, 10):
                 topo = 1 if (self.t + col) % 4 < 2 else 2
-                px(col, topo, LARANJA)
-                px(col, topo + 1, LARANJA)
+                px(col, topo, corpo)
+                px(col, topo + 1, corpo)
         if digitando:  # bracinhos batendo no teclado, um de cada vez
             for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
-                px(col, 3 if sobe else 4, LARANJA)
-                px(col, 4 if sobe else 5, LARANJA)
+                px(col, 3 if sobe else 4, corpo)
+                px(col, 4 if sobe else 5, corpo)
 
         if self.movendo:
             olhar_x, olhar_y = self.dir_x, self.dir_y
@@ -1297,6 +1351,8 @@ class Claudinho:
         tedio = esq == "reuniao" and (self.t // 6) % 5 != 0  # reunião: olho quase sempre fechado
         if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole or comendo or mordida or tedio:
             piscando = True
+        if olhar_x:  # o lado pra onde ele está virado (olhando pro meio, fica o último): adereços seguem
+            self.frente = olhar_x
         l1, l2 = OLHOS_Y[olhar_y]
         if self.cfg["vendado"]:  # faixa nos olhos, com o nó balançando atrás da cabeça
             for col in range(1, 10):
@@ -1312,35 +1368,40 @@ class Claudinho:
         elif carregado:  # olhos arregalados, sem piscar
             for col in OLHOS_X[0]:
                 for lin in (0, 1, 2):
-                    px(col, lin, OLHO)
+                    px(col, lin, olho)
         else:
             for col in OLHOS_X[olhar_x]:
                 if not piscando:
-                    px(col, l1, OLHO)
-                px(col, l2, OLHO)
+                    px(col, l1, olho)
+                px(col, l2, olho)
 
-        if emo:  # franja de lado tapando um olho, mecha rosa e munhequeira
-            for col, lin in FRANJA:
-                px(col, lin, CABELO)
-            for col, lin in MECHA:
-                px(col, lin, ROSA)
-            if not bracos_soltos:
-                px(0, 4, CABELO)
-                px(10, 4, CABELO)
+        # skin: adereços em camadas; tocando rock, o pacote emo vai por cima do que estiver escolhido
+        vestido = dict(visual, **skins.PACOTES["emo"]["aderecos"]) if emo else visual
+        sem = set()
+        if self.cfg["vendado"]:
+            sem.add("olhos")  # a venda ganha dos óculos
+        if esq in ("reuniao", "build_quebrou"):
+            sem.add("cabeca")  # o fone da reunião / a nuvem ocupam a cabeça
+        if bracos_soltos:
+            sem.add("bracos")  # munhequeira e cia só com os bracinhos no lugar
+        for espaco in ("rosto", "pescoco", "olhos", "cabeca", "bracos"):
+            if vestido.get(espaco) and espaco not in sem:
+                for col, lin, cor in skins.pixels(vestido[espaco], self.t, self.frente):
+                    px(col, lin, cor)
 
         if carregado:  # perninhas penduradas, balançando pro lado contrário do movimento e chutando
             vx = self.arrasto.get("vx", 0)
             lado = 0 if abs(vx) < 2 else (-1 if vx > 0 else 1)
             for i, col in enumerate(PERNAS):
-                px(col, 6, LARANJA)
+                px(col, 6, corpo)
                 if (i + self.t // 2) % 2 == 0:
-                    px(col + lado, 7, LARANJA)
+                    px(col + lado, 7, corpo)
         else:
             passo = self.t if correndo else self.t // 2
             for i, col in enumerate(PERNAS):
-                px(col, 6, LARANJA)
+                px(col, 6, corpo)
                 if not (self.movendo and i % 2 == passo % 2):
-                    px(col, 7, LARANJA)
+                    px(col, 7, corpo)
 
         if correndo:  # poeirinha atrás
             atras = -1 - (self.t % 2) if self.dir_x > 0 else COLS + (self.t % 2)
@@ -1355,7 +1416,7 @@ class Claudinho:
                 for col in range(2, 9):
                     px(col, lin, NB_TAMPA)
             if altura == 3:
-                px(5, 4, LARANJA)  # logo na tampa
+                px(5, 4, corpo)  # logo na tampa
                 if digitando:  # teclinha piscando na base
                     tecla = (MARGEM + 1 + random.randrange(9)) * S
                     c.create_rectangle(tecla + S // 4, oy + 6 * S + S // 4, tecla + 3 * S // 4,
@@ -1575,12 +1636,9 @@ class Claudinho:
         threading.Thread(target=trabalho, daemon=True).start()
 
     def itens_musica(self):
-        if not self.cfg["ver_musica"]:
-            return [("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]), None]
-        m = self.musica
+        m = self.musica if self.cfg["ver_musica"] else None
         if not m:
-            return [("🎵 nada tocando", "musica:tocar", None),
-                    ("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]), None]
+            return []
         nome = f"{m['titulo']} - {m['artista']}" if m["artista"] else m["titulo"]
         if len(nome) > 45:
             nome = nome[:44] + "…"
@@ -1588,36 +1646,22 @@ class Claudinho:
                 ("⏸ Pausar" if m["tocando"] else "▶ Tocar", "musica:alternar", None),
                 ("⏭ Próxima", "musica:proxima", None),
                 ("⏮ Anterior", "musica:anterior", None),
-                ("Saber o que estou ouvindo 🎵", "ver_musica", lambda: self.cfg["ver_musica"]),
                 None]
 
     def itens_menu(self):
-        """(rótulo, ação, marcado?) — None = separador. Usado pelos dois menus."""
+        """(rótulo, ação, marcado?) — None = separador. Usado pelos dois menus.
+        Só o do dia a dia (e o que tem atalho); configuração e skins ficam no painel."""
         return [
             ("Perguntar", "perguntar", None),
             ("Esconder o Claudinho" if self.visivel else "Mostrar o Claudinho", "visivel", None),
             None,
             *self.itens_musica(),
-            ("Andar pela tela toda", "livre", lambda: self.cfg["movimento"] == "livre"),
-            ("Seguir o mouse entre monitores", "segue", lambda: self.cfg["seguir_mouse_entre_monitores"]),
-            ("Comentar o que está na tela", "comenta", lambda: self.cfg["comentar_tela"]),
-            ("Comentário maldoso 😈", "maldoso", lambda: self.cfg["modo_maldoso"]),
-            ("Modo TDAH 🐿️", "tdah", lambda: self.cfg["modo_tdah"]),
-            ("Avaliar piadas (boa/ruim)", "avaliacao", lambda: self.cfg["modo_avaliacao"]),
-            (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
-            ("Reações com emojis ✨", "emojis", lambda: self.cfg["emojis"]),
-            ("Esquetes quando está à toa ☕", "esquetes", lambda: self.cfg["esquetes"]),
-            ("Esquete agora 🎭", "esquete_agora", None),
-            ("Fica emo quando toca rock 🖤", "emo_rock", lambda: self.cfg["emo_rock"]),
-            (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
             (f"Resumir minhas notificações 🔔 ({self.cfg['atalho_notificacoes']})", "notificacoes", None),
+            (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             None,
-            ("Nova conversa", "nova", None),
-            ("Aviso de teste", "teste", None),
-            (f"Limpar fila ({len(self.falas)})", "limpar", None),
-            None,
+            ("Configurações e skins ⚙️", "painel", None),
             ("Sair", "sair", None),
         ]
 
@@ -1697,58 +1741,20 @@ class Claudinho:
                 self.root.attributes("-topmost", True)
             else:
                 self.root.withdraw()
-        elif acao == "livre":
-            self.mudar_cfg("movimento", "horizontal" if self.cfg["movimento"] == "livre" else "livre")
-        elif acao == "segue":
-            self.mudar_cfg("seguir_mouse_entre_monitores", not self.cfg["seguir_mouse_entre_monitores"])
-        elif acao == "comenta":
-            self.mudar_cfg("comentar_tela", not self.cfg["comentar_tela"])
         elif acao.startswith("musica:"):  # ⏯ ⏭ ⏮ (em thread: o Windows responde devagar às vezes)
             comando = acao.split(":", 1)[1]
             threading.Thread(target=lambda: (musica.controlar(comando), self.atualizar_musica()),
                              daemon=True).start()
-        elif acao == "ver_musica":
-            self.mudar_cfg("ver_musica", not self.cfg["ver_musica"])
-            if not self.cfg["ver_musica"]:
-                self.musica = None
-        elif acao == "emo_rock":
-            self.mudar_cfg("emo_rock", not self.cfg["emo_rock"])
-            if not self.cfg["emo_rock"]:
-                self.emo_ate = 0
-        elif acao == "esquete_agora":
+        elif acao == "esquete_agora" or acao.startswith("esquete:"):
             self.largar_esquete()
+            self.esquete_forcada = acao.split(":", 1)[1] if ":" in acao else None
+            if self.esquete_forcada not in esquetes.ESQUETES:
+                self.esquete_forcada = None
             self.prox_esquete = 0  # começa assim que ele estiver livre
-        elif acao == "esquetes":
-            self.mudar_cfg("esquetes", not self.cfg["esquetes"])
-            if self.cfg["esquetes"]:
-                self.prox_esquete = 0  # mostra uma já
-            else:
-                self.largar_esquete()
-        elif acao == "emojis":
-            self.mudar_cfg("emojis", not self.cfg["emojis"])
-            if self.cfg["emojis"]:
-                self.soltar_emoji("coracao")
         elif acao == "venda":
-            self.mudar_cfg("vendado", not self.cfg["vendado"])
-            self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if self.cfg["vendado"]
-                          else "Voltei a enxergar! Nossa, que tela bonita.")
-        elif acao == "avaliacao":
-            self.mudar_cfg("modo_avaliacao", not self.cfg["modo_avaliacao"])
-        elif acao == "tdah":
-            self.mudar_cfg("modo_tdah", not self.cfg["modo_tdah"])
-            self.comentar("Modo TDAH ligado. Falando nisso, você sabia que polvo tem três corações?"
-                          if self.cfg["modo_tdah"] else "Ok, foco. Voltei pro assunto.")
-        elif acao == "maldoso":
-            self.mudar_cfg("modo_maldoso", not self.cfg["modo_maldoso"])
-            self.comentar("Modo maldoso ligado. Prepara o psicológico." if self.cfg["modo_maldoso"]
-                          else "Tá bom, volto a ser fofo.")
-        elif acao == "freq":  # um clique = próxima opção (submenu não funcionava direito)
-            atual = list(self.cfg["comentar_a_cada_minutos"])
-            opcoes = [[a, b] for _, a, b in FREQUENCIAS]
-            a, b = opcoes[(opcoes.index(atual) + 1) % len(opcoes)] if atual in opcoes else opcoes[0]
-            self.mudar_cfg("comentar_a_cada_minutos", [a, b])
-            self.prox_comentario = time.time() + random.uniform(a, b) * 60
-            self.comentar(f"Beleza, piadas: {self.nome_frequencia()}.")
+            self.aplicar_cfg("vendado", not self.cfg["vendado"])
+        elif acao == "painel":
+            self.abrir_painel()
         elif acao == "comentar_agora":
             self.comentar_agora()
         elif acao == "resumir":
@@ -1769,6 +1775,88 @@ class Claudinho:
             self.root.destroy()
             return
         self.icone.update_menu()
+
+    # ---------- painel de configurações (painel.html, servido pelo servidor local) ----------
+    def aplicar_cfg(self, chave, valor):
+        """Muda uma configuração vinda do painel (ou de um atalho), com os efeitos de cada uma."""
+        if chave not in CHAVES_PAINEL:
+            return
+        if chave == "visual":
+            valor = skins.visual_valido(valor)
+        elif chave == "comentar_a_cada_minutos":
+            valor = [int(valor[0]), int(valor[1])]
+        elif chave == "chance_haiku":
+            valor = max(0.0, min(1.0, float(valor)))
+        elif chave == "aviso_segundos":
+            valor = max(3, min(30, int(valor)))
+        elif chave == "movimento":
+            valor = "horizontal" if valor == "horizontal" else "livre"
+        else:
+            valor = bool(valor)
+        if self.cfg.get(chave) == valor:
+            return
+        self.mudar_cfg(chave, valor)
+        if chave == "vendado":
+            self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
+                          else "Voltei a enxergar! Nossa, que tela bonita.")
+        elif chave == "modo_tdah":
+            self.comentar("Modo TDAH ligado. Falando nisso, você sabia que polvo tem três corações?"
+                          if valor else "Ok, foco. Voltei pro assunto.")
+        elif chave == "modo_maldoso":
+            self.comentar("Modo maldoso ligado. Prepara o psicológico." if valor else "Tá bom, volto a ser fofo.")
+        elif chave == "comentar_a_cada_minutos":
+            self.prox_comentario = time.time() + random.uniform(*valor) * 60
+        elif chave == "ver_musica" and not valor:
+            self.musica = None
+        elif chave == "emo_rock" and not valor:
+            self.emo_ate = 0
+        elif chave == "esquetes" and not valor:
+            self.largar_esquete()
+        elif chave == "emojis" and valor:
+            self.soltar_emoji("coracao")
+        elif chave == "visual" and self.cfg["emojis"]:
+            self.soltar_emoji("coracao")  # gostou da roupa nova
+
+    def estado_painel(self):
+        """O que o painel mostra (chamado pela thread do servidor: só lê)."""
+        m = self.musica
+        return {
+            "cfg": {k: self.cfg[k] for k in CHAVES_PAINEL},
+            "frequencias": [{"nome": n, "de": a, "ate": b} for n, a, b in FREQUENCIAS],
+            "atalhos": {k: self.cfg[k] for k in ("atalho_comentar", "atalho_venda", "atalho_resumir",
+                                                  "atalho_notificacoes")},
+            "pastas": self.cfg["pastas_leitura"],
+            "skins": skins.catalogo(),
+            "sprite": {"corpo": CORPO, "pernas": PERNAS, "margem": MARGEM, "folga": FOLGA,
+                       "olhos_x": {str(k): v for k, v in OLHOS_X.items()},
+                       "olhos_y": {str(k): v for k, v in OLHOS_Y.items()}},
+            "esquetes": [{"id": k, "nome": NOMES_ESQUETES.get(k, k)} for k in esquetes.ESQUETES],
+            "musica": musica.descrever(m) if m else None,
+            "fila": len(self.falas),
+        }
+
+    def abrir_painel(self):
+        """Abre o painel numa janela de app do Edge (sem barra de navegador), no monitor do Claudinho."""
+        url = f"http://127.0.0.1:{PORTA}/painel"
+        aberta = next((j["hwnd"] for j in janelas.listar() if j["titulo"].startswith("Claudinho · Painel")), None)
+        if aberta:  # já aberto: só traz pra frente
+            user32.ShowWindow(aberta, 9)  # SW_RESTORE
+            abrir.forcar_frente(aberta)
+            return
+        _, (esq, topo, dir_, base), _ = monitor(*self.centro())
+        w, h = 1040, 760
+        x, y = esq + (dir_ - esq - w) // 2, topo + max(0, (base - topo - h) // 2)
+        edge = shutil.which("msedge") or next((str(c) for c in (
+            Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft/Edge/Application/msedge.exe",
+            Path(os.environ.get("ProgramFiles", "")) / "Microsoft/Edge/Application/msedge.exe") if c.exists()), None)
+        if not edge:
+            webbrowser.open(url)
+            return
+        subprocess.Popen([edge, f"--app={url}", f"--window-size={w},{h}", f"--window-position={x},{y}",
+                          # InPrivate: sem isso o Edge entra sozinho na conta Microsoft e mostra aviso de sincronizar
+                          f"--user-data-dir={DADOS / 'painel-edge'}", "--inprivate", "--disable-sync",
+                          "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
+                         creationflags=subprocess.CREATE_NO_WINDOW)
 
     def mudar_cfg(self, chave, valor):
         self.cfg[chave] = valor
@@ -2344,14 +2432,16 @@ class Claudinho:
                 if emoji and self.cfg["emojis"]:
                     self.soltar_emoji(emoji)
             return
-        if not self.cfg["esquetes"] or agora < self.prox_esquete:
+        if not (self.cfg["esquetes"] or self.esquete_forcada) or agora < self.prox_esquete:
             return
         if (self.balao or self.entrada or self.falas or self.ocupado or self.arrasto or self.emoji
                 or self.comentando or self.lendo_notificacoes or self.modo != "passeio" or not self.visivel):
             return
         self.prox_esquete = agora + random.uniform(240, 540)  # uma a cada 4–9 min
         # CLAUDINHO_ESQUETE=inseto (por ex.) fixa qual roda: pra testar uma esquete nova
-        nome = self.ultima_esquete = os.environ.get("CLAUDINHO_ESQUETE") or esquetes.sortear(self.ultima_esquete, tocando)
+        nome = self.ultima_esquete = (self.esquete_forcada or os.environ.get("CLAUDINHO_ESQUETE")
+                                      or esquetes.sortear(self.ultima_esquete, tocando))
+        self.esquete_forcada = None
         self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
                         "musica": tocando}
         self.alvo = None  # para onde está
@@ -2551,6 +2641,8 @@ class Claudinho:
                     self.soltar_emoji("nota")
             elif ev[0] == "menu":
                 self.acao_menu(ev[1])
+            elif ev[0] == "painel_cfg":
+                self.aplicar_cfg(ev[1], ev[2])
             elif ev[0] == "notificacoes":
                 self.lendo_notificacoes = False
                 _, resumo, ids, erro = ev

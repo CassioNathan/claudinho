@@ -28,7 +28,15 @@ terminam e solta piadas sobre o que está na tela.
   `Win+Shift+E` manda um print da janela da frente pro chat e ele resume/explica bem simplificado
   (dá pra continuar perguntando sobre o mesmo print);
   `Win+Shift+N` resume as notificações da central do Windows, com botão pra limpar as que ele leu.
-  Menu no botão direito e no ícone da bandeja.
+  O menu (botão direito nele ou no ícone da bandeja) tem só o do dia a dia: perguntar, música, o que tem atalho
+  e **Configurações e skins ⚙️**.
+- **Painel:** uma janelinha (HTML servido pelo próprio Claudinho, aberta como app do Edge em modo InPrivate)
+  com tudo que é configuração: movimento, piadas, esquetes (dá pra rodar qualquer uma na hora), música e extras,
+  ações e atalhos. A API dele só aceita pedidos com o token embutido na página.
+- **Skins:** uma cor (10, incluindo arco-íris) e um adereço por espaço (cabeça, olhos, rosto, pescoço, braços),
+  28 adereços e 9 pacotes prontos (emo, CEO, natal, cowboy, pirata, anjinho, diabinho, gamer, rei).
+  Adereço com "frente" (franja, aba do boné, tapa-olho…) vira pro lado em que ele está olhando.
+  Tudo em `skins.py`; adereço novo é só uma lista de pixels.
 - **Esquetes (à toa):** de vez em quando, parado, ele apronta: "Tive uma ideia!", saca o notebook,
   trabalha e conta o resultado (às vezes um app novo, às vezes "acabaram meus tokens"); deploy do nada,
   git push --force suando, café, cochilo, alongamento, dancinha, caça ao bug (aparece uma joaninha,

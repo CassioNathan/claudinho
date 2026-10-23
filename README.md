@@ -24,7 +24,9 @@ terminam e solta piadas sobre o que está na tela.
   coração, zzz, check, fogo, nota, ?, raio, disquete, suor), às vezes com uma frase, escolhido pelo que
   você está fazendo. Pra criar novos, é só desenhar em `emojis.py`.
 - **Sprites:** andando, correndo entre monitores, notebook digitando, pensando, sendo carregado, vendado.
-- **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos.
+- **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos;
+  `Win+Shift+E` manda um print da janela da frente pro chat e ele resume/explica bem simplificado
+  (dá pra continuar perguntando sobre o mesmo print).
   Menu no botão direito e no ícone da bandeja.
 
 ## Instalar num PC novo

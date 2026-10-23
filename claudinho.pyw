@@ -58,6 +58,7 @@ CONFIG_PADRAO = {
     "aviso_segundos": 5,
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
     "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
+    "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
     # onde o chat lê arquivos sem perguntar; fora daqui (e qualquer comando ou edição) pede confirmação
     "pastas_leitura": ["D:\\Projetos", "E:\\Stompdesk Projeto"],
 }
@@ -422,15 +423,16 @@ class ChatClaude:
             "subtype": "success", "request_id": ev.get("request_id"), "response": decisao}}) + "\n")
         self.proc.stdin.flush()
 
-    def perguntar(self, texto):
-        """Devolve (resposta, session_id, erro)."""
+    def perguntar(self, texto, imagem=None):
+        """Devolve (resposta, session_id, erro). `imagem` = bloco de imagem (ex.: print pra resumir)."""
+        conteudo = [imagem, {"type": "text", "text": texto}] if imagem else texto
         with self.trava:
             for tentativa in range(2):  # se o processo morreu, abre outro e tenta de novo
                 try:
                     if self.proc is None or self.proc.poll() is not None:
                         self.abrir()
                     self.proc.stdin.write(json.dumps(
-                        {"type": "user", "message": {"role": "user", "content": texto}}) + "\n")
+                        {"type": "user", "message": {"role": "user", "content": conteudo}}) + "\n")
                     self.proc.stdin.flush()
                     for linha in self.proc.stdout:
                         try:
@@ -486,9 +488,9 @@ def perfil_curto():
     return "\nQuem é o usuário (use pra piada ficar pessoal):\n" + texto[:1800]
 
 
-def em_jpeg(img):
+def em_jpeg(img, qualidade=80):
     buffer = io.BytesIO()
-    img.convert("RGB").save(buffer, "JPEG", quality=80)  # vai direto na mensagem, sem salvar em disco
+    img.convert("RGB").save(buffer, "JPEG", quality=qualidade)  # vai direto na mensagem, sem salvar em disco
     return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
                                         "data": base64.b64encode(buffer.getvalue()).decode()}}
 
@@ -902,6 +904,7 @@ class Claudinho:
         self.criar_icone_bandeja()
         iniciar_atalho(self.cfg["atalho_comentar"], self.eventos, "comentar_agora", 1)
         iniciar_atalho(self.cfg["atalho_venda"], self.eventos, "venda", 2)
+        iniciar_atalho(self.cfg["atalho_resumir"], self.eventos, "resumir", 3)
         self.root.after(70, self.tick)
 
     # ---------- laço principal ----------
@@ -1232,6 +1235,7 @@ class Claudinho:
             ("Reações com emojis ✨", "emojis", lambda: self.cfg["emojis"]),
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
+            (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
             None,
             ("Nova conversa", "nova", None),
             ("Aviso de teste", "teste", None),
@@ -1357,6 +1361,8 @@ class Claudinho:
             self.comentar(f"Beleza, piadas: {self.nome_frequencia()}.")
         elif acao == "comentar_agora":
             self.comentar_agora()
+        elif acao == "resumir":
+            self.resumir_tela()
         elif acao == "nova":
             self.nova_conversa()
         elif acao == "teste":
@@ -1657,6 +1663,41 @@ class Claudinho:
         return ("Algumas coisas que ele pediu pro Claude Code hoje (contexto opcional; só use se combinar "
                 "muito com a tela, e não conte quantas tarefas foram):\n" + "\n".join(linhas))
 
+    def resumir_tela(self):
+        """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
+        A resposta cai no balão de conversa, então dá pra continuar perguntando sobre o mesmo print."""
+        if self.cfg["vendado"]:
+            self.comentar("Tô vendado, não dá pra ler nada! Tira a faixa (Win+Shift+Y) que eu leio.")
+            return
+        if self.ocupado:
+            self.comentar("Calma, ainda tô pensando na outra…", duracao=3)
+            return
+        janela = janelas.janela_ativa()
+        nossas = {int(w.wm_frame(), 16) for w in (self.root,) + ((self.entrada.win,) if self.entrada else ())}
+        if (janela and janela["hwnd"] not in nossas and janela["exe"] not in janelas.IGNORAR
+                and janela["rect"][2] - janela["rect"][0] > 200):
+            esq, topo, dir_, base = janela["rect"]
+            _, area_mon, total = monitor((esq + dir_) / 2, (topo + base) / 2)
+            caixa = (max(esq, total[0]), max(topo, total[1]), min(dir_, total[2]), min(base, total[3]))
+            nome = frases.NOMES.get(frases.categoria(janela), janela["exe"].replace(".exe", ""))
+        else:  # sem janela útil na frente: o monitor do mouse inteiro
+            _, _, caixa = monitor(*cursor())
+            nome = "tela"
+        img = ImageGrab.grab(bbox=caixa, all_screens=True)
+        if img.width > 1800:  # texto precisa de resolução: reduz só se for muito grande
+            img = img.resize((1800, round(img.height * 1800 / img.width)))
+        pedido = ("Este é um print da janela que estou vendo agora (" + nome + "). Me explica o que tem nela "
+                  "de forma BEM simplificada: se for um texto longo, resume em poucos tópicos curtos e fáceis; "
+                  "se for código ou erro, diz o que é e o que fazer; se for outra coisa, explica em 2-3 frases. "
+                  "Não descreva a interface, foque no conteúdo.")
+        self.mem.registrar_mensagem("eu", f"[print da janela: {nome}] me resume isso")
+        self.ocupado = True
+        self.usou_ferramenta = True  # balão mostra "fazendo…" e ele saca o notebook
+        imagem = em_jpeg(img, qualidade=88)  # mais nítido: é pra ler texto
+
+        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pedido, imagem))),
+                         daemon=True).start()
+
     def comentar_agora(self):
         """Menu ou atalho: sempre olha a tela de verdade (Haiku), mostrando que está olhando."""
         if self.comentando:
@@ -1878,7 +1919,8 @@ class Claudinho:
                 _, resposta, sid, erro = ev
                 self.ocupado = False
                 self.mem.guardar_meta("session_id", sid)
-                texto = f"⚠ {erro}" if erro else resposta
+                # o balão não mostra markdown: tira os ** e ` que às vezes vêm na resposta
+                texto = f"⚠ {erro}" if erro else re.sub(r"\*\*|`", "", resposta)
                 if not erro:
                     self.mem.registrar_mensagem("claudinho", resposta)
                 self.fechar_balao()  # tira o "pensando…"

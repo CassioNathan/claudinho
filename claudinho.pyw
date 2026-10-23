@@ -462,6 +462,7 @@ class ChatClaude:
         self.ao_usar_ferramenta = ao_usar_ferramenta  # (ferramenta, entrada): o mascote reage
         self.proc = None
         self.trava = threading.Lock()
+        self.ultimo_uso = time.time()
 
     def abrir(self):
         exe = shutil.which("claude")
@@ -522,6 +523,15 @@ class ChatClaude:
             self.proc.kill()
         self.proc = None
 
+    def dormir_se_parado(self, minutos=10):
+        """Sem pergunta há `minutos`: fecha o processo do chat (a conversa continua: a próxima reabre ela)."""
+        if (self.proc and self.proc.poll() is None and time.time() - self.ultimo_uso > minutos * 60
+                and self.trava.acquire(blocking=False)):
+            try:
+                self.fechar()
+            finally:
+                self.trava.release()
+
     def trocar_personalidade(self, personalidade):
         """As instruções fixas mudam: fecha o processo e a próxima pergunta reabre a mesma conversa já com elas."""
         with self.trava:
@@ -570,6 +580,7 @@ class ChatClaude:
         """Devolve (resposta, session_id, erro). `imagem` = bloco de imagem (ex.: print pra resumir);
         `modelo` = usar outro modelo só nesta pergunta (ex.: "sonnet" no resumo de tela), depois volta pro Haiku."""
         conteudo = [imagem, {"type": "text", "text": texto}] if imagem else texto
+        self.ultimo_uso = time.time()
         with self.trava:
             for tentativa in range(2):  # se o processo morreu, abre outro e tenta de novo
                 try:
@@ -1211,6 +1222,19 @@ class Balao:
         self.win.destroy()
 
 
+class Gravador:
+    """Faz de conta que é o canvas: só anota os retângulos do quadro (pra comparar com o anterior)."""
+
+    def __init__(self):
+        self.itens = []
+
+    def delete(self, *_):
+        self.itens = []
+
+    def create_rectangle(self, x0, y0, x1, y1, fill, width=0):
+        self.itens.append((x0, y0, x1, y1, fill))
+
+
 # ---------------- o mascote ----------------
 class Claudinho:
     def __init__(self, eventos):
@@ -1263,6 +1287,7 @@ class Claudinho:
         self.canvas = tk.Canvas(self.root, width=self.W, height=self.H, bg=CHAVE,
                                 highlightthickness=0, cursor="hand2")
         self.canvas.pack()
+        self.ultimo_quadro = None  # pra só redesenhar quando muda
 
         _, (esq, topo, dir_, base), _ = monitor(*cursor())
         self.x, self.y = float(dir_ - self.W - 120), float(base - self.H)
@@ -1300,9 +1325,31 @@ class Claudinho:
             self.talvez_emoji()
             self.cuidar_da_esquete()
             self.animar_emoji()
+            self.desenhar_se_mudou()
+            if self.t % 100 == 0:
+                self.chat.dormir_se_parado()
+        finally:
+            # parado à toa (sem andar, falar, esquete…), o laço anda mais devagar: gasta menos processador
+            self.root.after(150 if self.a_toa() else 70, self.tick)
+
+    def a_toa(self):
+        return not (self.movendo or self.balao or self.entrada or self.esquete or self.emoji or self.arrasto
+                    or self.ocupado or self.olhando_forcado or self.lendo_notificacoes or self.notebook > 0
+                    or self.modo != "passeio" or time.time() < self.pouso_ate)
+
+    def desenhar_se_mudou(self):
+        """Monta o quadro numa lista e só mexe no canvas (a parte cara) se ele for diferente do anterior:
+        parado, olhando pro mesmo lado, o quadro se repete e não custa nada."""
+        tela, self.canvas = self.canvas, Gravador()
+        try:
             self.desenhar()
         finally:
-            self.root.after(70, self.tick)
+            quadro, self.canvas = self.canvas.itens, tela
+        if quadro != self.ultimo_quadro:
+            tela.delete("all")
+            for x0, y0, x1, y1, cor in quadro:
+                tela.create_rectangle(x0, y0, x1, y1, fill=cor, width=0)
+            self.ultimo_quadro = quadro
 
     def mover_janela(self):
         self.root.geometry(f"{self.W}x{self.H}+{int(self.x)}+{int(self.y)}")
@@ -2374,6 +2421,9 @@ class Claudinho:
         if self.entrada:
             self.fechar_conversa()
         else:
+            # o chat pode estar dormindo: já vai acordando enquanto você digita
+            self.chat.ultimo_uso = time.time()
+            threading.Thread(target=self.chat.aquecer, daemon=True).start()
             # acabou de falar algo num balão (até 3 min)? a conversa abre nisso, pra você responder a ele
             recente = self.falas_recentes(minutos=3)
             self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)

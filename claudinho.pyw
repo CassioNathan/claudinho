@@ -1770,6 +1770,7 @@ class Claudinho:
         elif acao == "limpar":
             self.falas.clear()
         elif acao == "sair":
+            self.fechar_painel()
             self.icone.stop()
             self.chat.fechar()
             self.root.destroy()
@@ -1852,11 +1853,22 @@ class Claudinho:
         if not edge:
             webbrowser.open(url)
             return
-        subprocess.Popen([edge, f"--app={url}", f"--window-size={w},{h}", f"--window-position={x},{y}",
+        proc = subprocess.Popen([edge, f"--app={url}", f"--window-size={w},{h}", f"--window-position={x},{y}",
                           # InPrivate: sem isso o Edge entra sozinho na conta Microsoft e mostra aviso de sincronizar
                           f"--user-data-dir={DADOS / 'painel-edge'}", "--inprivate", "--disable-sync",
                           "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
                          creationflags=subprocess.CREATE_NO_WINDOW)
+        # no mesmo "job" do chat: se o Claudinho fechar (ou for derrubado), o painel fecha junto
+        ctypes.windll.kernel32.AssignProcessToJobObject(wt.HANDLE(JOB_FILHOS), wt.HANDLE(proc._handle))
+
+    @staticmethod
+    def fechar_painel():
+        """Fecha painel que tenha sobrado (de um Claudinho anterior, que tinha outro token)."""
+        subprocess.run(["powershell", "-NoProfile", "-Command",
+                        "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | "
+                        "Where-Object { $_.CommandLine -like '*painel-edge*' } | "
+                        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"],
+                       creationflags=subprocess.CREATE_NO_WINDOW, timeout=20)
 
     def mudar_cfg(self, chave, valor):
         self.cfg[chave] = valor
@@ -2689,6 +2701,8 @@ class Claudinho:
                 self.comentar(texto, {"origem": "haiku", "id": pid})
 
     def rodar(self):
+        # painel que ficou aberto de um Claudinho anterior não fala mais com este: fecha
+        threading.Thread(target=self.fechar_painel, daemon=True).start()
         self.root.mainloop()
 
 

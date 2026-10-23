@@ -337,6 +337,7 @@ async function api(caminho, corpo) {
     headers: {"X-Token": TOKEN, "Content-Type": "application/json"},
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
+  if (r.status === 403) location.reload();  // o Claudinho reiniciou (token novo): pega a página nova
   if (!r.ok) throw new Error(r.status);
   return r.status === 204 ? null : r.json();
 }

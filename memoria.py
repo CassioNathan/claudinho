@@ -158,6 +158,19 @@ class Memoria:
                             "ORDER BY id DESC LIMIT 1", (self.conversa_atual(),))
         return linha[0]["texto"] if linha else ""
 
+    def conversa_velha(self, max_perguntas):
+        """A conversa atual começou noutro dia ou já teve perguntas demais (cada mensagem relê o histórico todo)."""
+        linha = self._todos("SELECT MIN(criado_em) AS inicio, SUM(quem = 'eu') AS perguntas FROM conversa "
+                            "WHERE numero = ?", (self.conversa_atual(),))[0]
+        if not linha["inicio"]:
+            return False
+        return linha["inicio"][:10] != time.strftime("%Y-%m-%d") or linha["perguntas"] >= max_perguntas
+
+    def fim_da_conversa(self, numero, n=4):
+        """As últimas `n` mensagens de uma conversa, da mais antiga pra mais nova."""
+        linhas = self._todos("SELECT quem, texto FROM conversa WHERE numero = ? ORDER BY id DESC LIMIT ?", (numero, n))
+        return [(l["quem"], l["texto"]) for l in reversed(linhas)]
+
     def nova_conversa(self):
         self.guardar_meta("conversa_atual", self.conversa_atual() + 1)
         self.guardar_meta("session_id", None)

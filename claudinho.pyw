@@ -39,6 +39,7 @@ import memoria
 import musica
 
 PORTA = 47821
+MAX_PERGUNTAS_CONVERSA = 30  # depois disso (ou no dia seguinte) o chat começa uma conversa nova
 DADOS = Path.home() / ".claudinho"
 CONFIG = DADOS / "config.json"  # o resto (piadas, notas, avisos, conversa) fica no claudinho.db
 
@@ -366,7 +367,9 @@ class ChatClaude:
                "--append-system-prompt", PROMPT_SISTEMA, "--strict-mcp-config", "--disable-slash-commands",
                "--permission-mode", "default", "--permission-prompt-tool", "stdio",
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
-               "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)"]
+               "--allowedTools", "WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)",
+               # só as ferramentas que o chat usa: a definição das outras pesava ~7 mil tokens por mensagem
+               "--tools", "Bash,Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]
         if self.pastas:  # dentro delas, ler arquivo não pede confirmação
             cmd += ["--add-dir", *self.pastas]
         if self.sid:
@@ -1624,9 +1627,18 @@ class Claudinho:
         # agora o Claudinho está em primeiro plano (você acabou de digitar nele): libera a próxima
         # janela que ele abrir (navegador, programa) pra vir pra frente em vez de abrir escondida
         user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+        pergunta = texto
+        # cada mensagem relê o histórico todo: conversa de outro dia ou longa demais começa do zero,
+        # levando só o finalzinho da anterior pra não perder o fio
+        if self.mem.conversa_velha(MAX_PERGUNTAS_CONVERSA):
+            anterior = self.mem.conversa_atual()
+            self.mem.nova_conversa()
+            self.chat.nova_conversa()
+            fim = "\n".join(f"{'Eu' if q == 'eu' else 'Você'}: {t[:200]}" for q, t in self.mem.fim_da_conversa(anterior))
+            if fim:
+                pergunta += f"\n\n(Fim da nossa conversa anterior, só pra continuidade:\n{fim})"
         self.mem.registrar_mensagem("eu", texto)
         self.ocupado = True
-        pergunta = texto
         pergunta += self.contexto_das_falas()  # continuidade: ele lembra da piada/aviso que acabou de mostrar
         if self.musica:  # contexto que ele vê mas não precisa comentar
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"

@@ -78,6 +78,16 @@ POEIRA = "#b9b4a8"
 NB_BASE = "#3b3a37"   # notebook: base/teclado
 NB_TAMPA = "#a8a59d"  # notebook: tampa (vista de trás)
 NB_TECLA = "#f4efe4"
+NUVEM = "#7d828c"    # esquetes: build quebrou, fogo, pato, npm, pizza, jogo, faxina, reunião, halter
+FOGO_1, FOGO_2, FOGO_3 = "#e8452c", "#f28c28", "#ffd23f"
+BALDE = "#8c96a3"
+PATO, BICO = "#f2c94c", "#e8862a"
+CAIXA, FITA = "#b07d4f", "#e0c08f"
+BORDA, QUEIJO, PEPPERONI = "#c98a3c", "#f4c542", "#c0392b"
+CONTROLE, VERDE = "#4a4a55", "#3fbf6b"
+CABO, PALHA = "#8b5a2b", "#d8b25a"
+FONE = "#2c2c2c"
+PESO, BARRA = "#3a3936", "#9b978d"
 CABELO = "#141414"   # modo emo
 ROSA = "#e0457b"
 CANECA = "#e8e2d4"   # esquete do café
@@ -588,6 +598,19 @@ EMO = ["Ninguém me entende… 🖤", "Essa música fala de mim.", "Não é uma 
        "Meu código também tem traumas.", "Eu sinto tudo em Lá menor.",
        "Essa é pra quem já levou um merge conflict no coração.", "Hoje eu só compilo em preto.",
        "Deixa eu sofrer em paz, tá tocando a minha música.", "Minha franja tem mais personalidade que meu commit."]
+# pra onde ele olha em cada esquete: (fase, t) -> (olhar_x, olhar_y)
+OLHAR_ESQUETE = {
+    "build_quebrou": lambda f, t: (0, 1),
+    "fogo": lambda f, t: (-1, 0),
+    "pato": lambda f, t: (-1, 0),
+    "npm": lambda f, t: (-1, 0 if f < 0.6 else -1),  # a caixa cresce e ele olha pra cima
+    "pizza": lambda f, t: (1, 0),
+    "jogo": lambda f, t: (0, 1),
+    "limpeza": lambda f, t: (1, 1),
+    "reuniao": lambda f, t: (0, 0),
+    "borboleta": lambda f, t: (-1 if f < 0.45 else 1, -1),
+    "malhando": lambda f, t: (-1 if (t // 12) % 2 == 0 else 1, -1),
+}
 FRANJA = [  # (coluna, linha) do cabelo emo: topo da cabeça e a franja caindo de lado, tapando um olho
     *[(c, -1) for c in range(2, 10)], *[(c, 0) for c in range(1, 10)],
     *[(c, 1) for c in range(1, 6)], *[(c, 2) for c in range(1, 5)], (1, 3), (2, 3)]
@@ -1185,6 +1208,10 @@ class Claudinho:
             pulo = -1 if (self.t // 14) % 2 else 0
         elif esq == "danca":
             pulo = 1 if self.t % 6 < 3 else 0
+        elif esq == "build_quebrou":  # encolhido debaixo da chuva
+            pulo = -1
+        elif esq == "fogo" and fase < 0.6:  # pulando de desespero
+            pulo = self.t % 2
         oy = (FOLGA - pulo) * S
 
         def px(col, lin, cor):
@@ -1197,7 +1224,7 @@ class Claudinho:
         alvo_nb = 1.0 if no_notebook and not self.movendo else 0.0
         self.notebook += max(-0.15, min(0.15, alvo_nb - self.notebook))
         digitando = self.notebook >= 0.99
-        bracos_soltos = digitando or carregado or esq in ("alongar", "danca")
+        bracos_soltos = digitando or carregado or esq in ("alongar", "danca", "fogo", "jogo", "malhando")
 
         for lin, linha in enumerate(CORPO):
             for col, ch in enumerate(linha):
@@ -1212,6 +1239,24 @@ class Claudinho:
             for col, cima in ((0, self.t % 6 < 3), (10, self.t % 6 >= 3)):
                 px(col, -1 if cima else 4, LARANJA)
                 px(col, 0 if cima else 5, LARANJA)
+        elif esq == "fogo":  # desespero (bracinhos pra cima, rápido); depois segura o balde do lado do fogo
+            if fase < 0.6:
+                for col in (0, 10):
+                    cima = (self.t + col) % 2 == 0
+                    px(col, -1 if cima else 0, LARANJA)
+                    px(col, 0 if cima else 1, LARANJA)
+            else:
+                for col, lin in ((0, 2), (0, 3), (10, 3), (10, 4)):
+                    px(col, lin, LARANJA)
+        elif esq == "jogo":  # apertando os botões do controle feito louco
+            for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
+                px(col, 4 if sobe else 5, LARANJA)
+                px(col, 5 if sobe else 6, LARANJA)
+        elif esq == "malhando":  # um braço levanta o halter, depois o outro
+            erguido = 0 if (self.t // 12) % 2 == 0 else 10
+            for col in (0, 10):
+                for lin in ((-1, 0) if col == erguido else (3, 4)):
+                    px(col, lin, LARANJA)
         if carregado:  # bracinhos pra cima, sacudindo ("uiii!")
             for col in (0, 10):
                 topo = 1 if (self.t + col) % 4 < 2 else 2
@@ -1240,12 +1285,16 @@ class Claudinho:
             olhar_x, olhar_y = (-1 if self.t % 12 < 6 else 1), 0
         elif esq == "cafe":
             olhar_x, olhar_y = 1, 0  # olhando pra caneca
+        elif esq in OLHAR_ESQUETE:
+            olhar_x, olhar_y = OLHAR_ESQUETE[esq](fase, self.t)
         piscando = time.time() < self.piscar_ate
         # cochilando, se espreguiçando ou no gole do café: olhinho fechado (só a linha de baixo)
         gole = esq == "cafe" and (time.time() - self.esquete["inicio"]) % 3 < 1.1
         if esq == "inseto" and self.esquete.get("inseto") and not self.movendo:  # de olho no bicho
             olhar_x, olhar_y = (1 if self.esquete["inseto"]["x"] > self.x else -1), 1
-        if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole or comendo:
+        mordida = esq == "pizza" and (time.time() - self.esquete["inicio"]) % 2.5 < 0.8
+        tedio = esq == "reuniao" and (self.t // 6) % 5 != 0  # reunião: olho quase sempre fechado
+        if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole or comendo or mordida or tedio:
             piscando = True
         l1, l2 = OLHOS_Y[olhar_y]
         if self.cfg["vendado"]:  # faixa nos olhos, com o nó balançando atrás da cabeça
@@ -1355,6 +1404,90 @@ class Claudinho:
             quadrado(11.5, 0.6 - sobe, NB_TECLA, 0.6)  # bolinha da nota
             quadrado(12.0, -0.4 - sobe, NB_TECLA, 0.25)  # haste
             quadrado(12.0, -0.15 - sobe, NB_TECLA, 0.25)
+        elif esq == "build_quebrou":  # nuvenzinha em cima da cabeça e chuva caindo nele
+            for col in range(3, 8):
+                quadrado(col, -2, NUVEM)
+            for col in range(2, 9):
+                quadrado(col, -1, NUVEM)
+            for k in range(4):
+                quadrado(2.5 + k * 1.7, -0.1 + ((t + k * 3) % 6) * 0.8, SUOR, 0.3)
+        elif esq == "fogo":  # foguinho do lado esquerdo; o balde de água apaga; sobra fumaça
+            if fase < 0.85:
+                for col in (-3, -2, -1):
+                    quadrado(col, 7, FOGO_1)
+                    quadrado(col, 6, FOGO_2)
+                quadrado(-3 + (t // 2) % 2, 5, FOGO_3)
+                quadrado(-2, 5, FOGO_2)
+                if t % 4 < 2:
+                    quadrado(-2, 4, FOGO_3)
+                if fase > 0.6:  # água caindo do balde
+                    for k in range(3):
+                        quadrado(-2.8 + k * 0.9, 3 + ((t + k) % 4) * 0.8, SUOR, 0.4)
+                    quadrado(-1.5, 1.5, BALDE)  # balde na mão
+                    quadrado(-0.5, 1.5, BALDE, 0.5)
+            else:
+                for k in range(3):
+                    quadrado(-2.2 + (k % 2) * 0.5, 6 - k * 1.3 - (t % 4) * 0.3, POEIRA, 0.5)
+        elif esq == "pato" and fase < 0.93:  # patinho de borracha à esquerda + "…" dele falando
+            for col in (-3, -2, -1):
+                quadrado(col, 6, PATO)
+            quadrado(-2, 5, PATO)
+            quadrado(-1, 5, PATO)
+            quadrado(-2, 4, PATO)
+            quadrado(-2.6, 4.4, BICO, 0.6)
+            quadrado(-1.85, 4.25, OLHO, 0.3)
+            if fase < 0.85:
+                for k in range((t // 4) % 4):
+                    quadrado(-1 + k * 0.6, 1.8, NB_TECLA, 0.35)
+        elif esq == "npm":  # caixa que cresce (largura até 3, altura até 5)
+            larg, alt = 1 + round(fase * 2), 1 + round(fase * 4)
+            for col in range(-larg, 0):
+                for lin in range(8 - alt, 8):
+                    quadrado(col, lin, CAIXA)
+            meio = -larg / 2 - 0.2
+            for lin in range(8 - alt, 8):
+                quadrado(meio, lin, FITA, 0.4)
+        elif esq == "pizza":  # fatia na mão direita; cada mordida tira um pedaço (a ponta primeiro)
+            fatia = [(11, 4, QUEIJO), (11, 3, QUEIJO), (12, 3, PEPPERONI), (11, 2, BORDA), (12, 2, BORDA)]
+            for col, lin, cor in fatia[min(4, int(fase * 4.5)):]:
+                quadrado(col, lin, cor)
+        elif esq == "jogo":  # controle na frente, botões piscando
+            for col in range(3, 8):
+                quadrado(col, 4.6, CONTROLE)
+            quadrado(3, 5.6, CONTROLE)
+            quadrado(7, 5.6, CONTROLE)
+            quadrado(3.4, 4.85, NB_TECLA, 0.4)  # direcional
+            quadrado(6.1, 4.8, PEPPERONI if t % 2 else CONTROLE, 0.35)
+            quadrado(6.6, 5.1, VERDE if t % 3 else CONTROLE, 0.35)
+        elif esq == "limpeza":  # vassourinha balançando e a poeira indo embora
+            vai = 0.5 * ((t // 4) % 2)
+            for k in range(5):
+                quadrado(11 + k * 0.25 + vai, 1 + k, CABO, 0.4)
+            quadrado(11.3 + vai, 6, PALHA)
+            quadrado(12.3 + vai, 6, PALHA, 0.7)
+            for k in range(3):
+                quadrado(12 + (t / 2 + k * 2) % 4, 7.2, POEIRA, 0.4)
+        elif esq == "reuniao":  # fone com microfone
+            for col in range(1, 10):
+                quadrado(col, -1, FONE)
+            for col in (0, 10):
+                quadrado(col, 0, FONE)
+                quadrado(col, 1, FONE)
+            quadrado(10.5, 2.1, FONE, 0.4)
+            quadrado(10.1, 2.5, FONE, 0.4)
+        elif esq == "borboleta":  # a joaninha com asas sobe voando em diagonal
+            col, lin = -2 + fase * 14, 6 - fase * 8 + math.sin(fase * 20) * 0.6
+            asa = -0.5 if t % 2 else 0.3
+            quadrado(col - 0.5, lin + asa, NB_TECLA, 0.5)
+            quadrado(col + 0.6, lin + asa, NB_TECLA, 0.5)
+            quadrado(col, lin, esquetes.CORES_INSETO["R"], 0.6)
+        elif esq == "malhando":  # halter em cima do braço erguido; suor no fim
+            erguido = 0 if (t // 12) % 2 == 0 else 10
+            quadrado(erguido - 1, -2, PESO)
+            quadrado(erguido, -1.8, BARRA, 0.6)
+            quadrado(erguido + 1, -2, PESO)
+            if fase > 0.5:
+                quadrado(10.6, -0.4 + (t // 3 % 4) * 0.45, SUOR, 0.5)
 
     # ---------- mouse ----------
     def apertou(self, e):
@@ -1989,11 +2122,13 @@ class Claudinho:
         self.acompanhar_app_ativo()
         if not self.cfg["comentar_tela"] or self.comentando or time.time() < self.prox_comentario:
             return
-        if self.ocupado or self.balao or self.entrada or self.falas or self.modo != "passeio":
+        if self.ocupado or self.balao or self.entrada or self.falas or self.esquete or self.modo != "passeio":
             return
         a, b = self.cfg["comentar_a_cada_minutos"]
         self.prox_comentario = time.time() + random.uniform(a, b) * 60
-        if random.random() >= self.cfg["chance_haiku"]:
+        if self.cfg["esquetes"] and random.random() < 0.25:  # às vezes, no lugar da piada, uma esquete
+            self.prox_esquete = 0
+        elif random.random() >= self.cfg["chance_haiku"]:
             _, _, area_total = self.area()
             self.comentar_do_banco(janelas.listar(area_total))
         else:

@@ -3,6 +3,7 @@
 Cada esquete tem duração (s), falas de começo e de fim (sorteia uma; lista vazia = calado)
 e o que o desenho faz (o desenho mora no claudinho.pyw, que olha o nome da esquete)."""
 import random
+import time
 
 ESQUETES = {
     "ideia": {  # o fluxo completo: tem a ideia, pensa, trabalha no notebook e conta como foi (ou não foi)
@@ -59,6 +60,61 @@ ESQUETES = {
         "inicio_musica": ["♪ Essa é boa! ♪", "Ó a música! ♪", "♪ Não resisto ♪"],
         "fim": [],
     },
+    "build_quebrou": {  # nuvenzinha chovendo em cima dele, encolhido
+        "duracao": 7,
+        "inicio": ["Ih…", "Opa. Vermelho no CI."],
+        "fim": ["Quebrou o build… e não fui eu. Acho.", "O build quebrou. Vou culpar o cache.",
+                "Build vermelho. Hoje não é meu dia."],
+    },
+    "fogo": {  # foguinho do lado, ele surta e depois apaga com um balde
+        "duracao": 8,
+        "inicio": ["Opa… o servidor tá pegando fogo!", "FOGO NA PRODUÇÃO!", "Isso é fumaça saindo do servidor?"],
+        "fim": ["Tudo sob controle. 🙂", "Apagado. Ninguém precisa saber.", "Resolvido. Post-mortem? Que post-mortem?"],
+    },
+    "pato": {  # patinho de borracha: ele explica o código pro pato
+        "duracao": 9,
+        "inicio": ["Pato, deixa eu te explicar esse código…", "Senta aí, pato. Olha só essa função…"],
+        "fim": ["Valeu, pato. Era um ponto e vírgula.", "Achei o bug só de explicar. Pato genial.",
+                "O pato não disse nada e resolveu. Contrata."],
+    },
+    "npm": {  # caixa que vai crescendo do lado
+        "duracao": 7,
+        "inicio": ["npm install…", "Só vou instalar uma libzinha."],
+        "fim": ["Só instalei uma dependência…", "1 pacote. 1.400 dependências. Normal.",
+                "node_modules agora pesa mais que eu."],
+    },
+    "pizza": {  # só de noite: uma fatia de pizza, mordida por mordida
+        "duracao": 8, "so_noite": True,
+        "inicio": ["Hora da pizza 🍕", "Pizza da madrugada, ninguém viu."],
+        "fim": ["Código bom é código com pizza.", "Agora sim, consigo debugar até de manhã."],
+    },
+    "jogo": {  # controle na mão, apertando tudo
+        "duracao": 8,
+        "inicio": ["Só uma partida.", "Rapidinho, só uma fase."],
+        "fim": ["…mais uma.", "Perdi. Vou dizer que foi lag.", "Zerei. Agora sim volto pro código."],
+    },
+    "limpeza": {  # vassourinha varrendo poeira pra fora
+        "duracao": 7,
+        "inicio": ["Faxina no código…", "Hora de tirar a poeira daqui."],
+        "fim": ["Removi código morto. Descanse em paz, função teste2_final_AGORA_VAI.",
+                "Apaguei 300 linhas comentadas. Ninguém vai sentir falta.", "Limpinho. Até o próximo commit."],
+    },
+    "reuniao": {  # fone na cabeça, piscando devagar de tédio
+        "duracao": 10,
+        "inicio": ["Entrando na daily…", "Reunião rapidinha, 5 minutos."],
+        "fim": ["Essa reunião podia ser um e-mail.", "1 hora pra decidir marcar outra reunião.",
+                "Saí da daily. Já esqueci tudo."],
+    },
+    "borboleta": {  # a joaninha volta com asas e sai voando
+        "duracao": 6,
+        "inicio": ["Ué… o bug voltou?", "Peraí, esse bug tá diferente…"],
+        "fim": ["Não é bug, é feature. 🦋", "Evoluiu. Agora é feature com asas."],
+    },
+    "malhando": {  # halterezinho, um braço de cada vez
+        "duracao": 7,
+        "inicio": ["Hora do treino!", "Bora, só três séries."],
+        "fim": ["Treino de dedo pra digitar mais rápido. 💪", "Amanhã é dia de perna. Ou não."],
+    },
 }
 
 
@@ -97,7 +153,8 @@ def final(nome):
 
 def sortear(ultima=None, musica_tocando=False):
     """Nome de uma esquete (evita repetir a última; a ideia é a mais comum; com música, a dança aparece mais)."""
-    nomes = [n for n in ESQUETES if n != ultima]
+    noite = time.localtime().tm_hour >= 22 or time.localtime().tm_hour < 5
+    nomes = [n for n, e in ESQUETES.items() if n != ultima and (noite or not e.get("so_noite"))]
     pesos = [3 if n == "ideia" or (n == "danca" and musica_tocando) else 1 for n in nomes]
     return random.choices(nomes, pesos)[0]
 

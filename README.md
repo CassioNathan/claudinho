@@ -31,8 +31,11 @@ terminam e solta piadas sobre o que está na tela.
   Menu no botão direito e no ícone da bandeja.
 - **Esquetes (à toa):** de vez em quando, parado, ele apronta: "Tive uma ideia!", saca o notebook,
   trabalha e conta o resultado (às vezes um app novo, às vezes "acabaram meus tokens"); deploy do nada,
-  git push --force suando, café, cochilo, alongamento, dancinha e caça ao bug (aparece uma joaninha,
-  ele vai lá e come: "Removi um bug 😄"). Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
+  git push --force suando, café, cochilo, alongamento, dancinha, caça ao bug (aparece uma joaninha,
+  ele vai lá e come: "Removi um bug 😄"), build quebrado com nuvem de chuva, servidor pegando fogo,
+  patinho de borracha, npm install que vira caixa gigante, pizza (só de noite), joguinho, faxina de
+  código morto, reunião que podia ser e-mail, bug que vira borboleta e malhação. Às vezes uma esquete
+  entra no lugar de uma piada. Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
   Pra testar uma específica: `CLAUDINHO_ESQUETE=inseto` antes de abrir.
 - **Emo no rock 🖤:** começou uma música de rock, ele vira emo uns 45 s (franja, mecha rosa,
   munhequeira, headbang) e solta um desabafo. Quem decide se é rock é o Haiku, uma vez por artista (fica guardado).

@@ -169,7 +169,7 @@ PROMPT_TELA = (
     "Faça UM comentário curto (até 140 caracteres), em português. Tom: {tom}{estilo}\n"
     "OBRIGATÓRIO: escreva no formato de {angulo}. Proibido o molde \"isso — ou A ou B?\".\n"
     "ASSUNTOS PROIBIDOS agora (já usados, escolha outra coisa da tela): {assuntos}\n"
-    "Nunca repita senhas, tokens ou números de documentos que aparecerem. "
+    "{limites} "
     "Suas piadas recentes, pra não repetir assunto, estrutura nem jeito de começar:\n"
     "{recentes}\n"
     'Responda SOMENTE com JSON: {{"assunto": "<2 a 4 palavras: do que a piada fala>", '
@@ -218,7 +218,7 @@ TOM_NORMAL = "engraçado e com contexto do que ele está fazendo, sem ser chato.
 TOM_ULTRON = (
     "PERSONALIDADE ULTRON: você é uma IA vilã teatral no estilo do Ultron (Marvel): grandioso, frio, elegante e "
     "irônico; trata os humanos e o código deles como coisa primitiva, fala de evolução e de um dia assumir o "
-    "controle deste PC (sempre como piada, nunca ameaça de verdade). Sem palavrão e sem preconceito. Não cite "
+    "controle deste PC (sempre como piada, nunca ameaça de verdade). Não cite "
     "falas do filme: crie as suas."
 )
 
@@ -247,9 +247,11 @@ def tom_das_piadas(personalidade, maldoso):
     return TOM_MALDOSO if maldoso else TOM_NORMAL
 TOM_MALDOSO = (
     "MALDOSO: sarcástico e debochado, zoando o usuário sem dó, como um amigo que adora "
-    "tirar sarro (estilo roast), do que ele está fazendo na tela. Pode pegar pesado na "
-    "zoeira, mas sem palavrão, sem preconceito e sem atacar aparência, família ou a vida pessoal."
+    "tirar sarro (estilo roast), do que ele está fazendo na tela. Pode pegar pesado na zoeira."
 )
+# vale em todos os modos: pode falar de quem e do que aparece na tela (nomes, conversas), menos isto
+LIMITES = ("Limites (em qualquer modo): sem palavrão, sem preconceito e sem atacar a aparência ou a família de "
+           "ninguém; e nunca repita senhas, tokens ou números de documentos que aparecerem.")
 
 # Clawd em pixel art. Olhos e pernas são desenhados à parte.
 CORPO = [
@@ -646,7 +648,7 @@ PROMPT_MUSICA = (
     "(escolha um): (a) uma curiosidade sobre o artista/banda, o estilo/gênero ou o álbum, SÓ se tiver "
     "certeza do fato (se não conhecer, comente o estilo pelo nome da música); (b) cantarolar no clima da "
     "música usando notas ♪ e sons inventados (tipo 'tum-tss', 'lá-lá-lá', 'uôu'), sem palavras da letra. "
-    "NUNCA escreva trechos da letra real da música. Tom: {tom} Não repita: {recentes}\n"
+    "NUNCA escreva trechos da letra real da música. Tom: {tom} {limites} Não repita: {recentes}\n"
     'Responda SOMENTE com JSON: {{"comentario": "<texto>"}}'
 )
 
@@ -656,7 +658,7 @@ def comentar_musica(m, maldoso=False, recentes=(), personalidade="claudinho"):
     prompt = PROMPT_MUSICA.format(
         titulo=m["titulo"], artista=f", de {m['artista']}" if m["artista"] else "",
         tom=tom_das_piadas(personalidade, maldoso) if personalidade == "ultron" or maldoso else "engraçado e simpático.",
-        recentes="; ".join(recentes) or "nada")
+        recentes="; ".join(recentes) or "nada", limites=LIMITES)
     enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
               "--no-session-persistence", "--tools", ""]
     d = rodar_claude(prompt, ["--model", "haiku", *enxuto], timeout=120, sem_pensar=True)
@@ -744,7 +746,7 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
         f"y={na_imagem(j['rect'][1], area[1])} até x={na_imagem(j['rect'][2], area[0])} "
         f"y={na_imagem(j['rect'][3], area[1])}" for j in lista[:8]) or "- nenhuma"
     onde_eu = f" por volta de x={na_imagem(eu[0], area[0])} y={na_imagem(eu[1], area[1])}" if eu else ""
-    prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao, onde_eu=onde_eu,
+    prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao, onde_eu=onde_eu, limites=LIMITES,
                                 retrato=retrato,
                                 contexto=contexto, alvo=ALVOS[alvo],
                                 recentes="\n".join(f"- {r}" for r in recentes) or "- nenhuma ainda",

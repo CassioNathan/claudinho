@@ -57,6 +57,7 @@ CONFIG_PADRAO = {
     "vendado": False,                    # faixa nos olhos: não tira print da tela (só banco de frases)
     "ver_musica": True,                  # sabe o que está tocando (piadas, chat e menu com controles)
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
+    "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
@@ -77,6 +78,8 @@ POEIRA = "#b9b4a8"
 NB_BASE = "#3b3a37"   # notebook: base/teclado
 NB_TAMPA = "#a8a59d"  # notebook: tampa (vista de trás)
 NB_TECLA = "#f4efe4"
+CABELO = "#141414"   # modo emo
+ROSA = "#e0457b"
 CANECA = "#e8e2d4"   # esquete do café
 CAFE = "#6b4226"
 SUOR = "#8ec5ff"     # gotinha do git push --force
@@ -571,6 +574,26 @@ PROMPT_NOTIFICACOES = (
     "Pode fechar com uma piadinha curta se couber. Responda só o resumo.")
 
 
+def artista_de_rock(artista, titulo=""):
+    """O Haiku diz se o artista é rock (punk, metal, emo, grunge, alternativo…). Uma chamada curta, só texto."""
+    prompt = (f"O artista musical \"{artista}\" (música: \"{titulo}\") é de rock ou de um subgênero de rock "
+              "(punk, metal, emo, grunge, hard rock, alternativo, post-hardcore…)? Responda só sim ou não.")
+    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
+              "--no-session-persistence", "--tools", ""]
+    d = rodar_claude(prompt, ["--model", "haiku", *enxuto], timeout=60, sem_pensar=True)
+    return not d.get("is_error") and d.get("result", "").strip().lower().startswith("sim")
+
+
+EMO = ["Ninguém me entende… 🖤", "Essa música fala de mim.", "Não é uma fase, mãe.",
+       "Meu código também tem traumas.", "Eu sinto tudo em Lá menor.",
+       "Essa é pra quem já levou um merge conflict no coração.", "Hoje eu só compilo em preto.",
+       "Deixa eu sofrer em paz, tá tocando a minha música.", "Minha franja tem mais personalidade que meu commit."]
+FRANJA = [  # (coluna, linha) do cabelo emo: topo da cabeça e a franja caindo de lado, tapando um olho
+    *[(c, -1) for c in range(2, 10)], *[(c, 0) for c in range(1, 10)],
+    *[(c, 1) for c in range(1, 6)], *[(c, 2) for c in range(1, 5)], (1, 3), (2, 3)]
+MECHA = [(7, -1), (6, 0), (5, 1)]  # mecha rosa
+
+
 def resumir_notificacoes(lista):
     """Resumo curtinho das notificações (Haiku sem ferramentas, sem memória: é só texto)."""
     linhas = "\n".join(f"- {n['quando']:%d/%m %H:%M} {n['app']}: {n['titulo']} — {n['texto'][:160]}"
@@ -968,7 +991,10 @@ class Claudinho:
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.esquete, self.prox_esquete = None, time.time() + random.uniform(120, 240)  # idle: deploy, café…
+        if os.environ.get("CLAUDINHO_ESQUETE"):  # testando uma esquete: a primeira vem logo
+            self.prox_esquete = time.time() + 5
         self.ultima_esquete = None
+        self.emo_ate, self.emo_musica = 0, None  # rock tocando: modo emo até essa hora
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
         self.S = escala()
@@ -1079,7 +1105,8 @@ class Claudinho:
 
         if self.modo == "passeio":
             # parado quando fala, e também quando está trabalhando no notebook
-            falando = (self.balao and self.balao.tipo != "pensando") or self.entrada or self.ocupado or self.esquete
+            falando = (self.balao and self.balao.tipo != "pensando") or self.entrada or self.ocupado \
+                or (self.esquete and self.esquete.get("fase_inseto") != "cacando")  # caçando o bug: anda
             if falando:
                 return
             if self.alvo is None:
@@ -1146,7 +1173,15 @@ class Claudinho:
             pulo = 0
         esq = self.esquete["nome"] if self.esquete and not carregado else None
         fase = (time.time() - self.esquete["inicio"]) / esquetes.ESQUETES[esq]["duracao"] if esq else 0
-        if esq == "cochilo":  # respirando devagar
+        m = self.musica
+        emo = (time.time() < self.emo_ate and m and m["tocando"]
+               and (m["titulo"], m["artista"]) == self.emo_musica and not carregado)
+        if emo and not self.movendo and not esq and pulo == 0:  # headbang: abaixa a cabeça no ritmo
+            pulo = -1 if (self.t // 2) % 4 == 0 else 0
+        comendo = esq == "inseto" and self.esquete.get("fase_inseto") == "comendo"
+        if comendo:  # nhac nhac: amassadinha rápida
+            pulo = -1 if self.t % 3 else 0
+        elif esq == "cochilo":  # respirando devagar
             pulo = -1 if (self.t // 14) % 2 else 0
         elif esq == "danca":
             pulo = 1 if self.t % 6 < 3 else 0
@@ -1208,7 +1243,9 @@ class Claudinho:
         piscando = time.time() < self.piscar_ate
         # cochilando, se espreguiçando ou no gole do café: olhinho fechado (só a linha de baixo)
         gole = esq == "cafe" and (time.time() - self.esquete["inicio"]) % 3 < 1.1
-        if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole:
+        if esq == "inseto" and self.esquete.get("inseto") and not self.movendo:  # de olho no bicho
+            olhar_x, olhar_y = (1 if self.esquete["inseto"]["x"] > self.x else -1), 1
+        if esq == "cochilo" or (esq == "alongar" and 0.15 < fase < 0.75) or gole or comendo:
             piscando = True
         l1, l2 = OLHOS_Y[olhar_y]
         if self.cfg["vendado"]:  # faixa nos olhos, com o nó balançando atrás da cabeça
@@ -1231,6 +1268,15 @@ class Claudinho:
                 if not piscando:
                     px(col, l1, OLHO)
                 px(col, l2, OLHO)
+
+        if emo:  # franja de lado tapando um olho, mecha rosa e munhequeira
+            for col, lin in FRANJA:
+                px(col, lin, CABELO)
+            for col, lin in MECHA:
+                px(col, lin, ROSA)
+            if not bracos_soltos:
+                px(0, 4, CABELO)
+                px(10, 4, CABELO)
 
         if carregado:  # perninhas penduradas, balançando pro lado contrário do movimento e chutando
             vx = self.arrasto.get("vx", 0)
@@ -1348,6 +1394,20 @@ class Claudinho:
         except Exception:
             pass
 
+    def e_rock(self, m):
+        """A música é rock? Guarda a resposta por artista no banco: o Haiku só é chamado pra artista novo."""
+        if not self.cfg["emo_rock"] or not m.get("artista"):
+            return False
+        generos = self.mem.meta("artistas_rock", {})
+        artista = m["artista"].strip().lower()
+        if artista not in generos:
+            try:
+                generos[artista] = artista_de_rock(m["artista"], m["titulo"])
+            except Exception:
+                return False  # sem resposta: não guarda, tenta de novo na próxima
+            self.mem.guardar_meta("artistas_rock", generos)
+        return generos[artista]
+
     def acompanhar_musica(self):
         anterior = None
         while True:
@@ -1355,6 +1415,7 @@ class Claudinho:
             m = self.musica
             chave = m and (m["titulo"], m["artista"])
             if m and m["tocando"] and anterior is not None and chave != anterior:
+                m["rock"] = self.e_rock(m)
                 self.eventos.put(("musica_nova", m))  # começou outra música
             if m:
                 anterior = chave
@@ -1412,6 +1473,8 @@ class Claudinho:
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             ("Reações com emojis ✨", "emojis", lambda: self.cfg["emojis"]),
             ("Esquetes quando está à toa ☕", "esquetes", lambda: self.cfg["esquetes"]),
+            ("Esquete agora 🎭", "esquete_agora", None),
+            ("Fica emo quando toca rock 🖤", "emo_rock", lambda: self.cfg["emo_rock"]),
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
@@ -1514,12 +1577,19 @@ class Claudinho:
             self.mudar_cfg("ver_musica", not self.cfg["ver_musica"])
             if not self.cfg["ver_musica"]:
                 self.musica = None
+        elif acao == "emo_rock":
+            self.mudar_cfg("emo_rock", not self.cfg["emo_rock"])
+            if not self.cfg["emo_rock"]:
+                self.emo_ate = 0
+        elif acao == "esquete_agora":
+            self.largar_esquete()
+            self.prox_esquete = 0  # começa assim que ele estiver livre
         elif acao == "esquetes":
             self.mudar_cfg("esquetes", not self.cfg["esquetes"])
             if self.cfg["esquetes"]:
                 self.prox_esquete = 0  # mostra uma já
             else:
-                self.esquete = None
+                self.largar_esquete()
         elif acao == "emojis":
             self.mudar_cfg("emojis", not self.cfg["emojis"])
             if self.cfg["emojis"]:
@@ -2127,7 +2197,9 @@ class Claudinho:
         if self.esquete:
             # você chamou (clicou, arrastou, pediu algo) ou ele saiu correndo: larga tudo, sem fala de fim
             if self.ocupado or self.arrasto or self.entrada or self.modo != "passeio" or not self.visivel:
-                self.esquete = None
+                self.largar_esquete()
+            elif self.esquete["nome"] == "inseto":
+                self.cuidar_do_inseto(agora)
             elif agora >= self.esquete["ate"]:
                 fim, emoji = esquetes.final(self.esquete["nome"])
                 self.esquete = None
@@ -2142,7 +2214,8 @@ class Claudinho:
                 or self.comentando or self.lendo_notificacoes or self.modo != "passeio" or not self.visivel):
             return
         self.prox_esquete = agora + random.uniform(240, 540)  # uma a cada 4–9 min
-        nome = self.ultima_esquete = esquetes.sortear(self.ultima_esquete, tocando)
+        # CLAUDINHO_ESQUETE=inseto (por ex.) fixa qual roda: pra testar uma esquete nova
+        nome = self.ultima_esquete = os.environ.get("CLAUDINHO_ESQUETE") or esquetes.sortear(self.ultima_esquete, tocando)
         self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
                         "musica": tocando}
         self.alvo = None  # para onde está
@@ -2152,6 +2225,83 @@ class Claudinho:
         emoji = esquetes.ESQUETES[nome].get("emoji_inicio")
         if emoji and self.cfg["emojis"]:
             self.soltar_emoji(emoji)
+        if nome == "inseto":
+            self.criar_inseto()
+
+    def largar_esquete(self):
+        if self.esquete and self.esquete.get("inseto"):
+            self.esquete["inseto"]["win"].destroy()
+        self.esquete = None
+
+    # ----- esquete do inseto: aparece um bichinho perto, ele vai lá e come -----
+    def criar_inseto(self):
+        P = max(3, self.S * 2 // 3)
+        w, h = 7 * P, 5 * P
+        _, area, _ = self.area()
+        meio = self.x + self.W / 2
+        lado = random.choice((-1, 1))
+        if not area[0] + 20 < meio + lado * 250 < area[2] - 20:  # sem espaço desse lado: nasce do outro
+            lado = -lado
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-transparentcolor", CHAVE)
+        win.config(bg=CHAVE)
+        canvas = tk.Canvas(win, width=w, height=h, bg=CHAVE, highlightthickness=0)
+        canvas.pack()
+        fora_da_barra(win)
+        self.esquete.update(fase_inseto="notou", desde=time.time(), inseto={
+            "win": win, "canvas": canvas, "P": P, "w": w, "h": h,
+            "x": meio + lado * random.uniform(180, 300) - w / 2, "y": self.y + self.H - h,  # no "chão" dele
+            "vx": random.choice((-1, 1)) * random.uniform(0.5, 1.0) * P / 3})
+        self.desenhar_inseto()
+
+    def desenhar_inseto(self):
+        i = self.esquete["inseto"]
+        P, c = i["P"], i["canvas"]
+        c.delete("all")
+        quadro = esquetes.INSETO[(self.t // 3) % 2]
+        for lin, linha in enumerate(quadro):
+            for col, ch in enumerate(linha):
+                if ch != ".":
+                    x = col if i["vx"] >= 0 else 6 - col  # cabeça pro lado que anda
+                    c.create_rectangle(x * P, lin * P, (x + 1) * P, (lin + 1) * P,
+                                       fill=esquetes.CORES_INSETO[ch], width=0)
+        tk.Wm.wm_geometry(i["win"], f"{i['w']}x{i['h']}+{int(i['x'])}+{int(i['y'])}")
+
+    def cuidar_do_inseto(self, agora):
+        e, i = self.esquete, self.esquete["inseto"]
+        if e["fase_inseto"] == "comendo":
+            if agora - e["desde"] > 1.3:  # nhac nhac… pronto
+                self.esquete = None
+                self.comentar(esquetes.fala("inseto", "fim"), duracao=5)
+                self.soltar_emoji("check")
+            return
+        # o bichinho anda de um lado pro outro, às vezes muda de ideia, sem sair do monitor
+        _, area, _ = self.area()
+        if random.random() < 0.02:
+            i["vx"] = -i["vx"]
+        i["x"] += i["vx"]
+        if not area[0] < i["x"] < area[2] - i["w"]:
+            i["vx"] = -i["vx"]
+            i["x"] = limitar(i["x"], area[0], area[2] - i["w"])
+        self.desenhar_inseto()
+        if e["fase_inseto"] == "notou":  # vê o bicho, fala e só depois vai atrás
+            if agora - e["desde"] > 1.5:
+                e["fase_inseto"] = "cacando"
+            return
+        if agora >= e["ate"]:  # não alcançou: o bug fugiu
+            self.largar_esquete()
+            self.comentar(random.choice(esquetes.ESQUETES["inseto"]["fugiu"]), duracao=5)
+            return
+        meio_bicho = i["x"] + i["w"] / 2
+        if abs(self.x + self.W / 2 - meio_bicho) < self.W * 0.25:  # pegou!
+            i["win"].destroy()
+            e.update(fase_inseto="comendo", desde=agora, inseto=None)
+            self.alvo, self.pausa_ate = None, agora + 3
+            return
+        # vai atrás dele (o mover cuida do passo; o alvo é atualizado todo tick)
+        self.alvo = self.limitar_na_area(meio_bicho - self.W / 2, i["y"] + i["h"] - self.H, area)
 
     def talvez_emoji(self):
         if not self.cfg["emojis"] or self.emoji or time.time() < self.prox_emoji:
@@ -2250,7 +2400,13 @@ class Claudinho:
             elif ev[0] == "ferramenta":  # ele está mexendo no PC (abrindo algo, rodando comando)
                 self.usou_ferramenta = True
             elif ev[0] == "musica_nova":
-                self.talvez_comentar_musica(ev[1])
+                if ev[1].get("rock") and self.cfg["emo_rock"]:  # rock: vira emo um tempinho e solta um desabafo
+                    self.emo_ate = time.time() + 45
+                    self.emo_musica = (ev[1]["titulo"], ev[1]["artista"])
+                    if not (self.balao or self.entrada):
+                        self.comentar(random.choice(EMO), duracao=6)
+                else:
+                    self.talvez_comentar_musica(ev[1])
             elif ev[0] == "comentario_musica":
                 self.comentando = False
                 if ev[1] and not self.parecida(ev[1]):

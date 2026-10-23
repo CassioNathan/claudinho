@@ -10,6 +10,13 @@ ESQUETES = {
         "inicio": ["Tive uma ideia!", "Pera… tive uma ideia.", "Ó, ó, tive uma ideia!"],
         "fim": [],  # o fim sai de resultado_da_ideia()
     },
+    "inseto": {  # aparece um bichinho perto dele: ele vai lá e come (o claudinho.pyw cuida das fases)
+        "duracao": 22,  # se não pegar até lá, o bicho foge
+        "inicio": ["Opa… um bug!", "Ó lá um bug!", "Peraí… isso é um bug?"],
+        "fim": ["Removi um bug 😄", "Bug removido. Delicioso. 😋", "Menos um bug em produção 😄",
+                "Removi um bug 😄 (sem nem abrir o código)"],
+        "fugiu": ["Fugiu… agora é feature.", "Escapou. Vou abrir uma issue.", "Não consegui reproduzir. 🤷"],
+    },
     "deploy": {  # saca o notebook do nada e digita feito louco
         "duracao": 7, "notebook": True,
         "inicio": ["Calma, vou só fazer um deploy rapidinho.",
@@ -71,6 +78,14 @@ def resultado_da_ideia():
     if random.random() < 0.65:
         return random.choice(SUCESSOS).format(feito=random.choice(FEITOS)), random.choice(["check", "fogo"])
     return random.choice(FRACASSOS).format(feito=random.choice(FEITOS)), random.choice(["bug", "suor"])
+
+
+# o bichinho da esquete "inseto" (joaninha vista de cima, cabeça pra direita), dois quadros de perninha
+INSETO = [
+    ["L.L.L..", ".RRRRL.", "RORORHL", ".RRRRL.", "L.L.L.."],
+    [".L.L.L.", ".RRRRL.", "RORORHL", ".RRRRL.", ".L.L.L."],
+]
+CORES_INSETO = {"R": "#d1453b", "O": "#1f1e1d", "H": "#1f1e1d", "L": "#3a3936"}
 
 
 def final(nome):

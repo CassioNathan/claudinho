@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
+import winreg
 import webbrowser
 import time
 import tkinter as tk
@@ -133,7 +134,9 @@ PROMPT_SISTEMA = (
     "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
     "sem confirmação. Para TOCAR UMA MÚSICA ou um ARTISTA que ele pedir, use `python musica.py buscar "
     "\"<música e artista>\"` ou `python musica.py artista \"<artista>\"`: toca no YouTube Music dele e segue "
-    "num rádio parecido. Um comando por vez, sem && nem |. "
+    "num rádio parecido. Para um VÍDEO NO YOUTUBE use `python musica.py youtube \"<o que procurar>\"` (abre o "
+    "primeiro resultado) e para CURTIR a música do YouTube Music, `python musica.py curtir`. "
+    "Um comando por vez, sem && nem |. "
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
 
@@ -375,7 +378,7 @@ JOB_FILHOS = _criar_job()
 # o ajudante, sozinho, sem encadear nada (&&, |, ;, redirecionamento, subcomando)
 AJUDANTE = re.compile(r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
                       r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior"
-                      r"|(?:buscar|artista) [^&|;<>`$\r\n]+))")
+                      r"|curtir|(?:buscar|artista|youtube) [^&|;<>`$\r\n]+))")
 # tentativas de abrir coisa por fora do ajudante
 ABRIR_NA_MAO = re.compile(r"(?i)(?:cmd(?:\.exe)?\s+/c\s+)?(?:start|start-process|explorer(?:\.exe)?|invoke-item)\b")
 
@@ -747,6 +750,42 @@ APP = None  # o Claudinho rodando (o painel lê o estado dele)
 # a API do painel só responde com este token (vai embutido na página): outro site aberto no navegador
 # não consegue mexer no Claudinho, porque não lê a página e não sabe o token
 TOKEN = secrets.token_urlsafe(16)
+def caminho_do_navegador():
+    """Executável do navegador padrão (pelo comando "abrir" registrado pro tipo de link dele)."""
+    try:
+        chave = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, chave) as k:
+            prog = winreg.QueryValueEx(k, "ProgId")[0]
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, prog + r"\shell\open\command") as k:
+            comando = winreg.QueryValueEx(k, "")[0]
+    except OSError:
+        return None
+    achado = re.match(r'\s*"([^"]+)"|\s*(\S+)', comando)
+    return achado and (achado.group(1) or achado.group(2))
+
+
+def chave_da_extensao():
+    """Chave fixa da extensão do navegador (fica em ~/.claudinho/ext_token e vai embutida na extensão)."""
+    arquivo = DADOS / "ext_token"
+    try:
+        return arquivo.read_text(encoding="utf-8").strip()
+    except OSError:
+        DADOS.mkdir(exist_ok=True)
+        chave = secrets.token_urlsafe(24)
+        arquivo.write_text(chave, encoding="utf-8")
+        return chave
+
+
+EXT_TOKEN = chave_da_extensao()
+# o que a extensão sabe: quantas abas de cada site estão abertas e quando ela falou por último;
+# `fila` = pedidos esperando ela buscar (somem em 8 s se ninguém pegar)
+EXT = {"fila": [], "abas": {}, "visto": 0.0, "trava": threading.Lock()}
+
+
+def extensao_conectada():
+    return time.time() - EXT["visto"] < 5
+
+
 PAGINAS = {"/painel": Path(__file__).with_name("painel.html"),
            "/conversa": Path(__file__).with_name("conversa.html")}
 
@@ -780,6 +819,23 @@ def iniciar_servidor(eventos):
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 dados = json.loads(self.rfile.read(n) or b"{}")
+                if self.path.startswith("/ext/"):  # extensão do navegador (e o musica.py pedindo pra ela)
+                    if not secrets.compare_digest(self.headers.get("X-Claudinho-Ext", ""), EXT_TOKEN):
+                        return self.responder(403)
+                    with EXT["trava"]:
+                        agora = time.time()
+                        EXT["fila"] = [c for c in EXT["fila"] if agora - c["criado"] < 8]
+                        if self.path == "/ext/buscar":
+                            EXT["abas"], EXT["visto"] = dados.get("abas") or {}, agora
+                            comandos, EXT["fila"] = EXT["fila"], []
+                            return self.responder(200, json.dumps({"comandos": comandos}).encode("utf-8"))
+                        if self.path == "/ext/enviar":
+                            site = dados.get("site")
+                            aberta = extensao_conectada() and (EXT["abas"].get(site) or 0) > 0
+                            if aberta:
+                                EXT["fila"].append(dict(dados.get("comando") or {}, site=site, criado=agora))
+                            return self.responder(200, json.dumps({"entregue": aberta}).encode("utf-8"))
+                    return self.responder(404)
                 if self.path.startswith("/api/"):
                     if not self.token_ok():
                         return self.responder(403)
@@ -1780,6 +1836,8 @@ class Claudinho:
             self.abrir_painel()
         elif acao == "conversa":
             self.ver_conversa()
+        elif acao == "instalar_extensao":
+            self.instalar_extensao()
         elif acao == "comentar_agora":
             self.comentar_agora()
         elif acao == "resumir":
@@ -1861,6 +1919,7 @@ class Claudinho:
             "musica": musica.descrever(m) if m else None,
             "fila": len(self.falas),
             "lembrancas_total": self.mem.total_lembrancas(),
+            "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
         }
 
     def abrir_painel(self):
@@ -1901,6 +1960,24 @@ class Claudinho:
                     abrir.forcar_frente(nova)
                     return
         threading.Thread(target=trazer, daemon=True).start()
+
+    def instalar_extensao(self):
+        """Monta a extensão em ~/.claudinho/extensao (com a chave e o ícone), abre a pasta e a página de
+        extensões do navegador padrão. O navegador não deixa instalar sozinho: você carrega a pasta lá."""
+        destino = DADOS / "extensao"
+        destino.mkdir(parents=True, exist_ok=True)
+        for arquivo in Path(__file__).with_name("extensao").iterdir():
+            shutil.copy(arquivo, destino / arquivo.name)
+        (destino / "config.js").write_text(
+            f"self.CLAUDINHO = {json.dumps({'porta': PORTA, 'token': EXT_TOKEN})};\n", encoding="utf-8")
+        desenhar_icone(128).save(destino / "icone.png")
+        os.startfile(destino)
+        exe = abrir.navegador_padrao()[0] if len(abrir.navegador_padrao()) == 1 else ""
+        pagina = {"opera.exe": "opera://extensions", "chrome.exe": "chrome://extensions",
+                  "msedge.exe": "edge://extensions", "brave.exe": "brave://extensions"}.get(exe)
+        caminho = caminho_do_navegador()
+        if pagina and caminho:
+            subprocess.Popen([caminho, pagina], creationflags=subprocess.CREATE_NO_WINDOW)
 
     @staticmethod
     def fechar_painel():

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Claudinho",
+  "version": "1.0",
+  "description": "Deixa o Claudinho tocar música e vídeo nas abas do YouTube Music e do YouTube que já estão abertas.",
+  "icons": {"128": "icone.png"},
+  "permissions": ["alarms"],
+  "host_permissions": [
+    "http://127.0.0.1:47821/*",
+    "https://music.youtube.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "background": {"service_worker": "fundo.js"},
+  "content_scripts": [
+    {"matches": ["https://music.youtube.com/*"], "js": ["ytmusic.js"], "run_at": "document_idle"},
+    {"matches": ["https://www.youtube.com/*"], "js": ["youtube.js"], "run_at": "document_idle"}
+  ]
+}

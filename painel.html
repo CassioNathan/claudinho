@@ -152,6 +152,16 @@
   .pasta { font-family: Consolas, monospace; font-size: 12.5px; color: var(--texto);
            background: #232220; border-radius: 8px; padding: 6px 10px; display: inline-block; margin: 3px 4px 3px 0; }
 
+  .status-ext { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 10px; font-size: 11.5px;
+                background: #3a3935; color: var(--apagado); }
+  .status-ext.ok { background: rgba(111,191,115,.16); color: #9fdca2; }
+  .instrucoes { background: #232220; border: 1px dashed #4a4843; border-radius: 12px; padding: 12px 16px; margin: 4px 0 12px;
+                color: var(--apagado); font-size: 13px; }
+  .instrucoes b { color: var(--texto); }
+  .instrucoes ol { margin: 8px 0; padding-left: 20px; } .instrucoes li { margin: 5px 0; }
+  .caminho { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .caminho code { background: #1a1918; border-radius: 8px; padding: 7px 10px; color: var(--texto); font: 12.5px Consolas, monospace;
+                  flex: 1; overflow-x: auto; white-space: nowrap; }
   .toast {
     position: fixed; right: 26px; bottom: 24px; background: #2f3b2f; color: #cdeccd; border: 1px solid #456b45;
     padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; opacity: 0; transform: translateY(8px);
@@ -281,6 +291,22 @@
                  style="background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;width:250px;font:13px Inter,'Segoe UI',sans-serif">
           <button class="botao principal">▶ Tocar</button>
         </form>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Extensão para navegador 🧩</div>
+          <div class="desc">Com ela, ele toca na aba do YouTube Music / YouTube que já está aberta (sem aba nova), curte a música e
+            abre o primeiro vídeo de uma pesquisa. <span id="statusExt" class="status-ext">—</span></div></div>
+        <button class="botao" id="instalarExt">Instalar extensão</button>
+      </div>
+      <div class="instrucoes" id="instrucoes" hidden>
+        <b>Falta só carregar no navegador</b> (ele não deixa instalar sozinho — é uma vez só):
+        <ol>
+          <li>Na página de extensões que abriu, ligue o <b>Modo do desenvolvedor</b>.</li>
+          <li>Clique em <b>Carregar sem compactação</b> (ou "Load unpacked").</li>
+          <li>Escolha esta pasta (já abri ela no Explorer):
+            <div class="caminho"><code id="pastaExt"></code><button class="botao" id="copiarPasta">Copiar</button></div></li>
+        </ol>
+        Pronto: com o YouTube Music aberto, o status aqui em cima vira <b>conectada</b>.
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Fica emo quando toca rock 🖤</div><div class="desc">Veste o pacote emo por cima da skin por uns 45 s e solta um desabafo.</div></div>
@@ -537,8 +563,21 @@ function atualizarVivos() {
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");
+  const ext = estado.extensao, st = document.getElementById("statusExt");
+  const abertas = [ext.abas.ytmusic ? "YouTube Music" : "", ext.abas.youtube ? "YouTube" : ""].filter(Boolean);
+  st.textContent = !ext.conectada ? "não conectada" : abertas.length ? `conectada · ${abertas.join(" e ")} aberto` : "conectada";
+  st.className = "status-ext" + (ext.conectada ? " ok" : "");
+  document.getElementById("pastaExt").textContent = ext.pasta;
 }
 
+document.getElementById("instalarExt").onclick = () => {
+  acao("instalar_extensao", "preparei a extensão ✓");
+  document.getElementById("instrucoes").hidden = false;
+};
+document.getElementById("copiarPasta").onclick = async () => {
+  await navigator.clipboard.writeText(document.getElementById("pastaExt").textContent);
+  avisar("caminho copiado ✓");
+};
 document.getElementById("formMusica").onsubmit = ev => {
   ev.preventDefault();
   const campo = document.getElementById("termoMusica");

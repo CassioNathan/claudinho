@@ -10,9 +10,12 @@ Também é um ajudante limitado do chat, que roda sem confirmação:
     python musica.py anterior     volta pra anterior
     python musica.py buscar "<música e/ou artista>"   toca no YouTube Music (e segue num rádio parecido)
     python musica.py artista "<artista>"              toca o mais ouvido do artista (e segue no rádio dele)
+    python musica.py youtube "<o que procurar>"       abre no YouTube o primeiro vídeo da pesquisa
+    python musica.py curtir                           curte a música que está tocando no YouTube Music
 
 Buscar e tocar usa o YouTube Music sem login (ytmusicapi) só pra achar a música; quem toca é o seu
-navegador, logado na sua conta. Antes de abrir, pausa o que estiver tocando pra não sair duas músicas.
+navegador, logado na sua conta. Com a extensão do Claudinho instalada, usa a aba que já está aberta;
+sem ela (ou sem aba aberta), abre uma nova. Pausa o que estiver tocando pra não sair duas músicas.
 """
 import asyncio
 import sys
@@ -97,23 +100,65 @@ def buscar(termo, artista=False):
     return None
 
 
-def tocar_no_youtube_music(termo, artista=False):
-    """Acha e abre no YouTube Music, já tocando, num rádio a partir da música. Devolve a música ou None."""
-    m = buscar(termo, artista)
-    if not m:
-        return None
-    atual = tocando()
-    if atual and atual["tocando"]:
-        controlar("pausar")  # pra não ficar a música velha e a nova juntas
-        time.sleep(0.3)
-    # list=RDAMVM<id>: rádio do YouTube Music começando por essa música (vai emendando parecidas)
-    url = f"https://music.youtube.com/watch?v={m['id']}&list=RDAMVM{m['id']}"
+NAVEGADORES = {"Opera", "Chrome", "Edge", "Firefox", "Brave"}
+
+
+def pela_extensao(site, comando):
+    """Pede pra extensão do navegador (via Claudinho) fazer isso na aba que já está aberta.
+    Devolve True se tinha aba aberta e a extensão vai fazer; False se não (aí abre aba nova)."""
+    import json
+    import urllib.request
+    try:
+        chave = (Path.home() / ".claudinho/ext_token").read_text(encoding="utf-8").strip()
+        pedido = urllib.request.Request(
+            "http://127.0.0.1:47821/ext/enviar", data=json.dumps({"site": site, "comando": comando}).encode(),
+            headers={"Content-Type": "application/json", "X-Claudinho-Ext": chave})
+        return bool(json.loads(urllib.request.urlopen(pedido, timeout=2).read()).get("entregue"))
+    except Exception:
+        return False
+
+
+def abrir_aba_nova(url):
     try:
         import abrir  # abre no navegador padrão e traz a janela pra frente
         abrir.abrir_site(url)
     except Exception:
         webbrowser.open(url)
+
+
+def tocar_no_youtube_music(termo, artista=False):
+    """Acha e toca no YouTube Music num rádio a partir da música: na aba que já está aberta (com a
+    extensão do Claudinho) ou numa aba nova. Devolve a música ou None."""
+    m = buscar(termo, artista)
+    if not m:
+        return None
+    # list=RDAMVM<id>: rádio do YouTube Music começando por essa música (vai emendando parecidas)
+    url = f"https://music.youtube.com/watch?v={m['id']}&list=RDAMVM{m['id']}"
+    atual = tocando()
+    na_aba = pela_extensao("ytmusic", {"acao": "abrir", "url": url})
+    # pausa o que estiver tocando, pra não sair duas músicas juntas (se for a própria aba, ela já troca)
+    if atual and atual["tocando"] and not (na_aba and atual["app"] in NAVEGADORES):
+        controlar("pausar")
+        time.sleep(0.3)
+    if not na_aba:
+        abrir_aba_nova(url)
+    m["na_aba"] = na_aba
     return m
+
+
+def tocar_no_youtube(termo):
+    """Pesquisa no YouTube e abre o primeiro vídeo (na aba aberta, se tiver a extensão). Devolve True se
+    usou a aba que já estava aberta."""
+    from urllib.parse import quote_plus
+    # #claudinho-tocar: a extensão abre o primeiro resultado sozinha (sem ela, fica a lista da pesquisa)
+    url = f"https://www.youtube.com/results?search_query={quote_plus(termo)}#claudinho-tocar"
+    atual = tocando()
+    if atual and atual["tocando"]:
+        controlar("pausar")
+    if pela_extensao("youtube", {"acao": "abrir", "url": url, "focar": True}):
+        return True
+    abrir_aba_nova(url)
+    return False
 
 
 def descrever(m):
@@ -138,10 +183,21 @@ def main():
         m = tocar_no_youtube_music(termo, artista=acao == "artista")
         if not m:
             sys.exit(f"não achei nada no YouTube Music pra: {termo}")
-        print(f"tocando no YouTube Music: {m['titulo']} - {m['artista']} (depois segue num rádio parecido)")
+        onde = "na aba que já estava aberta" if m["na_aba"] else "numa aba nova"
+        print(f"tocando no YouTube Music ({onde}): {m['titulo']} - {m['artista']} (depois segue num rádio parecido)")
+    elif acao == "youtube":
+        termo = " ".join(sys.argv[2:]).strip().strip('"')
+        if not termo:
+            sys.exit('uso: python musica.py youtube "<o que procurar>"')
+        na_aba = tocar_no_youtube(termo)
+        print(f"abri no YouTube o primeiro vídeo de: {termo} ({'na aba aberta' if na_aba else 'numa aba nova'})")
+    elif acao == "curtir":
+        if not pela_extensao("ytmusic", {"acao": "curtir"}):
+            sys.exit("não consegui: precisa do YouTube Music aberto e da extensão do Claudinho no navegador")
+        print("curti a música no YouTube Music")
     else:
         sys.exit(f"recusado: ação '{acao}' não existe "
-                 "(tocando, pausar, tocar, alternar, proxima, anterior, buscar, artista)")
+                 "(tocando, pausar, tocar, alternar, proxima, anterior, buscar, artista, youtube, curtir)")
 
 
 if __name__ == "__main__":

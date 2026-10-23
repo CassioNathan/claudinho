@@ -46,8 +46,13 @@ terminam e solta piadas sobre o que está na tela.
   dividem o mesmo tempo (uma fila só, cerca de 1 em 3 vezes é esquete); clicar, arrastar ou chegar algo
   importante interrompe a esquete na hora.
 - **YouTube Music 🎵:** no chat ("toca Helena do MCR", "bota um Trivium") ou no painel, ele acha a música
-  (ytmusicapi, sem login) e abre no seu navegador já tocando, num rádio que segue com parecidas. Pausa o que
-  estava tocando antes. Play/pausa/próxima/anterior continuam pelos controles de mídia do Windows.
+  (ytmusicapi, sem login) e toca num rádio que segue com parecidas. Pausa o que estava tocando antes.
+  Play/pausa/próxima/anterior continuam pelos controles de mídia do Windows.
+- **Extensão do navegador 🧩** (`extensao/`, instala pelo painel): com ela, a música troca **na aba do YouTube Music
+  que já está aberta** (sem aba nova), ele curte a música e "abre no YouTube" pesquisa e entra no primeiro vídeo da
+  aba do YouTube. O fundo da extensão pergunta ao Claudinho (127.0.0.1) a cada segundo, com uma chave própria
+  (`~/.claudinho/ext_token`); só navega dentro de music.youtube.com e www.youtube.com. Sem extensão ou sem aba
+  aberta, abre aba nova como antes. O navegador exige o modo do desenvolvedor ligado pra extensão carregada de pasta.
 - **Mini cérebro 🧠:** cada aviso do Claude Code (pedido + resultado) e cada troca do chat viram lembrança no
   SQLite, com busca de texto local (FTS5). Ao perguntar algo parecido com o que já rolou, até 3 lembranças curtas
   (~250 tokens) vão junto; sem nada parecido, não vai nada. Guardar e buscar não usa IA nenhuma. Liga/desliga no painel.

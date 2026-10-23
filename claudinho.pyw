@@ -93,7 +93,7 @@ NOMES_ESQUETES = {
     "danca": "🕺 Dancinha", "build_quebrou": "🌧️ Build quebrou", "fogo": "🔥 Servidor pegando fogo",
     "pato": "🦆 Patinho de borracha", "npm": "📦 npm install", "pizza": "🍕 Pizza", "jogo": "🎮 Joguinho",
     "limpeza": "🧹 Faxina", "reuniao": "📞 Reunião", "borboleta": "🦋 Bug virou feature", "malhando": "🏋️ Malhando",
-    "ultron": "🤖 Momento Ultron",
+    "ultron": "🤖 Momento Ultron", "construindo": "🔧 Projeto secreto",
 }
 
 CHAVE = "#010203"  # cor que vira transparente nas janelas
@@ -113,6 +113,7 @@ CONTROLE, VERDE = "#4a4a55", "#3fbf6b"
 CABO, PALHA = "#8b5a2b", "#d8b25a"
 FONE = "#2c2c2c"
 PESO, BARRA = "#3a3936", "#9b978d"
+ROBO, ROBO_ESCURO = "#9aa3ad", "#6c7480"  # o mini Claudinho robô do projeto secreto
 CANECA = "#e8e2d4"   # esquete do café
 CAFE = "#6b4226"
 SUOR = "#8ec5ff"     # gotinha do git push --force
@@ -706,6 +707,8 @@ OLHAR_ESQUETE = {
     "reuniao": lambda f, t: (0, 0),
     "borboleta": lambda f, t: (-1 if f < 0.45 else 1, -1),
     "malhando": lambda f, t: (-1 if (t // 12) % 2 == 0 else 1, -1),
+    # de olho no robô → olha pra você (pego no flagra) → esconde o robô → olha pro alto, disfarçando
+    "construindo": lambda f, t: (-1, 1) if f < 0.62 else (0, 0) if f < 0.72 else (-1, 0) if f < 0.82 else (1, -1),
 }
 
 
@@ -1430,6 +1433,8 @@ class Claudinho:
             pulo = -1 if (self.t // 14) % 2 else 0
         elif esq == "danca":
             pulo = 1 if self.t % 6 < 3 else 0
+        elif esq == "construindo" and 0.62 <= fase < 0.67:  # levou um susto: você estava olhando!
+            pulo = 1
         elif esq == "build_quebrou":  # encolhido debaixo da chuva
             pulo = -1
         elif esq == "fogo" and fase < 0.6:  # pulando de desespero
@@ -1450,7 +1455,8 @@ class Claudinho:
         alvo_nb = 1.0 if no_notebook and not self.movendo else 0.0
         self.notebook += max(-0.15, min(0.15, alvo_nb - self.notebook))
         digitando = self.notebook >= 0.99
-        bracos_soltos = digitando or carregado or esq in ("alongar", "danca", "fogo", "jogo", "malhando")
+        martelando = esq == "construindo" and fase < 0.62
+        bracos_soltos = digitando or carregado or martelando or esq in ("alongar", "danca", "fogo", "jogo", "malhando")
 
         for lin, linha in enumerate(CORPO):
             for col, ch in enumerate(linha):
@@ -1478,6 +1484,12 @@ class Claudinho:
             for col, sobe in ((0, self.t % 2 == 0), (10, self.t % 2 == 1)):
                 px(col, 4 if sobe else 5, corpo)
                 px(col, 5 if sobe else 6, corpo)
+        elif martelando:  # bracinho esquerdo martelando o robô; o direito parado
+            batida = (self.t // 3) % 2
+            px(0, 2 + 2 * batida, corpo)
+            px(0, 3 + 2 * batida, corpo)
+            px(10, 3, corpo)
+            px(10, 4, corpo)
         elif esq == "malhando":  # um braço levanta o halter, depois o outro
             erguido = 0 if (self.t // 12) % 2 == 0 else 10
             for col in (0, 10):
@@ -1714,6 +1726,8 @@ class Claudinho:
             quadrado(col - 0.5, lin + asa, NB_TECLA, 0.5)
             quadrado(col + 0.6, lin + asa, NB_TECLA, 0.5)
             quadrado(col, lin, esquetes.CORES_INSETO["R"], 0.6)
+        elif esq == "construindo":
+            self.desenhar_projeto_secreto(fase, quadrado)
         elif esq == "malhando":  # halter em cima do braço erguido; suor no fim
             erguido = 0 if (t // 12) % 2 == 0 else 10
             quadrado(erguido - 1, -2, PESO)
@@ -2697,7 +2711,7 @@ class Claudinho:
             elif self.esquete["nome"] == "inseto":
                 self.cuidar_do_inseto(agora)
             elif agora >= self.esquete["ate"]:
-                fim, emoji = esquetes.final(self.esquete["nome"])
+                fim, emoji = esquetes.final(self.esquete["nome"], self.cfg["personalidade"] == "ultron")
                 self.esquete = None
                 if fim:
                     self.comentar(fim, duracao=5)
@@ -2720,7 +2734,7 @@ class Claudinho:
         self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
                         "musica": tocando}
         self.alvo = None  # para onde está
-        inicio = esquetes.fala(nome, "inicio", tocando)
+        inicio = esquetes.fala(nome, "inicio", tocando, self.cfg["personalidade"] == "ultron")
         if inicio:
             self.comentar(inicio, duracao=4)
         emoji = esquetes.ESQUETES[nome].get("emoji_inicio")
@@ -2728,6 +2742,37 @@ class Claudinho:
             self.soltar_emoji(emoji)
         if nome == "inseto":
             self.criar_inseto()
+
+    def desenhar_projeto_secreto(self, fase, quadrado):
+        """Mini Claudinho robô montado de baixo pra cima à esquerda dele, com faíscas; depois o "!", a poeira
+        de quando ele some com o robô e a notinha do assobio."""
+        t = self.t
+        if fase < 0.72:
+            pecas = [(-3, 7), (-1, 7), (-3, 6), (-2, 6), (-1, 6), (-3, 5), (-2, 5), (-1, 5), (-3, 4), (-2, 4),
+                     (-1, 4), (-2, 3)]  # pernas, corpo, cabeça, antena
+            prontas = len(pecas) if fase >= 0.6 else int(len(pecas) * max(0.0, fase - 0.05) / 0.55)
+            for col, lin in pecas[:prontas]:
+                quadrado(col, lin, ROBO if lin != 3 else ROBO_ESCURO)
+            if prontas == len(pecas):  # olhos vermelhos acendendo (e piscando)
+                cor = "#ff3b30" if t % 8 < 6 else "#7a1a14"
+                quadrado(-3, 5, cor)
+                quadrado(-1, 5, cor)
+            if 0.05 < fase < 0.6 and t % 3 == 0:  # faíscas da martelada
+                quadrado(-0.6 + (t % 2) * 0.3, 3.5 + (t % 4) * 0.5, FOGO_3, 0.35)
+                quadrado(-0.2, 4.2 + (t % 3) * 0.4, "#fff3b0", 0.25)
+        if 0.62 <= fase < 0.74:  # "!" em cima da cabeça
+            quadrado(11.2, -1.6, "#f4efe4", 0.5)
+            quadrado(11.2, -1.1, "#f4efe4", 0.5)
+            quadrado(11.2, -0.1, "#f4efe4", 0.5)
+        if 0.72 <= fase < 0.82:  # puf! a poeira de quando o robô some
+            abre = (fase - 0.72) / 0.1
+            for col, lin in ((-2, 5.5), (-3, 6.3), (-1, 6.5), (-2.5, 4.4), (-1.4, 4.6)):
+                quadrado(col - abre * 0.4, lin - abre * 0.6, POEIRA, 0.5 + abre * 0.4)
+        if fase >= 0.82:  # assobiando, como se nada tivesse acontecido
+            sobe = (t // 3) % 4 * 0.4
+            quadrado(11.5, 0.6 - sobe, NB_TECLA, 0.6)
+            quadrado(12.0, -0.4 - sobe, NB_TECLA, 0.25)
+            quadrado(12.0, -0.15 - sobe, NB_TECLA, 0.25)
 
     def cacando(self):
         """Indo atrás do bug da esquete do inseto (vai correndo)."""
@@ -2779,7 +2824,7 @@ class Claudinho:
         if e["fase_inseto"] == "comendo":
             if agora - e["desde"] > 1.3:  # nhac nhac… pronto
                 self.esquete = None
-                self.comentar(esquetes.fala("inseto", "fim"), duracao=5)
+                self.comentar(esquetes.fala("inseto", "fim", ultron=self.cfg["personalidade"] == "ultron"), duracao=5)
                 self.soltar_emoji("check")
             return
         # o bichinho anda de um lado pro outro, às vezes muda de ideia, sem sair do monitor
@@ -2797,7 +2842,7 @@ class Claudinho:
             return
         if agora >= e["ate"]:  # não alcançou: o bug fugiu
             self.largar_esquete()
-            self.comentar(random.choice(esquetes.ESQUETES["inseto"]["fugiu"]), duracao=5)
+            self.comentar(esquetes.fala("inseto", "fugiu", ultron=self.cfg["personalidade"] == "ultron"), duracao=5)
             return
         meio_bicho = i["x"] + i["w"] / 2
         if abs(self.x + self.W / 2 - meio_bicho) < self.W * 0.25:  # pegou!

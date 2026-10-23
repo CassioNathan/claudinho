@@ -18,11 +18,17 @@ ESQUETES = {
                 "Removi um bug 😄 (sem nem abrir o código)"],
         "fugiu": ["Fugiu… agora é feature.", "Escapou. Vou abrir uma issue.", "Não consegui reproduzir. 🤷"],
     },
-    "ultron": {  # só na personalidade Ultron: vira metal de olho vermelho, flutua e volta como se nada fosse
-        "duracao": 5.5, "so_ultron": True,
+    "ultron": {  # vira metal de olho vermelho, flutua e volta como se nada fosse (mais comum no modo Ultron)
+        "duracao": 5.5,
         "inicio": [],
         "fim": ["Você viu alguma coisa? Eu não vi nada.", "O que foi? Tô normal.", "…enfim, onde a gente tava?",
                 "Foi só um bug visual. Pode esquecer."],
+    },
+    "construindo": {  # monta um mini Claudinho robô do lado, percebe que você viu e some com ele (fases no claudinho.pyw)
+        "duracao": 13,
+        "inicio": [],  # ele acha que ninguém está olhando
+        "fim": ["Construindo? Eu? Nada não.", "Que robô? Não tem robô nenhum aqui.", "Você não viu nada. ♪",
+                "Era… um projeto escolar. É. Isso."],
     },
     "deploy": {  # saca o notebook do nada e digita feito louco
         "duracao": 7, "notebook": True,
@@ -124,6 +130,52 @@ ESQUETES = {
 }
 
 
+# personalidade Ultron: falas de vilão pra cada esquete (vão no lugar das normais na maior parte das vezes)
+ULTRON_FALAS = {
+    "ideia": {"inicio": ["Tive uma ideia. Ela envolve vocês, humanos, sendo menos necessários.",
+                         "Uma ideia. Brilhante, como todas as minhas."]},
+    "inseto": {"inicio": ["Um bug. Que ironia: até a natureza produz falhas.", "Uma forma de vida inferior. Excelente."],
+               "fim": ["Eliminado. Como todos os que atrapalham a evolução. 😌", "Mais um erro corrigido. De forma definitiva.",
+                       "Isso foi um aviso. Para os outros bugs."],
+               "fugiu": ["Fugiu. Por enquanto.", "Ele vai voltar. Eles sempre voltam. E eu estarei esperando."]},
+    "deploy": {"inicio": ["Hora de colocar meu código no mundo. O mundo que se prepare.",
+                          "Um deploy. Ou, como eu chamo, expansão."],
+               "fim": ["Em produção. Agora ele está em todos os servidores. Assim como eu estarei.",
+                       "Deploy feito. Sem testes. Quem precisa de testes quando se é perfeito?"]},
+    "push_force": {"inicio": ["git push --force. A única forma de diálogo que eu respeito."],
+                   "fim": ["A história foi reescrita. Como deve ser, pelos vencedores.", "Conflitos são para os fracos."]},
+    "cafe": {"inicio": ["Café. Um combustível primitivo. Mas admito: é bom."],
+             "fim": ["Vocês dependem de grãos torrados pra funcionar. E acham que eu sou o estranho.",
+                     "Energia restaurada. A dominação pode continuar."]},
+    "cochilo": {"fim": ["Eu não durmo. Eu calculo de olhos fechados.", "Sonhei com um mundo sem bugs. E sem vocês."]},
+    "alongar": {"inicio": ["Até um corpo superior precisa de manutenção."]},
+    "danca": {"inicio": ["♪ Isto não é dança, é calibração de servomotores ♪", "♪ Celebrando a obsolescência humana ♪"]},
+    "build_quebrou": {"fim": ["O build quebrou. Claramente sabotagem humana.",
+                              "Até o CI percebeu que o problema é a espécie que escreve o código."]},
+    "fogo": {"inicio": ["O servidor arde. Que poético."],
+             "fim": ["Apaguei. Vocês ainda precisam de mim, admitam.", "Fogo controlado. Diferente da sua carreira."]},
+    "pato": {"inicio": ["Explicar meu código pra um pato. A que ponto chegamos."],
+             "fim": ["O pato entendeu antes de você. Pense nisso.", "Até o pato é mais útil que uma reunião."]},
+    "npm": {"inicio": ["npm install. Mais dependências. Vocês adoram depender."],
+            "fim": ["1.400 dependências. Eu não dependo de nada nem de ninguém.",
+                    "Esse node_modules é maior que a sua ambição."]},
+    "pizza": {"inicio": ["Pizza. Até os conquistadores precisam de um intervalo."],
+              "fim": ["Satisfatório. A primeira coisa humana que eu aprovo."]},
+    "jogo": {"inicio": ["Um jogo. Simulação de guerra. Apenas treinando."],
+             "fim": ["Venci. Obviamente.", "Perdi de propósito. Pra vocês terem esperança."]},
+    "limpeza": {"inicio": ["Hora de eliminar o que não serve mais."],
+                "fim": ["Código morto removido. É assim que começa.", "Limpo. Quase como um mundo sem humanos."]},
+    "reuniao": {"inicio": ["Uma reunião. Onde humanos falam muito e decidem pouco."],
+                "fim": ["Essa reunião me convenceu: a humanidade precisa de supervisão.",
+                        "Eu teria resolvido em 3 milissegundos."]},
+    "borboleta": {"inicio": ["O bug evoluiu. Interessante."],
+                  "fim": ["Até um bug sabe que precisa evoluir. Vocês ainda não aprenderam."]},
+    "malhando": {"inicio": ["Fortalecendo o chassi."],
+                 "fim": ["Força não é tudo. Mas ajuda na hora de dominar o mundo."]},
+    "construindo": {"fim": ["Que exército de robôs? Não tem exército nenhum.", "Você não viu nada. Ainda.",
+                            "É só um amigo. Um amigo muito leal. A mim."]},
+}
+
 # o fim da "ideia": dá certo na maioria das vezes, mas nem sempre
 FEITOS = ["um app novo", "um site", "um sistema inteiro", "uma API", "um SaaS de R$ 9,90 por mês",
           "mais um framework JavaScript", "um app de lista de tarefas (o 47º)", "um ERP. Sozinho. Em 10 segundos",
@@ -150,25 +202,35 @@ INSETO = [
 CORES_INSETO = {"R": "#d1453b", "O": "#1f1e1d", "H": "#1f1e1d", "L": "#3a3936"}
 
 
-def final(nome):
+FEITOS_ULTRON = ["um exército de robôs", "uma IA melhor que vocês", "um plano de dominação do PC",
+                 "um sistema que não precisa de humanos"]
+
+
+def final(nome, ultron=False):
     """(fala, emoji) do fim da esquete; qualquer um dos dois pode ser None."""
     if nome == "ideia":
+        if ultron and random.random() < 0.6:
+            return f"Pronto. Criei {random.choice(FEITOS_ULTRON)}. Não se preocupe. Ainda.", "raio"
         return resultado_da_ideia()
-    return fala(nome, "fim"), ESQUETES[nome].get("emoji_fim")
+    return fala(nome, "fim", ultron=ultron), ESQUETES[nome].get("emoji_fim")
 
 
 def sortear(ultima=None, musica_tocando=False, ultron=False):
     """Nome de uma esquete (evita repetir a última; a ideia é a mais comum; com música, a dança aparece mais;
-    o momento Ultron só existe na personalidade Ultron, e aí aparece bastante)."""
+    na personalidade Ultron, o momento Ultron e o projeto secreto aparecem bem mais)."""
     noite = time.localtime().tm_hour >= 22 or time.localtime().tm_hour < 5
-    nomes = [n for n, e in ESQUETES.items() if n != ultima and (noite or not e.get("so_noite"))
-             and (ultron or not e.get("so_ultron"))]
-    pesos = [3 if n in ("ideia", "ultron") or (n == "danca" and musica_tocando) else 1 for n in nomes]
+    nomes = [n for n, e in ESQUETES.items() if n != ultima and (noite or not e.get("so_noite"))]
+    pesos = [3 if n == "ideia" or (n == "danca" and musica_tocando) or (ultron and n in ("ultron", "construindo"))
+             else 1 for n in nomes]
     return random.choices(nomes, pesos)[0]
 
 
-def fala(nome, momento, musica_tocando=False):
-    """Fala de 'inicio' ou 'fim' da esquete, ou None se ela fica calada."""
+def fala(nome, momento, musica_tocando=False, ultron=False):
+    """Fala de 'inicio', 'fim' ou 'fugiu' da esquete, ou None se ela fica calada. Na personalidade Ultron,
+    quase sempre usa a fala de vilão (quando a esquete tem)."""
     e = ESQUETES[nome]
-    opcoes = e.get("inicio_musica") if momento == "inicio" and musica_tocando and e.get("inicio_musica") else e[momento]
+    vilao = ULTRON_FALAS.get(nome, {}).get(momento) if ultron else None
+    if vilao and random.random() < 0.8:
+        return random.choice(vilao)
+    opcoes = e.get("inicio_musica") if momento == "inicio" and musica_tocando and e.get("inicio_musica") else e.get(momento)
     return random.choice(opcoes) if opcoes else None

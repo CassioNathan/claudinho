@@ -747,7 +747,8 @@ APP = None  # o Claudinho rodando (o painel lê o estado dele)
 # a API do painel só responde com este token (vai embutido na página): outro site aberto no navegador
 # não consegue mexer no Claudinho, porque não lê a página e não sabe o token
 TOKEN = secrets.token_urlsafe(16)
-PAINEL_HTML = Path(__file__).with_name("painel.html")
+PAGINAS = {"/painel": Path(__file__).with_name("painel.html"),
+           "/conversa": Path(__file__).with_name("conversa.html")}
 
 
 def iniciar_servidor(eventos):
@@ -763,11 +764,15 @@ def iniciar_servidor(eventos):
             return secrets.compare_digest(self.headers.get("X-Token", ""), TOKEN)
 
         def do_GET(self):
-            if self.path.split("?")[0] == "/painel":
-                html = PAINEL_HTML.read_text(encoding="utf-8").replace("__TOKEN__", TOKEN)
+            pagina = PAGINAS.get(self.path.split("?")[0])
+            if pagina:
+                html = pagina.read_text(encoding="utf-8").replace("__TOKEN__", TOKEN)
                 self.responder(200, html.encode("utf-8"), "text/html")
             elif self.path == "/api/estado" and self.token_ok() and APP:
                 self.responder(200, json.dumps(APP.estado_painel(), ensure_ascii=False).encode("utf-8"))
+            elif self.path == "/api/conversa" and self.token_ok() and APP:
+                corpo = {"mensagens": APP.mem.historico(200), "pensando": APP.ocupado}
+                self.responder(200, json.dumps(corpo, ensure_ascii=False).encode("utf-8"))
             else:
                 self.responder(404)
 
@@ -990,8 +995,6 @@ class Balao:
         x, y = cursor()
         # clicar noutro balão dele (ex.: Pode/Não em cima da conversa) ou na janela da conversa não é "fora"
         nossas = [self.win] + [b.win for b in (self.app.balao, self.app.entrada) if b]
-        if self.app.janela_conversa:
-            nossas.append(self.app.janela_conversa)
         for w in nossas:
             try:
                 if w.winfo_exists() and w.winfo_rootx() <= x < w.winfo_rootx() + w.winfo_width() and \
@@ -1066,7 +1069,6 @@ class Claudinho:
         self.print_anexado = None  # {"imagem": bloco, "nome": ...} que vai junto da próxima mensagem
         self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
         self.lendo_notificacoes = False
-        self.janela_conversa = None
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
         self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
@@ -1776,6 +1778,8 @@ class Claudinho:
             self.aplicar_cfg("vendado", not self.cfg["vendado"])
         elif acao == "painel":
             self.abrir_painel()
+        elif acao == "conversa":
+            self.ver_conversa()
         elif acao == "comentar_agora":
             self.comentar_agora()
         elif acao == "resumir":
@@ -1860,15 +1864,19 @@ class Claudinho:
         }
 
     def abrir_painel(self):
-        """Abre o painel numa janela de app do Edge (sem barra de navegador), no monitor do Claudinho."""
-        url = f"http://127.0.0.1:{PORTA}/painel"
-        aberta = next((j["hwnd"] for j in janelas.listar() if j["titulo"].startswith("Claudinho · Painel")), None)
-        if aberta:  # já aberto: só traz pra frente
+        self.abrir_janela_web("/painel", "Claudinho · Painel", 1040, 760)
+
+    def abrir_janela_web(self, caminho, titulo, w, h):
+        """Abre uma página do servidor local numa janela de app do Edge (sem barra de navegador), no monitor
+        do Claudinho. Se já estiver aberta, só traz pra frente."""
+        url = f"http://127.0.0.1:{PORTA}{caminho}"
+        aberta = next((j["hwnd"] for j in janelas.listar() if j["titulo"].startswith(titulo)), None)
+        if aberta:
             user32.ShowWindow(aberta, 9)  # SW_RESTORE
             abrir.forcar_frente(aberta)
             return
         _, (esq, topo, dir_, base), _ = monitor(*self.centro())
-        w, h = 1040, 760
+        h = min(h, base - topo - 40)
         x, y = esq + (dir_ - esq - w) // 2, topo + max(0, (base - topo - h) // 2)
         edge = shutil.which("msedge") or next((str(c) for c in (
             Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft/Edge/Application/msedge.exe",
@@ -1876,13 +1884,23 @@ class Claudinho:
         if not edge:
             webbrowser.open(url)
             return
+        user32.AllowSetForegroundWindow(-1)  # ASFW_ANY: a janela nova pode vir pra frente (você acabou de clicar)
         proc = subprocess.Popen([edge, f"--app={url}", f"--window-size={w},{h}", f"--window-position={x},{y}",
-                          # InPrivate: sem isso o Edge entra sozinho na conta Microsoft e mostra aviso de sincronizar
-                          f"--user-data-dir={DADOS / 'painel-edge'}", "--inprivate", "--disable-sync",
-                          "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
-                         creationflags=subprocess.CREATE_NO_WINDOW)
-        # no mesmo "job" do chat: se o Claudinho fechar (ou for derrubado), o painel fecha junto
+                                 # InPrivate: sem isso o Edge entra sozinho na conta Microsoft e mostra aviso de sincronizar
+                                 f"--user-data-dir={DADOS / 'painel-edge'}", "--inprivate", "--disable-sync",
+                                 "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+        # no mesmo "job" do chat: se o Claudinho fechar (ou for derrubado), a janela fecha junto
         ctypes.windll.kernel32.AssignProcessToJobObject(wt.HANDLE(JOB_FILHOS), wt.HANDLE(proc._handle))
+
+        def trazer():  # o Windows deixa janela nova nascer atrás das outras: espera ela aparecer e traz
+            for _ in range(40):
+                time.sleep(0.25)
+                nova = next((j["hwnd"] for j in janelas.listar() if j["titulo"].startswith(titulo)), None)
+                if nova:
+                    abrir.forcar_frente(nova)
+                    return
+        threading.Thread(target=trazer, daemon=True).start()
 
     @staticmethod
     def fechar_painel():
@@ -1961,7 +1979,7 @@ class Claudinho:
         """Anota o que ele acabou de falar num balão (piada, comentário, aviso) pra conversa continuar dali."""
         if fala["tipo"] == "aviso":
             d = fala["dados"]
-            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {(d.get('resposta') or '').strip()[:300]}"
+            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {formatar.limpar(d.get('resposta') or '')[:300]}"
         else:
             texto = fala.get("texto", "")
         if texto:
@@ -2129,6 +2147,9 @@ class Claudinho:
 
     def abrir_conversa(self, texto, por_clique=False):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
+        texto = formatar.limpar(texto)  # o balão não entende markdown
+        if texto.startswith("[aviso] "):
+            texto = "✓ " + texto[len("[aviso] "):]
         rascunho = self.entrada.entry.get() if self.entrada else ""
         # estava digitando quando a resposta chegou? o balão novo já volta com o cursor no campo
         try:
@@ -2207,48 +2228,8 @@ class Claudinho:
             self.comentar("Conversa nova! Pode mandar.", duracao=3, prioridade=ESTADO)
 
     def ver_conversa(self):
-        """Janela maior com a conversa inteira (as últimas conversas também), rolável."""
-        try:
-            if self.janela_conversa and self.janela_conversa.winfo_exists():
-                self.encher_conversa()
-                self.janela_conversa.lift()
-                self.janela_conversa.focus_force()
-                return
-        except tk.TclError:
-            pass
-        win = self.janela_conversa = ctk.CTkToplevel(self.root, fg_color=FUNDO)
-        win.title("Conversa com o Claudinho")
-        win.attributes("-topmost", True)
-        _, (esq, topo, dir_, base), _ = monitor(int(self.x) + self.W // 2, int(self.y) + self.H // 2)
-        w, h = 560, min(680, base - topo - 80)
-        win.geometry(f"{w}x{h}+{(esq + dir_ - w) // 2}+{(topo + base - h) // 2}")
-        caixa = self.caixa_conversa = ctk.CTkTextbox(win, fg_color=FUNDO, text_color=TEXTO, wrap="word",
-                                                     font=ctk.CTkFont("Segoe UI", 13), border_width=0)
-        caixa.pack(fill="both", expand=True, padx=12, pady=12)
-        caixa.tag_config("eu", foreground=APAGADO)
-        caixa.tag_config("claudinho", foreground=LARANJA)
-        caixa.tag_config("separador", foreground=APAGADO, justify="center")
-        self.encher_conversa()
-        fora_da_barra(win)
-        win.after(100, win.focus_force)
-
-    def encher_conversa(self):
-        caixa = self.caixa_conversa
-        caixa.configure(state="normal")
-        caixa.delete("1.0", "end")
-        numero = None
-        for m in self.mem.historico():
-            if m["numero"] != numero:
-                if numero is not None:
-                    caixa.insert("end", f"\n— conversa nova · {m['criado_em'][:16]} —\n\n", "separador")
-                numero = m["numero"]
-            quem = "você" if m["quem"] == "eu" else "claudinho"
-            caixa.insert("end", f"{quem}  {m['criado_em'][11:16]}\n", "eu" if m["quem"] == "eu" else "claudinho")
-            caixa.insert("end", formatar.limpar(m["texto"]) + "\n\n")
-        if numero is None:
-            caixa.insert("end", "Ainda não conversamos. Clica em mim e manda uma!", "separador")
-        caixa.configure(state="disabled")
-        caixa.see("end")
+        """A conversa inteira em balões (conversa.html), numa janela que acompanha as mensagens novas."""
+        self.abrir_janela_web("/conversa", "Claudinho · Conversa", 600, 780)
 
     # ---------- comentários sobre a tela ----------
     def acompanhar_app_ativo(self):
@@ -2768,11 +2749,6 @@ class Claudinho:
                     self.mem.registrar_mensagem("claudinho", resposta)
                     self.mem.lembrar("chat", f"Você: {self.pergunta_atual[:500]}\nClaudinho: {resposta[:900]}",
                                      conversa=self.mem.conversa_atual())
-                    try:  # janela da conversa aberta: já mostra a resposta nova
-                        if self.janela_conversa and self.janela_conversa.winfo_exists():
-                            self.encher_conversa()
-                    except tk.TclError:
-                        pass
                 self.fechar_balao()  # tira o "pensando…"
                 self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
             elif ev[0] == "comentario":

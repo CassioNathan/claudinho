@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Claudinho · Conversa</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fundo: #1c1b19; --topo: #22211f; --dele: #2c2b28; --dele-borda: #3a3935; --meu: #d97757; --meu2: #c96a4b;
+    --texto: #ece9e1; --apagado: #9b978d; --laranja2: #e8906f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--fundo); color: var(--texto); font: 14px/1.5 Inter, "Segoe UI", system-ui, sans-serif;
+         display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: #3d3c38; border-radius: 10px; border: 3px solid var(--fundo); }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--topo);
+           border-bottom: 1px solid #2f2e2b; }
+  header canvas { image-rendering: pixelated; }
+  header h1 { font: 14px Silkscreen, monospace; margin: 0; }
+  header small { color: var(--apagado); font-size: 12px; }
+  #lista { flex: 1; overflow-y: auto; padding: 18px 16px 26px; }
+
+  .separador { text-align: center; color: var(--apagado); font-size: 11.5px; margin: 22px 0 14px; position: relative; }
+  .separador span { background: var(--fundo); padding: 0 10px; position: relative; }
+  .separador::before { content: ""; position: absolute; left: 8%; right: 8%; top: 50%; border-top: 1px solid #34332f; }
+
+  .msg { display: flex; flex-direction: column; margin: 6px 0; max-width: 82%; }
+  .msg.eu { margin-left: auto; align-items: flex-end; }
+  .msg.dele { margin-right: auto; align-items: flex-start; }
+  .balao { padding: 9px 13px; border-radius: 16px; word-wrap: break-word; overflow-wrap: anywhere; max-width: 100%; }
+  .eu .balao { background: var(--meu); color: #fff; border-bottom-right-radius: 5px; }
+  .dele .balao { background: var(--dele); border: 1px solid var(--dele-borda); border-bottom-left-radius: 5px; }
+  .hora { font-size: 10.5px; color: var(--apagado); margin: 3px 6px 0; }
+  .msg + .msg.mesmo { margin-top: 2px; }
+
+  .balao p { margin: 0 0 7px; } .balao p:last-child { margin-bottom: 0; }
+  .balao h3 { font-size: 13.5px; margin: 8px 0 5px; color: var(--laranja2); }
+  .eu .balao h3 { color: #fff; }
+  .balao ul, .balao ol { margin: 4px 0 7px; padding-left: 20px; } .balao li { margin: 2px 0; }
+  .balao code { background: rgba(0,0,0,.28); border-radius: 5px; padding: 1px 5px; font: 12.5px Consolas, monospace; }
+  .balao pre { background: #181716; border-radius: 9px; padding: 9px 11px; overflow-x: auto; margin: 6px 0; }
+  .balao pre code { background: none; padding: 0; }
+  .balao a { color: var(--laranja2); } .eu .balao a { color: #fff; }
+  .tabela { overflow-x: auto; margin: 6px 0 8px; }
+  .balao table { border-collapse: collapse; font-size: 12.5px; min-width: 60%; }
+  .balao th, .balao td { border: 1px solid #45443f; padding: 5px 8px; text-align: left; vertical-align: top; }
+  .balao th { background: rgba(255,255,255,.05); font-weight: 600; }
+  .chip { display: inline-block; background: rgba(0,0,0,.2); border-radius: 8px; padding: 1px 7px; font-size: 11.5px;
+          margin-bottom: 5px; }
+
+  .digitando .balao { display: flex; gap: 4px; padding: 13px 14px; }
+  .digitando i { width: 7px; height: 7px; border-radius: 50%; background: var(--apagado); animation: pulo 1.2s infinite; }
+  .digitando i:nth-child(2) { animation-delay: .15s; } .digitando i:nth-child(3) { animation-delay: .3s; }
+  @keyframes pulo { 0%, 60%, 100% { transform: none; opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
+  .vazio { text-align: center; color: var(--apagado); margin-top: 30vh; }
+  .offline { position: fixed; inset: 0; background: rgba(20,19,18,.88); display: none; place-items: center;
+             text-align: center; color: var(--apagado); }
+  .offline b { color: var(--texto); display: block; font-size: 17px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <canvas id="avatar" width="34" height="20"></canvas>
+  <div><h1>Claudinho</h1><small id="sub">conversa</small></div>
+</header>
+<div id="lista"></div>
+<div class="offline" id="offline"><div><b>O Claudinho não respondeu</b>Ele está aberto?</div></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const lista = document.getElementById("lista");
+
+// ---------- markdown -> HTML (pequeno, só o que o Claude costuma usar) ----------
+const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function inline(t) {
+  t = esc(t);
+  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+  t = t.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<b>${a || b}</b>`);
+  t = t.replace(/(^|[^\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])/g, "$1<i>$2</i>");
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  return t;
+}
+const celulas = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+const separador = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l);
+function markdown(texto) {
+  const linhas = texto.replace(/\r\n/g, "\n").split("\n");
+  let html = "", i = 0, lista = null, par = [];
+  const fecharPar = () => { if (par.length) { html += `<p>${par.map(inline).join("<br>")}</p>`; par = []; } };
+  const fecharLista = () => { if (lista) { html += `</${lista}>`; lista = null; } };
+  while (i < linhas.length) {
+    const l = linhas[i];
+    if (/^\s*```/.test(l)) {  // bloco de código
+      fecharPar(); fecharLista();
+      const cod = []; i++;
+      while (i < linhas.length && !/^\s*```/.test(linhas[i])) cod.push(linhas[i++]);
+      html += `<pre><code>${esc(cod.join("\n"))}</code></pre>`; i++; continue;
+    }
+    if (l.trim().startsWith("|") && i + 1 < linhas.length && separador(linhas[i + 1])) {  // tabela
+      fecharPar(); fecharLista();
+      const cab = celulas(l); i += 2;
+      let t = `<div class="tabela"><table><tr>${cab.map(c => `<th>${inline(c)}</th>`).join("")}</tr>`;
+      while (i < linhas.length && linhas[i].trim().startsWith("|"))
+        t += `<tr>${celulas(linhas[i++]).map(c => `<td>${inline(c)}</td>`).join("")}</tr>`;
+      html += t + "</table></div>"; continue;
+    }
+    const titulo = l.match(/^\s*#{1,6}\s+(.*)/);
+    const item = l.match(/^\s*[-*+]\s+(.*)/), num = l.match(/^\s*\d+[.)]\s+(.*)/);
+    if (titulo) { fecharPar(); fecharLista(); html += `<h3>${inline(titulo[1])}</h3>`; }
+    else if (item || num) {
+      fecharPar();
+      const tipo = item ? "ul" : "ol";
+      if (lista !== tipo) { fecharLista(); html += `<${tipo}>`; lista = tipo; }
+      html += `<li>${inline((item || num)[1])}</li>`;
+    }
+    else if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(l)) { fecharPar(); fecharLista(); }
+    else if (!l.trim()) { fecharPar(); fecharLista(); }
+    else { fecharLista(); par.push(l.replace(/^\s*>\s?/, "")); }
+    i++;
+  }
+  fecharPar(); fecharLista();
+  return html;
+}
+
+// ---------- a conversa ----------
+function bolha(m, anterior) {
+  const eu = m.quem === "eu";
+  let texto = m.texto, chip = "";
+  const print = texto.match(/^\[print(?: da janela)?: ([^\]]+)\]\s*/);
+  if (print) { chip = `<span class="chip">📷 print: ${esc(print[1])}</span><br>`; texto = texto.slice(print[0].length); }
+  const mesmo = anterior && anterior.quem === m.quem && anterior.numero === m.numero;
+  return `<div class="msg ${eu ? "eu" : "dele"}${mesmo ? " mesmo" : ""}">
+            <div class="balao">${chip}${markdown(texto)}</div>
+            <div class="hora">${m.criado_em.slice(11, 16)}</div></div>`;
+}
+function dataBonita(s) {
+  const [d, h] = s.split(" "), hoje = new Date().toISOString().slice(0, 10);
+  const [a, mes, dia] = d.split("-");
+  return (d === hoje ? "hoje" : `${dia}/${mes}`) + " · " + h.slice(0, 5);
+}
+let assinatura = "";
+async function atualizar() {
+  try {
+    const r = await fetch("/api/conversa", {headers: {"X-Token": TOKEN}});
+    if (r.status === 403) return location.reload();  // o Claudinho reiniciou
+    const dados = await r.json();
+    document.getElementById("offline").style.display = "none";
+    const ms = dados.mensagens, nova = ms.length + "|" + (ms.length ? ms[ms.length - 1].criado_em : "") + "|" + dados.pensando;
+    if (nova === assinatura) return;
+    assinatura = nova;
+    const noFim = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 80;
+    let html = "", numero = null;
+    ms.forEach((m, i) => {
+      if (m.numero !== numero) {
+        html += `<div class="separador"><span>${numero === null ? "conversa de " : "conversa nova · "}${dataBonita(m.criado_em)}</span></div>`;
+        numero = m.numero;
+      }
+      html += bolha(m, ms[i - 1]);
+    });
+    if (dados.pensando) html += `<div class="msg dele digitando"><div class="balao"><i></i><i></i><i></i></div></div>`;
+    lista.innerHTML = html || `<div class="vazio">Ainda não conversamos.<br>Clica em mim e manda uma!</div>`;
+    document.getElementById("sub").textContent = `${ms.length} mensagens`;
+    if (noFim || !lista.dataset.ok) { lista.scrollTop = lista.scrollHeight; lista.dataset.ok = 1; }
+  } catch (e) {
+    document.getElementById("offline").style.display = "grid";
+  }
+}
+
+// avatarzinho do cabeçalho
+(function () {
+  const c = document.getElementById("avatar").getContext("2d"), S = 2;
+  const corpo = [".XXXXXXXXX.", ".XXXXXXXXX.", ".XXXXXXXXX.", "XXXXXXXXXXX", "XXXXXXXXXXX", ".XXXXXXXXX."];
+  c.fillStyle = "#d97757";
+  corpo.forEach((l, y) => [...l].forEach((ch, x) => ch === "X" && c.fillRect((x + 3) * S, (y + 1) * S, S, S)));
+  [1, 3, 7, 9].forEach(x => { c.fillRect((x + 3) * S, 7 * S, S, S); c.fillRect((x + 3) * S, 8 * S, S, S); });
+  c.fillStyle = "#1f1e1d";
+  [3, 7].forEach(x => { c.fillRect((x + 3) * S, 2 * S, S, S); c.fillRect((x + 3) * S, 3 * S, S, S); });
+})();
+
+atualizar();
+setInterval(atualizar, 1500);
+</script>
+</body>
+</html>

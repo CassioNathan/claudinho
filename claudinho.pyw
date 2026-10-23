@@ -376,6 +376,23 @@ class ChatClaude:
                                      errors="replace", cwd=DADOS, env=env_limpo(),
                                      creationflags=subprocess.CREATE_NO_WINDOW)
         ctypes.windll.kernel32.AssignProcessToJobObject(wt.HANDLE(JOB_FILHOS), wt.HANDLE(self.proc._handle))
+        # "aperto de mão" do protocolo de controle: sem ele o claude ignora pedidos como trocar o modelo
+        self.controle({"subtype": "initialize", "hooks": None})
+
+    def controle(self, pedido):
+        """Manda um pedido de controle (initialize, set_model…) e espera a confirmação dele, porque
+        mandar o próximo passo antes da confirmação travava a conversa."""
+        ident = f"c{time.time_ns()}"
+        self.proc.stdin.write(json.dumps({"type": "control_request", "request_id": ident, "request": pedido}) + "\n")
+        self.proc.stdin.flush()
+        for linha in self.proc.stdout:
+            try:
+                ev = json.loads(linha)
+            except ValueError:
+                continue
+            if ev.get("type") == "control_response" and (ev.get("response") or {}).get("request_id") == ident:
+                return
+        raise RuntimeError("o claude fechou durante a configuração")
 
     def aquecer(self):
         """Abre o processo antes da primeira pergunta, em segundo plano."""
@@ -423,14 +440,22 @@ class ChatClaude:
             "subtype": "success", "request_id": ev.get("request_id"), "response": decisao}}) + "\n")
         self.proc.stdin.flush()
 
-    def perguntar(self, texto, imagem=None):
-        """Devolve (resposta, session_id, erro). `imagem` = bloco de imagem (ex.: print pra resumir)."""
+    def trocar_modelo(self, modelo):
+        """Troca o modelo da conversa aberta, sem perder o histórico (pedido de controle do Claude Code).
+        O pensamento leve (--effort low) continua valendo."""
+        self.controle({"subtype": "set_model", "model": modelo})
+
+    def perguntar(self, texto, imagem=None, modelo=None):
+        """Devolve (resposta, session_id, erro). `imagem` = bloco de imagem (ex.: print pra resumir);
+        `modelo` = usar outro modelo só nesta pergunta (ex.: "sonnet" no resumo de tela), depois volta pro Haiku."""
         conteudo = [imagem, {"type": "text", "text": texto}] if imagem else texto
         with self.trava:
             for tentativa in range(2):  # se o processo morreu, abre outro e tenta de novo
                 try:
                     if self.proc is None or self.proc.poll() is not None:
                         self.abrir()
+                    if modelo:
+                        self.trocar_modelo(modelo)
                     self.proc.stdin.write(json.dumps(
                         {"type": "user", "message": {"role": "user", "content": conteudo}}) + "\n")
                     self.proc.stdin.flush()
@@ -447,6 +472,9 @@ class ChatClaude:
                                 if isinstance(bloco, dict) and bloco.get("type") == "tool_use":
                                     self.ao_usar_ferramenta(bloco.get("name", ""), bloco.get("input") or {})
                         elif ev.get("type") == "result":
+                            self.modelos_usados = list(ev.get("modelUsage") or {})  # pra conferir quem respondeu
+                            if modelo:
+                                self.trocar_modelo("haiku")  # o chat normal volta pro Haiku
                             if ev.get("is_error"):
                                 return None, self.sid, ev.get("result") or "Erro do Claude."
                             return (ev.get("result") or "").strip(), self.sid, None
@@ -1695,7 +1723,8 @@ class Claudinho:
         self.usou_ferramenta = True  # balão mostra "fazendo…" e ele saca o notebook
         imagem = em_jpeg(img, qualidade=88)  # mais nítido: é pra ler texto
 
-        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pedido, imagem))),
+        # Sonnet (com o mesmo pensamento leve) só aqui: resumo precisa ler direito; o resto segue no Haiku
+        threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pedido, imagem, "sonnet"))),
                          daemon=True).start()
 
     def comentar_agora(self):

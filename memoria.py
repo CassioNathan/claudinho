@@ -9,9 +9,11 @@ Cada piada guarda o contexto em que saiu (programa, categoria, modo, alvo, músi
 permite buscar "piadas que ele curtiu nesse tipo de situação" (o RAG leve de `exemplos`).
 """
 import json
+import re
 import sqlite3
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 MIGRACOES = [
@@ -53,7 +55,52 @@ MIGRACOES = [
     );
     CREATE TABLE meta (chave TEXT PRIMARY KEY, valor TEXT);
     """,
+    # 2: mini cérebro — avisos e conversas guardados com busca de texto (FTS5, local: nenhuma IA envolvida)
+    """
+    CREATE TABLE lembrancas (
+        id        INTEGER PRIMARY KEY,
+        origem    TEXT,                -- chat, aviso
+        projeto   TEXT,
+        texto     TEXT NOT NULL,
+        conversa  INTEGER,             -- número da conversa do chat (pra não repetir o que já está nela)
+        criado_em TEXT DEFAULT (datetime('now', 'localtime'))
+    );
+    CREATE VIRTUAL TABLE lembrancas_busca USING fts5(
+        texto, projeto, content='lembrancas', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
+    CREATE TRIGGER lembrancas_nova AFTER INSERT ON lembrancas BEGIN
+        INSERT INTO lembrancas_busca(rowid, texto, projeto) VALUES (new.id, new.texto, new.projeto);
+    END;
+    CREATE TRIGGER lembrancas_apagada AFTER DELETE ON lembrancas BEGIN
+        INSERT INTO lembrancas_busca(lembrancas_busca, rowid, texto, projeto)
+        VALUES ('delete', old.id, old.texto, old.projeto);
+    END;
+    -- o que já existia vira lembrança também
+    INSERT INTO lembrancas(origem, texto, conversa, criado_em)
+        SELECT 'chat', CASE quem WHEN 'eu' THEN 'Você: ' ELSE 'Claudinho: ' END || texto, numero, criado_em
+        FROM conversa;
+    INSERT INTO lembrancas(origem, projeto, texto, criado_em)
+        SELECT 'aviso', projeto, 'Pedido no ' || projeto || ': ' || pedido, criado_em FROM avisos WHERE pedido <> '';
+    """,
 ]
+
+# palavras que não ajudam a achar lembrança (sem acento: a busca ignora acentos)
+COMUNS = set("""
+para pela pelo pelos pelas como mais mas uma umas uns isso isto esse essa esses essas este esta aqui ali
+voce voces ele ela eles elas nao sim tem ter tinha temos vai vou fazer feito faz pode posso quero queria
+qual quais quando onde porque entao tambem agora ainda sobre depois antes muito pouco tudo nada cara ok
+beleza blz tipo coisa coisas fica ficou esta estao estava sao era foi seria the and with from that this
+claudinho claude oi ola valeu obrigado sua seu suas seus minha meu nossa nosso dele dela
+""".split())
+
+
+def _palavras(texto):
+    """Palavras que servem pra buscar: sem acento, 4+ letras, tirando as comuns, sem repetir."""
+    sem_acento = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+    vistas = []
+    for p in re.findall(r"[a-z0-9_]{4,}", sem_acento):
+        if p not in COMUNS and p not in vistas:
+            vistas.append(p)
+    return vistas
 
 
 class Memoria:
@@ -157,6 +204,37 @@ class Memoria:
         linha = self._todos("SELECT texto FROM conversa WHERE numero = ? AND quem = 'claudinho' "
                             "ORDER BY id DESC LIMIT 1", (self.conversa_atual(),))
         return linha[0]["texto"] if linha else ""
+
+    # ---------- mini cérebro (lembranças com busca de texto local) ----------
+    def lembrar(self, origem, texto, projeto=None, conversa=None):
+        self._exec("INSERT INTO lembrancas(origem, projeto, texto, conversa) VALUES(?, ?, ?, ?)",
+                   (origem, projeto, texto.strip(), conversa))
+
+    def total_lembrancas(self):
+        return self._todos("SELECT COUNT(*) AS n FROM lembrancas")[0]["n"]
+
+    def buscar_lembrancas(self, pergunta, n=3, fora_da_conversa=None):
+        """Lembranças parecidas com a pergunta (busca local, sem IA). Só volta o que divide pelo menos
+        2 palavras com ela (ou a única, se a pergunta só tiver uma): melhor nada do que lembrança aleatória."""
+        chaves = _palavras(pergunta)
+        if not chaves:
+            return []
+        consulta = " OR ".join(f'"{p}"' for p in chaves[:12])
+        linhas = self._todos(
+            "SELECT l.id, l.origem, l.projeto, l.texto, l.conversa, l.criado_em FROM lembrancas_busca b "
+            "JOIN lembrancas l ON l.id = b.rowid WHERE lembrancas_busca MATCH ? "
+            "ORDER BY bm25(lembrancas_busca) LIMIT 30", (consulta,))
+        minimo = 1 if len(chaves) == 1 else 2
+        achadas = []
+        for l in linhas:
+            if fora_da_conversa is not None and l["conversa"] == fora_da_conversa:
+                continue  # já está na conversa de agora
+            comuns = set(chaves) & set(_palavras(l["texto"] + " " + (l["projeto"] or "")))
+            if len(comuns) >= minimo:
+                achadas.append(dict(l))
+            if len(achadas) == n:
+                break
+        return achadas
 
     def historico(self, limite=300):
         """As últimas mensagens de todas as conversas, da mais antiga pra mais nova."""

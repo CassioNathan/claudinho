@@ -35,6 +35,7 @@ import customtkinter as ctk
 import pystray
 from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
+import formatar
 import frases
 import abrir
 import janelas
@@ -64,6 +65,7 @@ CONFIG_PADRAO = {
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
     "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
     "visual": dict(skins.VISUAL_PADRAO),  # skin: cor do corpo + um adereço por espaço (escolhe no painel)
+    "lembrancas": True,                  # mini cérebro: o chat recebe lembranças parecidas (busca local)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
@@ -82,7 +84,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
-                 "emo_rock", "esquetes", "aviso_segundos"]
+                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -1059,6 +1061,7 @@ class Claudinho:
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
         self.print_anexado = None  # {"imagem": bloco, "nome": ...} que vai junto da próxima mensagem
+        self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
         self.lendo_notificacoes = False
         self.janela_conversa = None
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
@@ -1836,6 +1839,7 @@ class Claudinho:
             "esquetes": [{"id": k, "nome": NOMES_ESQUETES.get(k, k)} for k in esquetes.ESQUETES],
             "musica": musica.descrever(m) if m else None,
             "fila": len(self.falas),
+            "lembrancas_total": self.mem.total_lembrancas(),
         }
 
     def abrir_painel(self):
@@ -1908,7 +1912,7 @@ class Claudinho:
         self.fechar_balao()
         if fala["tipo"] == "aviso":
             d = fala["dados"]
-            resposta = (d.get("resposta") or "(sem texto)").strip()
+            resposta = formatar.limpar(d.get("resposta") or "(sem texto)")  # balão não entende markdown
             if len(resposta) > 1200:  # aviso é resumo: no máximo ~3 páginas
                 resposta = resposta[:1200].rsplit(" ", 1)[0] + "…"
             self.balao = Balao(self, "aviso", resposta, titulo=f"✓ pronto em {d.get('projeto') or '?'}",
@@ -2155,15 +2159,29 @@ class Claudinho:
             if fim:
                 pergunta += f"\n\n(Fim da nossa conversa anterior, só pra continuidade:\n{fim})"
         self.mem.registrar_mensagem("eu", f"[print: {anexado['nome']}] {texto}" if anexado else texto)
+        self.pergunta_atual = texto
         self.ocupado = True
         if anexado:
             pergunta = f"(Junto vai um print da janela que estou usando: {anexado['nome']}.)\n\n" + pergunta
         pergunta += self.contexto_das_falas()  # continuidade: ele lembra da piada/aviso que acabou de mostrar
+        pergunta += self.lembrancas_para(texto)
         if self.musica:  # contexto que ele vê mas não precisa comentar
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
         imagem = anexado["imagem"] if anexado else None
         threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pergunta, imagem))),
                          daemon=True).start()
+
+    def lembrancas_para(self, texto):
+        """Mini cérebro: lembranças de conversas e avisos antigos parecidas com a pergunta.
+        A busca é local (SQLite, sem IA); só vai algo pro Claude quando acha, e no máximo ~1.000 caracteres."""
+        if not self.cfg["lembrancas"]:
+            return ""
+        achadas = self.mem.buscar_lembrancas(texto, fora_da_conversa=self.mem.conversa_atual())
+        if not achadas:
+            return ""
+        linhas = [f"- {l['criado_em'][:16]}: " + " ".join(l["texto"].split())[:320] for l in achadas]
+        return ("\n\n(Lembranças de conversas e avisos anteriores que podem ter a ver; use só se ajudar e "
+                "não diga que buscou:\n" + "\n".join(linhas) + ")")
 
     def nova_conversa(self):
         if not self.ocupado:
@@ -2209,7 +2227,7 @@ class Claudinho:
                 numero = m["numero"]
             quem = "você" if m["quem"] == "eu" else "claudinho"
             caixa.insert("end", f"{quem}  {m['criado_em'][11:16]}\n", "eu" if m["quem"] == "eu" else "claudinho")
-            caixa.insert("end", re.sub(r"\*\*|`", "", m["texto"]).strip() + "\n\n")
+            caixa.insert("end", formatar.limpar(m["texto"]) + "\n\n")
         if numero is None:
             caixa.insert("end", "Ainda não conversamos. Clica em mim e manda uma!", "separador")
         caixa.configure(state="disabled")
@@ -2259,6 +2277,8 @@ class Claudinho:
             return
         pedido = (dados.get("pedido") or "").strip().replace("\n", " ")
         self.mem.registrar_aviso(projeto, pedido[:150])
+        resultado = formatar.limpar(dados.get("resposta") or "")
+        self.mem.lembrar("aviso", f"Pedido no {projeto}: {pedido[:400]}\nResultado: {resultado[:900]}", projeto)
 
     def resumo_do_dia(self):
         """Texto curto para o Haiku com o que foi pedido nos chats hoje."""
@@ -2330,6 +2350,7 @@ class Claudinho:
                   "se for código ou erro, diz o que é e o que fazer; se for outra coisa, explica em 2-3 frases. "
                   "Não descreva a interface, foque no conteúdo.")
         self.mem.registrar_mensagem("eu", f"[print da janela: {nome}] me resume isso")
+        self.pergunta_atual = f"[print da janela: {nome}] me resume isso"
         self.ocupado = True
         self.usou_ferramenta = True  # balão mostra "fazendo…" e ele saca o notebook
         imagem = em_jpeg(img, qualidade=88)  # mais nítido: é pra ler texto
@@ -2717,9 +2738,11 @@ class Claudinho:
                 self.ocupado = False
                 self.mem.guardar_meta("session_id", sid)
                 # o balão não mostra markdown: tira os ** e ` que às vezes vêm na resposta
-                texto = f"⚠ {erro}" if erro else re.sub(r"\*\*|`", "", resposta)
+                texto = f"⚠ {erro}" if erro else formatar.limpar(resposta)
                 if not erro:
                     self.mem.registrar_mensagem("claudinho", resposta)
+                    self.mem.lembrar("chat", f"Você: {self.pergunta_atual[:500]}\nClaudinho: {resposta[:900]}",
+                                     conversa=self.mem.conversa_atual())
                     try:  # janela da conversa aberta: já mostra a resposta nova
                         if self.janela_conversa and self.janela_conversa.winfo_exists():
                             self.encher_conversa()

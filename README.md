@@ -45,6 +45,10 @@ terminam e solta piadas sobre o que está na tela.
   código morto, reunião que podia ser e-mail, bug que vira borboleta e malhação. Piadas e esquetes
   dividem o mesmo tempo (uma fila só, cerca de 1 em 3 vezes é esquete); clicar, arrastar ou chegar algo
   importante interrompe a esquete na hora.
+- **Mini cérebro 🧠:** cada aviso do Claude Code (pedido + resultado) e cada troca do chat viram lembrança no
+  SQLite, com busca de texto local (FTS5). Ao perguntar algo parecido com o que já rolou, até 3 lembranças curtas
+  (~250 tokens) vão junto; sem nada parecido, não vai nada. Guardar e buscar não usa IA nenhuma. Liga/desliga no painel.
+- **Formatação:** os balões convertem o markdown das respostas (tabela vira lista, títulos, negrito, crases e links somem).
 - **Prioridade das falas:** aviso, coisa que você pediu e erro nunca são atropelados (nem enquanto você lê);
   piada sai da frente pra eles; mensagem de estado (vendei, modo ligado…) é descartável e é trocada na hora. Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
   Pra testar uma específica: `CLAUDINHO_ESQUETE=inseto` antes de abrir.

@@ -175,6 +175,7 @@
     <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
     <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
     <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
+    <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
   </nav>
@@ -287,6 +288,22 @@
       <div class="linha">
         <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
         <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="memoria">
+    <h2>🧠 Memória</h2>
+    <p class="sub">O mini cérebro: cada aviso do Claude Code e cada troca no chat ficam guardados aqui no seu PC.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Lembrar no chat</div><div class="desc">Quando você pergunta algo parecido com o que já
+          rolou, as lembranças certas vão junto. A busca é local (sem IA); só manda algo quando acha, e no máximo 3 lembranças curtas.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="lembrancas"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Lembranças guardadas</div><div class="desc">Ficam em ~/.claudinho/claudinho.db.</div></div>
+        <span class="valor" id="totalLembrancas">—</span>
       </div>
     </div>
   </section>
@@ -510,6 +527,7 @@ function montarResto() {
 function atualizarVivos() {
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
+  document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");
 }
 
 document.getElementById("sortear").onclick = () => {

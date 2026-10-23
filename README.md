@@ -7,6 +7,8 @@ terminam e solta piadas sobre o que está na tela.
 ## O que ele faz
 
 - **Chat rápido:** clique nele e pergunte. A resposta vem num balão com o campo pra continuar a conversa.
+  Ele lembra do que acabou de falar nos balões: clicou logo depois de uma piada ou aviso, a conversa
+  abre nela e dá pra responder direto ("ué, por que pão de queijo?").
   Usa o Claude Code instalado no PC (Haiku com pensamento leve), com a sua memória e o seu perfil.
 - **Mexe no PC com confirmação:** abre site, pesquisa ou programa da lista sem perguntar (via `abrir.py`);
   qualquer outro comando ou mudança em arquivo pede **Pode / Não** num balão.
@@ -60,7 +62,8 @@ Depois:
 | `instalar.py` | instalação num PC novo |
 | `~/.claudinho/config.json` | configurações (movimento, frequência, modos, atalho, pastas de leitura) |
 | `~/.claudinho/CLAUDE.md` | seu perfil |
-| `~/.claudinho/estado.json`, `avaliacoes.json` | conversa, memória do dia, piadas recentes, notas |
+| `memoria.py` | banco SQLite: piadas (com contexto e nota), avisos do dia, conversa; migrações versionadas |
+| `~/.claudinho/claudinho.db` | o banco em si (este PC) |
 
 As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 

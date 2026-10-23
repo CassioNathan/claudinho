@@ -35,13 +35,12 @@ from PIL import Image, ImageDraw, ImageGrab
 import frases
 import janelas
 import emojis
+import memoria
 import musica
 
 PORTA = 47821
 DADOS = Path.home() / ".claudinho"
-ESTADO = DADOS / "estado.json"
-CONFIG = DADOS / "config.json"
-AVALIACOES = DADOS / "avaliacoes.json"
+CONFIG = DADOS / "config.json"  # o resto (piadas, notas, avisos, conversa) fica no claudinho.db
 
 CONFIG_PADRAO = {
     "movimento": "livre",               # "livre" = anda pela tela toda | "horizontal" = só de lado
@@ -846,10 +845,11 @@ class Claudinho:
     def __init__(self, eventos):
         self.eventos = eventos
         self.cfg = carregar_config()
-        self.estado = ler_json(ESTADO, {"session_id": None, "historico": []})
+        # piadas e notas, avisos do dia e conversa ficam no SQLite (memoria.py)
+        self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
-        self.avaliacoes = ler_json(AVALIACOES, [])  # notas boa/ruim das piadas
-        self.chat = ChatClaude(self.estado.get("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
+        self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
+        self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
                                lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)))
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
@@ -866,10 +866,6 @@ class Claudinho:
         self.notebook = 0.0           # 0 = guardado, 1 = aberto e digitando (anima entre os dois)
         self.usou_ferramenta = False  # nesta pergunta ele já está fazendo coisas no PC
         self.pouso_ate = 0            # logo depois de ser solto: agachadinha
-        # o que ele já falou, guardado entre reinícios pra não ficar repetindo
-        self.recentes = deque(self.estado.get("piadas_recentes", []), maxlen=25)        # piadas ditas
-        self.recentes_frases = deque(self.estado.get("frases_recentes", []), maxlen=40)  # modelos do banco
-        self.assuntos = deque(self.estado.get("assuntos_recentes", []), maxlen=8)       # proibidos por um tempo
         self.app_atual, self.app_desde = "", time.time()
         self.t = 0
 
@@ -1191,7 +1187,7 @@ class Claudinho:
                 or random.random() > (0.15 if so_tela else 0.45)):
             return
         self.comentando = True
-        maldoso, recentes = self.cfg["modo_maldoso"], list(self.recentes)[-8:]
+        maldoso, recentes = self.cfg["modo_maldoso"], self.mem.piadas_recentes(8)
 
         def trabalho():
             try:
@@ -1431,6 +1427,31 @@ class Claudinho:
         else:
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"])
         self.balao.dados = fala
+        self.lembrar_fala(fala)
+
+    # ---------- continuidade: o chat sabe o que ele falou nos balões ----------
+    def lembrar_fala(self, fala):
+        """Anota o que ele acabou de falar num balão (piada, comentário, aviso) pra conversa continuar dali."""
+        if fala["tipo"] == "aviso":
+            d = fala["dados"]
+            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {(d.get('resposta') or '').strip()[:300]}"
+        else:
+            texto = fala.get("texto", "")
+        if texto:
+            self.falas_mostradas.append((time.time(), texto))
+
+    def falas_recentes(self, minutos=15):
+        agora = time.time()
+        return [(agora - quando, texto) for quando, texto in self.falas_mostradas if agora - quando < minutos * 60]
+
+    def contexto_das_falas(self):
+        """Bloco que vai junto da sua mensagem: o que ele disse nos balões nos últimos minutos."""
+        recentes = self.falas_recentes()
+        if not recentes:
+            return ""
+        linhas = "\n".join(f"- há {max(1, round(seg / 60))} min: \"{texto}\"" for seg, texto in recentes)
+        return ("\n\n(Contexto automático: o que você, Claudinho, falou nos balões nos últimos minutos. "
+                "Se a mensagem dele for uma resposta a isso, continue a conversa a partir daí:\n" + linhas + ")")
 
     # ---------- confirmação antes de agir no PC ----------
     def pedir_permissao(self, ferramenta, entrada):
@@ -1523,7 +1544,7 @@ class Claudinho:
 
     # ---------- pergunta ----------
     def ultima_resposta(self):
-        return next((m["texto"] for m in reversed(self.estado["historico"]) if m["quem"] != "eu"), "")
+        return self.mem.ultima_resposta()
 
     def fechar_conversa(self):
         if self.entrada:
@@ -1534,7 +1555,9 @@ class Claudinho:
         if self.entrada:
             self.fechar_conversa()
         else:
-            self.abrir_conversa(self.ultima_resposta(), por_clique=True)
+            # acabou de falar algo num balão (até 3 min)? a conversa abre nisso, pra você responder a ele
+            recente = self.falas_recentes(minutos=3)
+            self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
 
     def abrir_conversa(self, texto, por_clique=False):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
@@ -1567,10 +1590,10 @@ class Claudinho:
         # agora o Claudinho está em primeiro plano (você acabou de digitar nele): libera a próxima
         # janela que ele abrir (navegador, programa) pra vir pra frente em vez de abrir escondida
         user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
-        self.estado["historico"].append({"quem": "eu", "texto": texto})
-        gravar_json(ESTADO, self.estado)
+        self.mem.registrar_mensagem("eu", texto)
         self.ocupado = True
         pergunta = texto
+        pergunta += self.contexto_das_falas()  # continuidade: ele lembra da piada/aviso que acabou de mostrar
         if self.musica:  # contexto que ele vê mas não precisa comentar
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
         threading.Thread(target=lambda: self.eventos.put(("resposta", *self.chat.perguntar(pergunta))),
@@ -1578,8 +1601,7 @@ class Claudinho:
 
     def nova_conversa(self):
         if not self.ocupado:
-            self.estado.update(session_id=None, historico=[])  # a memória do dia fica
-            gravar_json(ESTADO, self.estado)
+            self.mem.nova_conversa()  # a memória do dia e as piadas ficam
             self.chat.nova_conversa()
             self.falas.appendleft({"tipo": "comentario", "texto": "Conversa nova! Pode mandar.",
                                    "duracao": 3})
@@ -1616,18 +1638,14 @@ class Claudinho:
 
     # ---------- memória do dia (o que foi pedido nos chats) ----------
     def avisos_de_hoje(self):
-        hoje = time.strftime("%Y-%m-%d")
-        return [a for a in self.estado.get("dia", []) if a.get("data") == hoje]
+        return self.mem.avisos_de(time.strftime("%Y-%m-%d"))
 
     def lembrar_do_dia(self, dados):
         projeto = (dados.get("projeto") or "").strip()
         if not projeto or projeto == "teste":  # aviso de teste do menu não conta
             return
         pedido = (dados.get("pedido") or "").strip().replace("\n", " ")
-        self.estado["dia"] = self.avisos_de_hoje()[-49:] + [{
-            "data": time.strftime("%Y-%m-%d"), "hora": time.strftime("%H:%M"),
-            "projeto": projeto, "pedido": pedido[:150]}]
-        gravar_json(ESTADO, self.estado)
+        self.mem.registrar_aviso(projeto, pedido[:150])
 
     def resumo_do_dia(self):
         """Texto curto para o Haiku com o que foi pedido nos chats hoje."""
@@ -1671,7 +1689,8 @@ class Claudinho:
             self.comentar_do_banco(lista)
             return
         self.comentando = True
-        modelo, recentes, assuntos = self.cfg["modelo_comentario"], list(self.recentes), list(self.assuntos)
+        modelo, recentes, assuntos = (self.cfg["modelo_comentario"], self.mem.piadas_recentes(25),
+                                      self.mem.assuntos_recentes(8))
         maldoso, tdah = self.cfg["modo_maldoso"], self.cfg["modo_tdah"]
         alvo, ponto = self.sortear_alvo(area_total)
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
@@ -1689,7 +1708,7 @@ class Claudinho:
                                   assuntos)
             except Exception:
                 r = None
-            self.eventos.put(("comentario", r, lista))
+            self.eventos.put(("comentario", r, lista, alvo))
 
         threading.Thread(target=trabalho, daemon=True).start()
 
@@ -1701,31 +1720,35 @@ class Claudinho:
         if janela is None and lista:
             janela = next((j for j in lista if j["exe"] == self.app_atual), lista[0])
         minutos = self.minutos_no_app() if janela and janela["exe"] == self.app_atual else 0
-        modelo, texto = frases.escolher(janela, minutos, self.recentes_frases, self.cfg["modo_maldoso"],
+        modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.cfg["modo_maldoso"],
                                         self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
                                         self.musica)
-        self.recentes_frases.append(modelo)
-        self.lembrar_piada(texto)
-        self.comentar(texto, {"origem": "banco", "modelo": modelo})
+        pid = self.lembrar_piada(texto, "banco", modelo=modelo, alvo=alvo)
+        self.comentar(texto, {"origem": "banco", "id": pid})
 
-    def lembrar_piada(self, texto, assunto=""):
-        self.recentes.append(texto)
-        if assunto:
-            self.assuntos.append(assunto)
-        self.estado["piadas_recentes"] = list(self.recentes)
-        self.estado["assuntos_recentes"] = list(self.assuntos)
-        self.estado["frases_recentes"] = list(self.recentes_frases)
-        gravar_json(ESTADO, self.estado)
+    def categoria_atual(self):
+        try:
+            ativa = janelas.janela_ativa()
+        except Exception:
+            ativa = None
+        return frases.categoria(ativa) if ativa else "geral"
+
+    def lembrar_piada(self, texto, origem, assunto="", modelo=None, alvo=None):
+        """Guarda a piada no banco com o contexto em que saiu (pra notas e pra buscar exemplos parecidos)."""
+        tocando = self.musica["titulo"] if self.musica and self.musica["tocando"] else None
+        return self.mem.registrar_piada(texto, origem, modelo, assunto, {
+            "categoria": self.categoria_atual(), "app": self.app_atual, "alvo": alvo,
+            "maldoso": self.cfg["modo_maldoso"], "tdah": self.cfg["modo_tdah"], "musica": tocando})
 
     def parecida(self, texto, assunto=""):
         """Piada nova repete alguma já dita ou já avaliada? Pega mesmo assunto, mesmo começo, texto
         ~parecido ou um trecho marcante em comum ("pão de queijo", "# tarefas e você"). Números
         contam como iguais: "22 tarefas" e "25 tarefas" são a mesma piada."""
-        if assunto and any(SequenceMatcher(None, assunto, a).ratio() > 0.7 for a in self.assuntos):
+        if assunto and any(SequenceMatcher(None, assunto, a).ratio() > 0.7 for a in self.mem.assuntos_recentes(8)):
             return True
         novo = normalizar(texto)
         inicio, trechos = novo[:4], trechos_marcantes(novo)
-        ja_ditas = list(self.recentes) + [a["texto"] for a in self.avaliacoes[-60:]]
+        ja_ditas = self.mem.piadas_recentes(25) + self.mem.textos_avaliados(60)
         for antiga in ja_ditas:
             antiga = normalizar(antiga)
             if (antiga[:4] == inicio or trechos & trechos_marcantes(antiga)
@@ -1797,27 +1820,22 @@ class Claudinho:
     # ---------- avaliação das piadas ----------
     def avaliar(self, fala, nota):
         piada = fala.get("piada") or {}
-        self.avaliacoes = (self.avaliacoes + [{
-            "texto": fala["texto"], "nota": nota, "origem": piada.get("origem"),
-            "modelo": piada.get("modelo"), "maldoso": self.cfg["modo_maldoso"],
-            "tdah": self.cfg["modo_tdah"], "data": time.strftime("%Y-%m-%d %H:%M")}])[-300:]
-        gravar_json(AVALIACOES, self.avaliacoes)
+        pid = piada.get("id") or self.lembrar_piada(fala["texto"], piada.get("origem"))
+        self.mem.avaliar(pid, nota)
         self.fechar_balao()
 
     def notas_do_banco(self):
         """Soma das notas por frase do banco: negativas somem, positivas aparecem mais."""
-        notas = {}
-        for a in self.avaliacoes:
-            if a.get("origem") == "banco" and a.get("modelo"):
-                notas[a["modelo"]] = notas.get(a["modelo"], 0) + a["nota"]
-        return notas
+        return self.mem.notas_por_modelo()
 
     def resumo_do_gosto(self):
         """Exemplos pro Haiku do que você curtiu e do que não curtiu.
         Antes era "faça mais nesse estilo" e ele COPIAVA a piada aprovada (o "pão de queijo" virou
-        bordão); agora as curtidas servem só pra calibrar o tipo de humor, e repetir é proibido."""
-        boas = [a["texto"] for a in self.avaliacoes if a["nota"] > 0][-6:]
-        ruins = [a["texto"] for a in self.avaliacoes if a["nota"] < 0][-6:]
+        bordão); agora as curtidas servem só pra calibrar o tipo de humor, e repetir é proibido.
+        Os exemplos vêm do banco priorizando a mesma situação (programa e modo) — o RAG leve."""
+        situacao = (self.categoria_atual(), self.cfg["modo_maldoso"], self.cfg["modo_tdah"])
+        boas = self.mem.exemplos(1, *situacao, n=6)
+        ruins = self.mem.exemplos(-1, *situacao, n=6)
         partes = []
         if boas:
             partes.append(
@@ -1844,8 +1862,8 @@ class Claudinho:
             elif ev[0] == "comentario_musica":
                 self.comentando = False
                 if ev[1] and not self.parecida(ev[1]):
-                    self.lembrar_piada(ev[1])
-                    self.comentar(ev[1], {"origem": "musica"})
+                    pid = self.lembrar_piada(ev[1], "musica")
+                    self.comentar(ev[1], {"origem": "musica", "id": pid})
                     self.soltar_emoji("nota")
             elif ev[0] == "menu":
                 self.acao_menu(ev[1])
@@ -1859,25 +1877,25 @@ class Claudinho:
                 self.usou_ferramenta = False
                 _, resposta, sid, erro = ev
                 self.ocupado = False
-                self.estado["session_id"] = sid
+                self.mem.guardar_meta("session_id", sid)
                 texto = f"⚠ {erro}" if erro else resposta
                 if not erro:
-                    self.estado["historico"].append({"quem": "lula", "texto": resposta})
-                gravar_json(ESTADO, self.estado)
+                    self.mem.registrar_mensagem("claudinho", resposta)
                 self.fechar_balao()  # tira o "pensando…"
                 self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
             elif ev[0] == "comentario":
                 self.comentando = False
                 forcado, self.olhando_forcado = self.olhando_forcado, False
-                _, r, lista = ev
+                _, r, lista, alvo = ev
                 if self.modo != "passeio" and not forcado:
                     continue
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
                 if not r or self.parecida(*r):
                     self.comentar_do_banco(lista)
                     continue
-                self.lembrar_piada(*r)
-                self.comentar(r[0], {"origem": "haiku"})
+                texto, assunto = r
+                pid = self.lembrar_piada(texto, "haiku", assunto=assunto, alvo=alvo)
+                self.comentar(texto, {"origem": "haiku", "id": pid})
 
     def rodar(self):
         self.root.mainloop()

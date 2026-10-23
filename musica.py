@@ -12,6 +12,13 @@ Também é um ajudante limitado do chat, que roda sem confirmação:
     python musica.py artista "<artista>"              toca o mais ouvido do artista (e segue no rádio dele)
     python musica.py youtube "<o que procurar>"       abre no YouTube o primeiro vídeo da pesquisa
     python musica.py curtir                           curte a música que está tocando no YouTube Music
+    python musica.py banda "<banda>"                  lista as músicas mais ouvidas e os álbuns (com id)
+    python musica.py tocar_id <id>                    toca no YouTube Music a música desse id (da lista)
+    python musica.py curtidas                         toca as músicas que você curtiu
+    python musica.py player <acao> [valor]            pausar, tocar, proxima, anterior, aleatorio, repetir, volume 0-100
+    python musica.py videos "<o que procurar>"        lista os vídeos da pesquisa do YouTube (com id)
+    python musica.py assistir <id>                    abre esse vídeo do YouTube numa aba nova, na frente
+    python musica.py video <acao> [valor]             pausar, tocar, velocidade 0.5-2, avancar N, voltar N, legenda, cinema
 
 Buscar e tocar usa o YouTube Music sem login (ytmusicapi) só pra achar a música; quem toca é o seu
 navegador, logado na sua conta. Com a extensão do Claudinho instalada, usa a aba que já está aberta;
@@ -141,8 +148,19 @@ def tocar_no_youtube_music(termo, artista=False):
     m = buscar(termo, artista)
     if not m:
         return None
-    # list=RDAMVM<id>: rádio do YouTube Music começando por essa música (vai emendando parecidas)
-    url = f"https://music.youtube.com/watch?v={m['id']}&list=RDAMVM{m['id']}"
+    m["na_aba"] = tocar_url(f"https://music.youtube.com/watch?v={m['id']}&list=RDAMVM{m['id']}")
+    return m
+
+
+def tocar_id(video_id):
+    """Toca no YouTube Music a música desse id (o que veio da lista da banda), num rádio a partir dela.
+    list=RDAMVM<id>: rádio do YouTube Music começando por essa música (vai emendando parecidas)."""
+    return tocar_url(f"https://music.youtube.com/watch?v={video_id}&list=RDAMVM{video_id}")
+
+
+def tocar_url(url):
+    """Abre um endereço do YouTube Music: na aba aberta (com a extensão) ou numa aba nova em segundo plano.
+    Devolve True se foi na aba que já estava aberta."""
     atual = tocando()
     na_aba = pela_extensao("ytmusic", {"acao": "abrir", "url": url})
     # pausa o que estiver tocando, pra não sair duas músicas juntas (se for a própria aba, ela já troca)
@@ -151,8 +169,85 @@ def tocar_no_youtube_music(termo, artista=False):
         time.sleep(0.3)
     if not na_aba:
         abrir_aba_nova(url, focar=False)  # música toca em segundo plano: não rouba o foco
-    m["na_aba"] = na_aba
-    return m
+    return na_aba
+
+
+def musicas_da_banda(nome, n=8):
+    """As músicas mais ouvidas e os álbuns de uma banda/artista no YouTube Music.
+    Devolve {'artista', 'musicas': [{'id', 'titulo', 'album'}], 'albuns': [{'titulo', 'ano'}]} ou None."""
+    from ytmusicapi import YTMusic
+    yt = YTMusic()
+    achados = yt.search(nome, filter="artists", limit=1)
+    if not achados:
+        return None
+    dados = yt.get_artist(achados[0]["browseId"])
+    secao = dados.get("songs") or {}
+    faixas = secao.get("results") or []
+    if secao.get("browseId"):  # a página do artista só traz 5; a playlist "músicas" dele tem as outras
+        try:
+            faixas = yt.get_playlist(secao["browseId"], limit=n).get("tracks") or faixas
+        except Exception:
+            pass
+    musicas = [{"id": m["videoId"], "titulo": m["title"], "album": (m.get("album") or {}).get("name", "")}
+               for m in faixas if m.get("videoId")][:n]
+    albuns = [{"titulo": a["title"], "ano": a.get("year", "")} for a in (dados.get("albums") or {}).get("results") or []][:6]
+    return {"artista": dados.get("name") or achados[0].get("artist", nome), "musicas": musicas, "albuns": albuns}
+
+
+def videos(termo, n=5):
+    """Os primeiros vídeos da pesquisa do YouTube (lê a página de resultados; não precisa de chave de API).
+    Devolve [{'id', 'titulo', 'canal', 'duracao', 'views'}]."""
+    import json
+    import re
+    import urllib.request
+    from urllib.parse import quote_plus
+    pedido = urllib.request.Request(
+        f"https://www.youtube.com/results?search_query={quote_plus(termo)}&hl=pt-BR&gl=BR",
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+                 "Accept-Language": "pt-BR,pt;q=0.9"})
+    html = urllib.request.urlopen(pedido, timeout=10).read().decode("utf-8")
+    achado = re.search(r"var ytInitialData = (\{.*?\});</script>", html, re.S)
+    if not achado:
+        return []
+    lista = []
+
+    def andar(o):  # os vídeos ficam em "videoRenderer" no meio de um JSON enorme
+        if len(lista) >= n:
+            return
+        if isinstance(o, dict):
+            if "videoRenderer" in o:
+                v = o["videoRenderer"]
+                texto = lambda chave: (v.get(chave) or {}).get("simpleText", "")
+                lista.append({"id": v["videoId"], "titulo": v["title"]["runs"][0]["text"],
+                              "canal": ((v.get("ownerText") or {}).get("runs") or [{}])[0].get("text", ""),
+                              "duracao": texto("lengthText"), "views": texto("viewCountText")})
+            for x in o.values():
+                andar(x)
+        elif isinstance(o, list):
+            for x in o:
+                andar(x)
+
+    andar(json.loads(achado.group(1)))
+    return lista
+
+
+def assistir(video_id):
+    """Abre o vídeo do YouTube numa aba nova, na frente (pela extensão ou direto)."""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    atual = tocando()
+    if atual and atual["tocando"]:
+        controlar("pausar")  # pra o vídeo não brigar com a música
+    if not pela_extensao("youtube", {"acao": "abrir", "url": url, "nova": True, "focar": True}):
+        abrir_aba_nova(url)
+
+
+ACOES_PLAYER = ("pausar", "tocar", "proxima", "anterior", "aleatorio", "repetir", "volume")
+ACOES_VIDEO = ("pausar", "tocar", "velocidade", "avancar", "voltar", "legenda", "cinema")
+
+
+def no_player(site, acao, valor=None):
+    """Mexe no player da aba aberta (YouTube Music ou YouTube) pela extensão. True se tinha aba pra isso."""
+    return pela_extensao(site, {"acao": "controle", "qual": acao, "valor": valor})
 
 
 def tocar_no_youtube(termo):
@@ -204,9 +299,52 @@ def main():
         if not pela_extensao("ytmusic", {"acao": "curtir"}):
             sys.exit("não consegui: precisa do YouTube Music aberto e da extensão do Claudinho no navegador")
         print("curti a música no YouTube Music")
+    elif acao == "banda":
+        nome = " ".join(sys.argv[2:]).strip().strip('"')
+        b = musicas_da_banda(nome) if nome else None
+        if not b or not b["musicas"]:
+            sys.exit(f"não achei a banda no YouTube Music: {nome}")
+        print(f"{b['artista']} — músicas mais ouvidas (id entre colchetes, pra tocar use tocar_id):")
+        for i, m in enumerate(b["musicas"], 1):
+            print(f"{i}. {m['titulo']}" + (f" ({m['album']})" if m["album"] else "") + f" [{m['id']}]")
+        if b["albuns"]:
+            print("Álbuns: " + "; ".join(f"{a['titulo']} ({a['ano']})" if a["ano"] else a["titulo"] for a in b["albuns"]))
+    elif acao == "tocar_id":
+        if len(sys.argv) < 3:
+            sys.exit("uso: python musica.py tocar_id <id>")
+        na_aba = tocar_id(sys.argv[2].strip())
+        print(f"tocando no YouTube Music ({'na aba que já estava aberta' if na_aba else 'numa aba nova'}), "
+              "depois segue num rádio parecido")
+    elif acao == "curtidas":
+        na_aba = tocar_url("https://music.youtube.com/watch?list=LM")  # LM = a playlist "Músicas que curti"
+        print(f"tocando as suas curtidas no YouTube Music ({'na aba aberta' if na_aba else 'numa aba nova'})")
+    elif acao in ("player", "video"):
+        qual = sys.argv[2] if len(sys.argv) > 2 else ""
+        valor = sys.argv[3] if len(sys.argv) > 3 else None
+        permitidas = ACOES_PLAYER if acao == "player" else ACOES_VIDEO
+        if qual not in permitidas:
+            sys.exit(f"recusado: use uma destas: {', '.join(permitidas)}")
+        site = "ytmusic" if acao == "player" else "youtube"
+        if not no_player(site, qual, valor):
+            sys.exit(f"não consegui: precisa do {'YouTube Music' if site == 'ytmusic' else 'YouTube'} aberto "
+                     "e da extensão do Claudinho no navegador")
+        print(f"feito: {qual}" + (f" {valor}" if valor else ""))
+    elif acao == "videos":
+        termo = " ".join(sys.argv[2:]).strip().strip('"')
+        lista = videos(termo) if termo else []
+        if not lista:
+            sys.exit(f"não achei vídeos pra: {termo}")
+        print(f"Vídeos no YouTube pra \"{termo}\" (id entre colchetes, pra abrir use assistir):")
+        for i, v in enumerate(lista, 1):
+            print(f"{i}. {v['titulo']} — {v['canal']}, {v['duracao']}, {v['views']} [{v['id']}]")
+    elif acao == "assistir":
+        if len(sys.argv) < 3:
+            sys.exit("uso: python musica.py assistir <id>")
+        assistir(sys.argv[2].strip())
+        print("abri o vídeo no YouTube, numa aba nova")
     else:
-        sys.exit(f"recusado: ação '{acao}' não existe "
-                 "(tocando, pausar, tocar, alternar, proxima, anterior, buscar, artista, youtube, curtir)")
+        sys.exit(f"recusado: ação '{acao}' não existe (tocando, pausar, tocar, alternar, proxima, anterior, buscar, "
+                 "artista, youtube, curtir, banda, tocar_id, curtidas, player, videos, assistir, video)")
 
 
 if __name__ == "__main__":

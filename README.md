@@ -48,6 +48,10 @@ terminam e solta piadas sobre o que está na tela.
 - **YouTube Music 🎵:** no chat ("toca Helena do MCR", "bota um Trivium") ou no painel, ele acha a música
   (ytmusicapi, sem login) e toca num rádio que segue com parecidas. Pausa o que estava tocando antes.
   Play/pausa/próxima/anterior continuam pelos controles de mídia do Windows.
+- **Listas e escolha 🎸🎬:** "quais as músicas do Trivium?" → ele lista as mais ouvidas (YouTube Music) e
+  pergunta qual tocar; "acha uns vídeos de X" → lista 5 vídeos do YouTube (título, canal, duração) e pergunta qual
+  abrir. Também toca suas curtidas e controla o player (aleatório, repetir, volume) e o vídeo (velocidade,
+  avançar/voltar, legenda, modo cinema) — esses controles precisam da extensão.
 - **Extensão do navegador 🧩** (`extensao/`, instala pelo painel): com ela, a música troca **na aba do YouTube Music
   que já está aberta** (sem aba nova), ele curte a música e "abre no YouTube" pesquisa e entra no primeiro vídeo da
   aba do YouTube. O fundo da extensão pergunta ao Claudinho (127.0.0.1) a cada segundo, com uma chave própria

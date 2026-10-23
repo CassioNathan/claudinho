@@ -137,8 +137,15 @@ PROMPT_SISTEMA = (
     "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
     "sem confirmação. Para TOCAR UMA MÚSICA ou um ARTISTA que ele pedir, use `python musica.py buscar "
     "\"<música e artista>\"` ou `python musica.py artista \"<artista>\"`: toca no YouTube Music dele e segue "
-    "num rádio parecido. Para um VÍDEO NO YOUTUBE use `python musica.py youtube \"<o que procurar>\"` (abre o "
-    "primeiro resultado) e para CURTIR a música do YouTube Music, `python musica.py curtir`. "
+    "num rádio parecido. BANDA: quando ele perguntar das músicas de uma banda/artista, SEMPRE rode "
+    "`python musica.py banda \"<banda>\"` (não responda de cabeça: a lista traz os ids pra tocar depois), "
+    "mostre a lista numerada (sem os ids) e pergunte qual tocar; quando ele escolher, `python musica.py tocar_id <id>` "
+    "com o id daquela música. VÍDEOS: `python musica.py videos \"<o que procurar>\"`, mostre os vídeos numerados "
+    "(título, canal e duração, sem id) e pergunte qual ele quer ver; escolhido, `python musica.py assistir <id>`. "
+    "Se ele pedir só \"abre um vídeo de X\" sem querer escolher, `python musica.py youtube \"X\"` abre o primeiro. "
+    "Curtidas dele: `python musica.py curtidas`; curtir a atual: `python musica.py curtir`. Player do YouTube Music: "
+    "`python musica.py player <pausar|tocar|proxima|anterior|aleatorio|repetir|volume 0-100>`; vídeo do YouTube: "
+    "`python musica.py video <pausar|tocar|velocidade 0.25-2.5|avancar N|voltar N|legenda|cinema>`. "
     "Um comando por vez, sem && nem |. "
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
@@ -423,9 +430,13 @@ JOB_FILHOS = _criar_job()
 
 
 # o ajudante, sozinho, sem encadear nada (&&, |, ;, redirecionamento, subcomando)
-AJUDANTE = re.compile(r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
-                      r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior"
-                      r"|curtir|(?:buscar|artista|youtube) [^&|;<>`$\r\n]+))")
+AJUDANTE = re.compile(
+    r"python3? (?:\./)?(?:abrir\.py (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
+    r"|musica\.py (?:tocando|pausar|tocar|alternar|proxima|anterior|curtir|curtidas"
+    r"|(?:buscar|artista|youtube|banda|videos) [^&|;<>`$\r\n]+"
+    r"|(?:tocar_id|assistir) [\"']?[A-Za-z0-9_-]{6,20}[\"']?"
+    r"|player (?:pausar|tocar|proxima|anterior|aleatorio|repetir|volume \d{1,3})"
+    r"|video (?:pausar|tocar|velocidade [\d.]{1,4}|avancar \d{1,4}|voltar \d{1,4}|legenda|cinema)))")
 # tentativas de abrir coisa por fora do ajudante
 ABRIR_NA_MAO = re.compile(r"(?i)(?:cmd(?:\.exe)?\s+/c\s+)?(?:start|start-process|explorer(?:\.exe)?|invoke-item)\b")
 

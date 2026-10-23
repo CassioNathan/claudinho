@@ -43,9 +43,10 @@ async function executar(c) {
       const nova = await chrome.tabs.create({url: c.url, active: !!c.focar});
       if (c.focar) await trazerPraFrente(nova);
     }
-  } else if (c.acao === "curtir" || c.acao === "descurtir") {
+  } else if (["curtir", "descurtir", "controle"].includes(c.acao)) {
+    // cliques e controles do player: quem faz é o script da página (na aba que está tocando ou foi usada por último)
     const aba = escolher(await abasDe(c.site));
-    if (aba) chrome.tabs.sendMessage(aba.id, {acao: c.acao}).catch(() => {});
+    if (aba) chrome.tabs.sendMessage(aba.id, c).catch(() => {});
   }
 }
 

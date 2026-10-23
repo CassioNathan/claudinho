@@ -288,7 +288,8 @@ def escolher(janela, minutos_no_app, recentes=(), maldoso=False, dia=(), tdah=Fa
     `notas` = soma das avaliações boa/ruim de cada frase; `musica` = o que está tocando (ou None)."""
     notas = notas or {}
     cat = categoria(janela) if janela else "geral"
-    if musica and musica.get("tocando") and random.random() < 0.25:  # de vez em quando, zoa a música
+    so_tela = maldoso or tdah  # nesses modos a zoeira é sobre a tela, não sobre segundo plano
+    if musica and musica.get("tocando") and random.random() < (0.06 if so_tela else 0.25):  # zoa a música
         modelo = sortear(MUSICA_MALDOSAS if maldoso else MUSICA, recentes, notas)
         return modelo, modelo.format(musica=musica["titulo"], artista=musica["artista"] or "artista desconhecido",
                                      app=musica["app"])
@@ -296,7 +297,7 @@ def escolher(janela, minutos_no_app, recentes=(), maldoso=False, dia=(), tdah=Fa
         modelo = sortear(TDAH, recentes, notas)
         return modelo, modelo.format(app=NOMES.get(cat, "computador") if janela else "computador")
     extras = dados_do_dia(dia)
-    if extras and random.random() < 0.3:  # de vez em quando lembra do que foi feito hoje
+    if extras and not so_tela and random.random() < 0.12:  # lembra do que foi feito hoje (pouco: vira bordão)
         do_dia = DO_DIA_MALDOSAS if maldoso else DO_DIA
         if extras["n_dia"] < 2:
             do_dia = [o for o in do_dia if "{n_dia}" not in o]

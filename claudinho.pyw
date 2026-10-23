@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import threading
+import unicodedata
 import time
 import tkinter as tk
 from collections import deque
@@ -130,15 +131,23 @@ ANGULOS = [
 ]
 
 ESTILO_TDAH = (
-    " MODO TDAH: parta de algo do alvo, mas viaje numa associação aleatória que não tem nada a "
-    "ver (ex.: vê 'pedidos' e lembra de pizza; vê um erro e pensa em pinguins), mantendo só um "
-    "fiozinho de ligação com a tela. Pode mudar de assunto no meio da frase."
+    " MODO TDAH: parta de algo VISÍVEL no print (um texto, um botão, uma janela aberta), mas viaje "
+    "numa associação aleatória que não tem nada a ver (ex.: vê 'pedidos' e lembra de pizza; vê um "
+    "erro e pensa em pinguins), mantendo só um fiozinho de ligação com a tela. Pode mudar de "
+    "assunto no meio da frase."
+)
+
+# maldoso e TDAH funcionam melhor zoando o que está na cara: nada de segundo plano
+SO_O_QUE_ESTA_NA_TELA = (
+    " Baseie a piada no que está VISÍVEL no print (textos, telas, janelas abertas), não em coisas "
+    "de segundo plano: tarefas do Claude Code rodando, quantidade de tarefas, música tocando, "
+    "programas minimizados."
 )
 
 TOM_NORMAL = "engraçado e com contexto do que ele está fazendo, sem ser chato."
 TOM_MALDOSO = (
     "MALDOSO: sarcástico e debochado, zoando o usuário sem dó, como um amigo que adora "
-    "tirar sarro (estilo roast), com contexto do que ele está fazendo. Pode pegar pesado na "
+    "tirar sarro (estilo roast), do que ele está fazendo na tela. Pode pegar pesado na "
     "zoeira, mas sem palavrão, sem preconceito e sem atacar aparência, família ou a vida pessoal."
 )
 
@@ -447,6 +456,25 @@ class ChatClaude:
                         if self.sid:  # talvez a sessão antiga tenha sumido: a próxima começa do zero
                             self.sid = None
                         return None, None, str(e)
+
+
+def normalizar(texto):
+    """Palavras da piada sem acento, em minúsculo, com todo número virando '#'."""
+    sem_acento = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+    return re.findall(r"[a-z#]+", re.sub(r"\d+", "#", sem_acento))
+
+
+PALAVRAS_COMUNS = set(
+    "a o e as os um uma de do da dos das em no na nos nas pra pro para por com sem que se ou mas "
+    "eu voce ele ela ta to esta estou ja nao sim ainda aqui la so mais menos muito isso esse essa "
+    "isto este esta aquele aquela tipo cara mano enquanto quando como porque ate tem vai foi ser e".split())
+
+
+def trechos_marcantes(palavras):
+    """Sequências de 3 palavras com pelo menos 2 de conteúdo (ex.: 'pao de queijo', 'pedindo pro claude'),
+    ignorando as feitas de palavra comum tipo 'enquanto voce ta', que aparecem em qualquer frase."""
+    return {" ".join(t) for t in zip(palavras, palavras[1:], palavras[2:])
+            if sum(p not in PALAVRAS_COMUNS and len(p) > 2 for p in t) >= 2}
 
 
 def perfil_curto():
@@ -1523,9 +1551,10 @@ class Claudinho:
         dia = self.avisos_de_hoje()
         if not dia:
             return ""
-        linhas = [f"- {a['hora']} {a['projeto']}: \"{a['pedido'][:100]}\"" for a in dia[-10:]]
-        return (f"O que ele pediu para o Claude Code hoje ({len(dia)} tarefas concluídas; "
-                "use isso na piada se combinar com a tela):\n" + "\n".join(linhas))
+        # sem o total de tarefas: o Haiku transformava "22 tarefas…" em bordão
+        linhas = [f"- {a['projeto']}: \"{a['pedido'][:100]}\"" for a in dia[-5:]]
+        return ("Algumas coisas que ele pediu pro Claude Code hoje (contexto opcional; só use se combinar "
+                "muito com a tela, e não conte quantas tarefas foram):\n" + "\n".join(linhas))
 
     def comentar_agora(self):
         """Menu ou atalho: sempre olha a tela de verdade (Haiku), mostrando que está olhando."""
@@ -1563,9 +1592,13 @@ class Claudinho:
         maldoso, tdah = self.cfg["modo_maldoso"], self.cfg["modo_tdah"]
         alvo, ponto = self.sortear_alvo(area_total)
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
-                    if self.app_atual else "") + self.resumo_do_dia() + self.resumo_do_gosto() + perfil_curto()
-        if self.musica and self.musica["tocando"]:
-            contexto += f"\nEle está ouvindo agora: {musica.descrever(self.musica)}."
+                    if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto()
+        if maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
+            contexto += SO_O_QUE_ESTA_NA_TELA
+        else:
+            contexto += self.resumo_do_dia()
+            if self.musica and self.musica["tocando"]:
+                contexto += f"\nEle está ouvindo agora: {musica.descrever(self.musica)}."
 
         def trabalho():
             try:
@@ -1602,14 +1635,18 @@ class Claudinho:
         gravar_json(ESTADO, self.estado)
 
     def parecida(self, texto, assunto=""):
-        """Piada nova repete uma recente (mesmo assunto, mesmo começo ou texto ~parecido)?"""
+        """Piada nova repete alguma já dita ou já avaliada? Pega mesmo assunto, mesmo começo, texto
+        ~parecido ou um trecho marcante em comum ("pão de queijo", "# tarefas e você"). Números
+        contam como iguais: "22 tarefas" e "25 tarefas" são a mesma piada."""
         if assunto and any(SequenceMatcher(None, assunto, a).ratio() > 0.7 for a in self.assuntos):
             return True
-        novo = texto.lower()
-        inicio = " ".join(novo.split()[:4])
-        for antiga in self.recentes:
-            antiga = antiga.lower()
-            if " ".join(antiga.split()[:4]) == inicio or SequenceMatcher(None, novo, antiga).ratio() > 0.55:
+        novo = normalizar(texto)
+        inicio, trechos = novo[:4], trechos_marcantes(novo)
+        ja_ditas = list(self.recentes) + [a["texto"] for a in self.avaliacoes[-60:]]
+        for antiga in ja_ditas:
+            antiga = normalizar(antiga)
+            if (antiga[:4] == inicio or trechos & trechos_marcantes(antiga)
+                    or SequenceMatcher(None, " ".join(novo), " ".join(antiga)).ratio() > 0.55):
                 return True
         return False
 
@@ -1693,14 +1730,19 @@ class Claudinho:
         return notas
 
     def resumo_do_gosto(self):
-        """Exemplos pro Haiku do que você curtiu e do que não curtiu."""
+        """Exemplos pro Haiku do que você curtiu e do que não curtiu.
+        Antes era "faça mais nesse estilo" e ele COPIAVA a piada aprovada (o "pão de queijo" virou
+        bordão); agora as curtidas servem só pra calibrar o tipo de humor, e repetir é proibido."""
         boas = [a["texto"] for a in self.avaliacoes if a["nota"] > 0][-6:]
         ruins = [a["texto"] for a in self.avaliacoes if a["nota"] < 0][-6:]
         partes = []
         if boas:
-            partes.append("Piadas que ele CURTIU (faça mais nesse estilo): " + " | ".join(boas))
+            partes.append(
+                "Piadas que ele CURTIU, só pra você entender o tipo de humor dele (tom, tamanho, ousadia). "
+                "NÃO reaproveite nenhuma imagem, comparação, bordão ou palavra marcante delas; a nova "
+                "tem que ser original: " + " | ".join(boas))
         if ruins:
-            partes.append("Piadas que ele NÃO curtiu (evite esse estilo): " + " | ".join(ruins))
+            partes.append("Piadas que ele NÃO curtiu (evite esse tipo de humor): " + " | ".join(ruins))
         return "\n" + "\n".join(partes) if partes else ""
 
     # ---------- eventos vindos de threads ----------

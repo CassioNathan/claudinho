@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSAO = "1.0.1"
+VERSAO = "1.1.0"
 EMPACOTADO = bool(getattr(sys, "frozen", False))
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 PASTA_APP = Path(sys.executable).resolve().parent if EMPACOTADO else BASE

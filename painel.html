@@ -372,6 +372,8 @@ function pixelsDoAdereco(a, t, olhando) {
   if (a.rgb) { const cor = hsv((t % 40) / 40); lista = lista.concat(a.rgb.map(([c, l]) => [c, l, cor])); }
   if (a.varredura) lista.push([1 + Math.floor(t / 2) % 9, a.varredura, "#b8f6ff"]);
   if (a.frente && ({esquerda: -1, direita: 1})[a.frente] !== olhando) lista = lista.map(([c, l, cor]) => [10 - c, l, cor]);
+  // óculos e rosto andam junto com os olhos (na prévia ele só olha pros lados)
+  if (a.espaco === "olhos" || a.espaco === "rosto") lista = lista.map(([c, l, cor]) => [c + olhando, l, cor]);
   return lista;
 }
 function desenhar(canvas, v, t, olhando = -1, piscando = false, escala = null) {

@@ -1386,7 +1386,7 @@ class Claudinho:
             sem.add("bracos")  # munhequeira e cia só com os bracinhos no lugar
         for espaco in ("rosto", "pescoco", "olhos", "cabeca", "bracos"):
             if vestido.get(espaco) and espaco not in sem:
-                for col, lin, cor in skins.pixels(vestido[espaco], self.t, self.frente):
+                for col, lin, cor in skins.pixels(vestido[espaco], self.t, self.frente, (olhar_x, olhar_y)):
                     px(col, lin, cor)
 
         if carregado:  # perninhas penduradas, balançando pro lado contrário do movimento e chutando

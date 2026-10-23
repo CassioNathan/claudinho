@@ -154,10 +154,15 @@ def aplicar_pacote(visual, nome):
 FRENTES = {"esquerda": -1, "direita": 1}
 
 
-def pixels(id_aderecos, t=0, olhando=-1):
+# os adereços desses espaços são desenhados com os olhos no meio e andam junto com eles
+SEGUEM_OLHOS = ("olhos", "rosto")
+
+
+def pixels(id_aderecos, t=0, olhando=-1, olhar=(0, 0)):
     """Pixels (col, lin, cor) de um adereço nesse quadro (antena pisca, fone muda de cor, viseira varre).
     Adereço com "frente" (franja, aba do boné, tapa-olho…) espelha pra seguir o lado pra onde ele olha
-    (`olhando`: -1 esquerda, 1 direita)."""
+    (`olhando`: -1 esquerda, 1 direita). Óculos e rosto (bigode, bochechas…) andam com os olhos:
+    `olhar` = (x, y) de -1 a 1, o mesmo deslocamento dos olhinhos."""
     a = ADERECOS[id_aderecos]
     lista = list(a["pixels"])
     if a.get("pisca") and t % 10 < 5:
@@ -170,6 +175,9 @@ def pixels(id_aderecos, t=0, olhando=-1):
         lista.append((1 + (t // 2) % 9, a["varredura"], "#b8f6ff"))
     if a.get("frente") and FRENTES[a["frente"]] != olhando:
         lista = [(10 - c, l, cor) for c, l, cor in lista]  # espelha na grade de 11 colunas (0–10)
+    if a["espaco"] in SEGUEM_OLHOS and olhar != (0, 0):
+        dx, dy = olhar
+        lista = [(c + dx, l + dy, cor) for c, l, cor in lista]
     return lista
 
 

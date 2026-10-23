@@ -494,6 +494,35 @@ def em_jpeg(img):
                                         "data": base64.b64encode(buffer.getvalue()).decode()}}
 
 
+PROMPT_MUSICA = (
+    "Você é o Claudinho, o mascote de mesa bem-humorado de um dev. Ele acabou de começar a ouvir "
+    "\"{titulo}\"{artista}. Faça UM comentário curto (até 160 caracteres), em português, de um destes jeitos "
+    "(escolha um): (a) uma curiosidade sobre o artista/banda, o estilo/gênero ou o álbum, SÓ se tiver "
+    "certeza do fato (se não conhecer, comente o estilo pelo nome da música); (b) cantarolar no clima da "
+    "música usando notas ♪ e sons inventados (tipo 'tum-tss', 'lá-lá-lá', 'uôu'), sem palavras da letra. "
+    "NUNCA escreva trechos da letra real da música. Tom: {tom} Não repita: {recentes}\n"
+    'Responda SOMENTE com JSON: {{"comentario": "<texto>"}}'
+)
+
+
+def comentar_musica(m, maldoso=False, recentes=()):
+    """Comentário sobre a música que começou a tocar (curiosidade ou cantarolar, nunca a letra)."""
+    prompt = PROMPT_MUSICA.format(
+        titulo=m["titulo"], artista=f", de {m['artista']}" if m["artista"] else "",
+        tom=TOM_MALDOSO if maldoso else "engraçado e simpático.",
+        recentes="; ".join(recentes) or "nada")
+    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
+              "--no-session-persistence", "--tools", ""]
+    d = rodar_claude(prompt, ["--model", "haiku", *enxuto], timeout=120, sem_pensar=True)
+    achado = re.search(r"\{.*\}", d.get("result", ""), re.S)
+    if d.get("is_error") or not achado:
+        return None
+    try:
+        return str(json.loads(achado.group(0))["comentario"]).strip()
+    except (ValueError, KeyError):
+        return None
+
+
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
                   alvo="atividade", ponto=None, assuntos=()):
     """Tira print do monitor e pede um comentário ao Haiku. `alvo` diz do que a piada fala;
@@ -1143,9 +1172,35 @@ class Claudinho:
             pass
 
     def acompanhar_musica(self):
+        anterior = None
         while True:
             self.atualizar_musica()
+            m = self.musica
+            chave = m and (m["titulo"], m["artista"])
+            if m and m["tocando"] and anterior is not None and chave != anterior:
+                self.eventos.put(("musica_nova", m))  # começou outra música
+            if m:
+                anterior = chave
             time.sleep(10)
+
+    def talvez_comentar_musica(self, m):
+        """Música nova: às vezes ele comenta (curiosidade ou cantarola), com a notinha 🎵.
+        Em maldoso/TDAH bem menos, que nesses modos a zoeira é sobre a tela."""
+        so_tela = self.cfg["modo_maldoso"] or self.cfg["modo_tdah"]
+        if (not self.cfg["comentar_tela"] or self.comentando or self.ocupado or self.balao or self.entrada
+                or random.random() > (0.15 if so_tela else 0.45)):
+            return
+        self.comentando = True
+        maldoso, recentes = self.cfg["modo_maldoso"], list(self.recentes)[-8:]
+
+        def trabalho():
+            try:
+                r = comentar_musica(m, maldoso, recentes)
+            except Exception:
+                r = None
+            self.eventos.put(("comentario_musica", r))
+
+        threading.Thread(target=trabalho, daemon=True).start()
 
     def itens_musica(self):
         if not self.cfg["ver_musica"]:
@@ -1784,6 +1839,14 @@ class Claudinho:
                 self.mostrar_permissao(ev[1])
             elif ev[0] == "ferramenta":  # ele está mexendo no PC (abrindo algo, rodando comando)
                 self.usou_ferramenta = True
+            elif ev[0] == "musica_nova":
+                self.talvez_comentar_musica(ev[1])
+            elif ev[0] == "comentario_musica":
+                self.comentando = False
+                if ev[1] and not self.parecida(ev[1]):
+                    self.lembrar_piada(ev[1])
+                    self.comentar(ev[1], {"origem": "musica"})
+                    self.soltar_emoji("nota")
             elif ev[0] == "menu":
                 self.acao_menu(ev[1])
             elif ev[0] == "atalho_ocupado":

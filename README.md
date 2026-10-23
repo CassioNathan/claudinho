@@ -15,7 +15,8 @@ terminam e solta piadas sobre o que está na tela.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modos maldoso 😈 e TDAH 🐿️,
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
 - **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
-  do Windows), zoa a música de vez em quando e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
+  do Windows), zoa a música de vez em quando, comenta quando começa uma música nova (curiosidade sobre
+  a banda/estilo ou cantarolando com ♪, nunca a letra) e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
   ("pausa", "pula essa"), sem confirmação (via `musica.py`).
 - **Reações com emojis:** de vez em quando sobe um emoji em pixel art do lado dele (café, bug, lâmpada,
   coração, zzz, check, fogo, nota, ?, raio, disquete, suor), às vezes com uma frase, escolhido pelo que

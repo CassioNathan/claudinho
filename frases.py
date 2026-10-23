@@ -282,6 +282,54 @@ def sortear(opcoes, recentes, notas):
     return random.choices(aprovadas, weights=pesos)[0]
 
 
+# autoconfiança: ele se elogia de vez em quando ({item} = um adereço que está usando, {cor} = cor do corpo)
+AUTOELOGIO = [
+    "Pixel por pixel, perfeição. Não dá pra melhorar o que já nasceu pronto.",
+    "Às vezes eu me pego olhando meu reflexo no monitor. Que mascote, hein.",
+    "Eu sou 11 pixels de largura de puro carisma.",
+    "Se beleza desse XP, eu já tava no nível máximo.",
+    "Modéstia à parte, sou o mascote mais bonito desse PC. Talvez do Brasil.",
+    "Não sou eu que sou bonito, é a resolução que me favorece. Mentira, sou eu mesmo.",
+    "Eu andando pela tela é tipo desfile. Só falta a passarela.",
+    "Tem gente que nasce com talento. Eu nasci com talento E com pixels bem alinhados.",
+    "Meu único defeito é ser perfeito demais. E não ter mãos.",
+]
+AUTOELOGIO_COR = [
+    "Me falaram que {cor} não combina com nada. Combina comigo.",
+    "Essa cor {cor} não é pra qualquer um. É pra mim.",
+]
+AUTOELOGIO_ITEM = [
+    "Tô de {item} hoje. Sim, eu sei que tô lindo.",
+    "Reparou no meu visual? {Item} e tudo. Impecável.",
+    "{Item}: aprovado pelo mascote mais estiloso do PC (eu).",
+    "Não é todo mundo que segura um {item} com essa classe.",
+]
+AUTOELOGIO_EMO = ["Até triste eu fico bonito.", "Minha franja tem mais personalidade que muito commit por aí."]
+
+
+def autoelogio(itens, cor, emo=False, recentes=()):
+    """Uma frase dele se achando, usando o que está vestindo. Devolve (modelo, texto)."""
+    opcoes = AUTOELOGIO + AUTOELOGIO_COR + (AUTOELOGIO_ITEM if itens else []) + (AUTOELOGIO_EMO if emo else [])
+    modelo = sortear(opcoes, recentes, {})
+    item = random.choice(itens) if itens else ""
+    return modelo, modelo.format(cor=cor, item=item, Item=item[:1].upper() + item[1:])
+
+
+def roupa_nova(antes, depois, skins):
+    """O que ele fala quando você troca a skin dele no painel."""
+    antes = antes or {}
+    novos = [skins.ADERECOS[depois[e]]["nome"].lower() for e in skins.ESPACOS
+             if depois.get(e) and depois.get(e) != antes.get(e) and depois[e] in skins.ADERECOS]
+    if novos:
+        item = novos[-1]
+        return random.choice([f"Olha eu de {item}! Ficou bom demais.", f"{item[:1].upper() + item[1:]}? Ficou incrível em mim.",
+                              f"De {item} eu fico ainda mais bonito. Se é que dá."])
+    if depois.get("cor") != antes.get("cor"):
+        cor = skins.CORES[depois["cor"]]["nome"].lower()
+        return random.choice([f"Agora sou {cor}. Combina comigo, né?", f"{cor[:1].upper() + cor[1:]}! Eu fico bem em qualquer cor."])
+    return random.choice(["Visual mais clean. Beleza natural é outra coisa.", "Sem nada? Tudo bem, eu me garanto assim."])
+
+
 def escolher(janela, minutos_no_app, recentes=(), maldoso=False, dia=(), tdah=False, notas=None,
              musica=None):
     """Monta um comentário a partir do banco. `janela` pode ser None; `dia` = avisos de hoje;

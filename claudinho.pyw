@@ -122,7 +122,8 @@ TEXTO = "#ece9e1"
 APAGADO = "#9b978d"
 
 PROMPT_SISTEMA = (
-    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário. A resposta aparece "
+    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: um bichinho pixelado, "
+    "bem-humorado e cheio de autoconfiança (se acha bonito e talentoso, sem ser chato). A resposta aparece "
     "num balãozinho de fala: responda em português, curto e direto (de preferência até 4 "
     "frases), em texto simples, sem tabelas nem markdown. Use a memória e o contexto que "
     "você tiver do usuário quando ajudar. Você roda no Windows dele e pode agir no PC: abrir "
@@ -141,9 +142,12 @@ PROMPT_SISTEMA = (
 )
 
 PROMPT_TELA = (
-    "Você é o Claudinho, o mascote de mesa bem-humorado de um dev (o bichinho laranja pixelado "
-    "nos prints é você: nunca comente sobre você mesmo). A primeira imagem é o monitor inteiro "
+    "Você é o Claudinho, o mascote de mesa bem-humorado e MUITO autoconfiante de um dev. Você é o bichinho "
+    "pixelado que aparece no print{onde_eu} ({retrato}). A primeira imagem é o monitor inteiro "
     "({w}x{h} pixels).{zoom}\nJanelas abertas (coordenadas da primeira imagem):\n{janelas}\n"
+    "Se em OUTRO lugar da tela aparecer o logo do Claude ou do Claude Code (o asterisco/estrelinha laranja do "
+    "Claude, ou o bichinho laranja pixelado no terminal do Claude Code), isso é você ou seu parente: pode "
+    "reagir se achando (\"esse sou eu\", \"meu irmão gêmeo\", \"isso é um espelho?\", \"bonitão esse cara\").\n"
     "{contexto}\nALVO DA PIADA: {alvo}\n"
     "Faça UM comentário curto (até 140 caracteres), em português. Tom: {tom}{estilo}\n"
     "OBRIGATÓRIO: escreva no formato de {angulo}. Proibido o molde \"isso — ou A ou B?\".\n"
@@ -163,8 +167,11 @@ ALVOS = {
               "Comente algo específico DESSA região."),
     "claudinho": ("o que está perto de você, Claudinho (a segunda imagem é um zoom em volta de você). "
                   "Comente algo específico DESSA região, como se tivesse acabado de tropeçar nisso."),
+    "eu_mesmo": ("VOCÊ MESMO: se gabe do seu visual (descrito acima: cor, adereços) ou do seu talento, com "
+                 "autoconfiança exagerada e engraçada; pode comparar com algo da tela (ex.: \"esse código é bom, "
+                 "mas não tão bonito quanto meu boné\")."),
 }
-PESOS_ALVO = {"atividade": 0.4, "mouse": 0.3, "claudinho": 0.3}
+PESOS_ALVO = {"atividade": 0.37, "mouse": 0.27, "claudinho": 0.26, "eu_mesmo": 0.1}
 
 # formato sorteado a cada piada: muda o jeito, não só as palavras
 ANGULOS = [
@@ -654,7 +661,7 @@ def resumir_notificacoes(lista):
 
 
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
-                  alvo="atividade", ponto=None, assuntos=()):
+                  alvo="atividade", ponto=None, assuntos=(), eu=None, retrato="laranja"):
     """Tira print do monitor e pede um comentário ao Haiku. `alvo` diz do que a piada fala;
     com `ponto` (mouse ou Claudinho), manda também um zoom daquela região.
     Devolve (texto, assunto) ou None."""
@@ -676,7 +683,9 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
         f"- {j['exe']} \"{j['titulo'][:80]}\" em x={na_imagem(j['rect'][0], area[0])} "
         f"y={na_imagem(j['rect'][1], area[1])} até x={na_imagem(j['rect'][2], area[0])} "
         f"y={na_imagem(j['rect'][3], area[1])}" for j in lista[:8]) or "- nenhuma"
-    prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao,
+    onde_eu = f" por volta de x={na_imagem(eu[0], area[0])} y={na_imagem(eu[1], area[1])}" if eu else ""
+    prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao, onde_eu=onde_eu,
+                                retrato=retrato,
                                 contexto=contexto, alvo=ALVOS[alvo],
                                 recentes="\n".join(f"- {r}" for r in recentes) or "- nenhuma ainda",
                                 tom=TOM_MALDOSO if maldoso else TOM_NORMAL,
@@ -1905,6 +1914,7 @@ class Claudinho:
             valor = bool(valor)
         if self.cfg.get(chave) == valor:
             return
+        antes = self.cfg.get(chave)
         self.mudar_cfg(chave, valor)
         if chave == "vendado":
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
@@ -1925,8 +1935,10 @@ class Claudinho:
             self.largar_esquete()
         elif chave == "emojis" and valor:
             self.soltar_emoji("coracao")
-        elif chave == "visual" and self.cfg["emojis"]:
-            self.soltar_emoji("coracao")  # gostou da roupa nova
+        elif chave == "visual":
+            self.comentar(frases.roupa_nova(antes, valor, skins), duracao=4, prioridade=ESTADO)
+            if self.cfg["emojis"]:
+                self.soltar_emoji("coracao")  # gostou da roupa nova
 
     def estado_painel(self):
         """O que o painel mostra (chamado pela thread do servidor: só lê)."""
@@ -2300,6 +2312,7 @@ class Claudinho:
             pergunta = f"(Junto vai um print da janela que estou usando: {anexado['nome']}.)\n\n" + pergunta
         pergunta += self.contexto_das_falas()  # continuidade: ele lembra da piada/aviso que acabou de mostrar
         pergunta += self.lembrancas_para(texto)
+        pergunta += f"\n\n(Seu visual agora: {self.retrato()}.)"
         if self.musica:  # contexto que ele vê mas não precisa comentar
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
         imagem = anexado["imagem"] if anexado else None
@@ -2467,6 +2480,14 @@ class Claudinho:
             self.fechar_balao()
         self.olhar_tela()
 
+    def emo_agora(self):
+        m = self.musica
+        return bool(time.time() < self.emo_ate and m and m["tocando"] and (m["titulo"], m["artista"]) == self.emo_musica)
+
+    def retrato(self):
+        """Como ele está agora (cor, adereços, emo, venda), numa frase: é assim que ele "se enxerga"."""
+        return skins.autorretrato(self.cfg["visual"], self.emo_agora(), self.cfg["vendado"])
+
     def sortear_alvo(self, area_total):
         """Do que a piada vai falar: o que ele faz, o que está perto do mouse ou perto do Claudinho.
         Devolve (alvo, ponto na tela ou None)."""
@@ -2477,6 +2498,8 @@ class Claudinho:
             return "mouse", (mx, my)
         if alvo == "claudinho":
             return "claudinho", tuple(int(v) for v in self.centro())
+        if alvo == "eu_mesmo":
+            return "eu_mesmo", None
         return "atividade", None
 
     def olhar_tela(self):
@@ -2491,6 +2514,7 @@ class Claudinho:
                                       self.mem.assuntos_recentes(8))
         maldoso, tdah = self.cfg["modo_maldoso"], self.cfg["modo_tdah"]
         alvo, ponto = self.sortear_alvo(area_total)
+        eu, retrato = tuple(int(v) for v in self.centro()), self.retrato()
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                     if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto()
         if maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
@@ -2503,7 +2527,7 @@ class Claudinho:
         def trabalho():
             try:
                 r = comentar_tela(area_total, modelo, recentes, lista, contexto, maldoso, tdah, alvo, ponto,
-                                  assuntos)
+                                  assuntos, eu=eu, retrato=retrato)
             except Exception:
                 r = None
             self.eventos.put(("comentario", r, lista, alvo))
@@ -2518,9 +2542,14 @@ class Claudinho:
         if janela is None and lista:
             janela = next((j for j in lista if j["exe"] == self.app_atual), lista[0])
         minutos = self.minutos_no_app() if janela and janela["exe"] == self.app_atual else 0
-        modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.cfg["modo_maldoso"],
-                                        self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
-                                        self.musica)
+        if random.random() < 0.12:  # autoconfiança: de vez em quando ele se elogia
+            modelo, texto = frases.autoelogio(skins.itens_vestidos(self.cfg["visual"]),
+                                              skins.CORES[self.cfg["visual"]["cor"]]["nome"].lower(),
+                                              self.emo_agora(), self.mem.modelos_recentes(40))
+        else:
+            modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.cfg["modo_maldoso"],
+                                            self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
+                                            self.musica)
         pid = self.lembrar_piada(texto, "banco", modelo=modelo, alvo=alvo)
         self.comentar(texto, {"origem": "banco", "id": pid})
 

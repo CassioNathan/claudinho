@@ -181,6 +181,26 @@ def pixels(id_aderecos, t=0, olhando=-1, olhar=(0, 0)):
     return lista
 
 
+def itens_vestidos(visual):
+    """Nomes dos adereços que ele está usando, em minúsculas (ex.: ['boné', 'óculos escuros'])."""
+    return [ADERECOS[visual[e]]["nome"].lower() for e in ESPACOS if visual.get(e) in ADERECOS]
+
+
+def autorretrato(visual, emo=False, vendado=False):
+    """Como ele está agora, numa frase (vai pro Haiku e pro chat: é assim que ele "se enxerga")."""
+    cor = CORES.get(visual.get("cor"), CORES["laranja"])
+    partes = [f"corpinho pixelado cor {cor['nome'].lower()}" if visual.get("cor") != "laranja"
+              else "corpinho pixelado laranja clássico"]
+    itens = itens_vestidos(visual)
+    if itens:
+        partes.append("usando " + ", ".join(itens))
+    if emo:
+        partes.append("no modo emo (tá tocando rock: franja e munhequeira)")
+    if vendado:
+        partes.append("com uma faixa nos olhos")
+    return ", ".join(partes)
+
+
 def catalogo():
     """Tudo que o painel precisa pra montar as escolhas e desenhar a prévia (JSON)."""
     return {

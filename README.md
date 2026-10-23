@@ -53,6 +53,9 @@ terminam e solta piadas sobre o que está na tela.
   aba do YouTube. O fundo da extensão pergunta ao Claudinho (127.0.0.1) a cada segundo, com uma chave própria
   (`~/.claudinho/ext_token`); só navega dentro de music.youtube.com e www.youtube.com. Sem extensão ou sem aba
   aberta, abre aba nova como antes. O navegador exige o modo do desenvolvedor ligado pra extensão carregada de pasta.
+- **Autoconfiança 😎:** ele sabe como está (cor, adereços, emo, venda) e onde aparece no print. De vez em quando a
+  piada é ele se gabando (no Haiku e no banco de frases), comenta quando você troca a roupa dele, e se aparecer o
+  logo do Claude/Claude Code na tela ele reage ("esse sou eu", "meu irmão gêmeo", "isso é um espelho?").
 - **Mini cérebro 🧠:** cada aviso do Claude Code (pedido + resultado) e cada troca do chat viram lembrança no
   SQLite, com busca de texto local (FTS5). Ao perguntar algo parecido com o que já rolou, até 3 lembranças curtas
   (~250 tokens) vão junto; sem nada parecido, não vai nada. Guardar e buscar não usa IA nenhuma. Liga/desliga no painel.

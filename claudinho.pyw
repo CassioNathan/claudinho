@@ -18,6 +18,7 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import unicodedata
 import time
@@ -2600,14 +2601,25 @@ class Claudinho:
 
 
 def main():
+    if sys.stderr is None:  # aberto pelo pythonw: sem console, os erros iriam pro nada; vão pro erros.log
+        DADOS.mkdir(exist_ok=True)
+        sys.stderr = open(DADOS / "erros.log", "a", encoding="utf-8", buffering=1)
+        print(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} Claudinho abriu", file=sys.stderr)
     eventos = queue.Queue()
-    try:
-        iniciar_servidor(eventos)
-    except OSError:
-        r = tk.Tk()
-        r.withdraw()
-        messagebox.showinfo("Claudinho", "O Claudinho já está rodando.")
-        return
+    # num reinício o Claudinho antigo pode levar uns segundos pra soltar a porta: espera antes de desistir
+    for tentativa in range(16):
+        try:
+            iniciar_servidor(eventos)
+            break
+        except OSError:
+            if tentativa == 15:
+                print("porta ocupada: já tem um Claudinho rodando", file=sys.stderr)
+                r = tk.Tk()
+                r.withdraw()
+                r.attributes("-topmost", True)  # o aviso não pode ficar escondido atrás das janelas
+                messagebox.showinfo("Claudinho", "O Claudinho já está rodando.", parent=r)
+                return
+            time.sleep(0.5)
     Claudinho(eventos).rodar()
 
 

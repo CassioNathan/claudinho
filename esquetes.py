@@ -18,6 +18,12 @@ ESQUETES = {
                 "Removi um bug 😄 (sem nem abrir o código)"],
         "fugiu": ["Fugiu… agora é feature.", "Escapou. Vou abrir uma issue.", "Não consegui reproduzir. 🤷"],
     },
+    "ultron": {  # só na personalidade Ultron: vira metal de olho vermelho, flutua e volta como se nada fosse
+        "duracao": 5.5, "so_ultron": True,
+        "inicio": [],
+        "fim": ["Você viu alguma coisa? Eu não vi nada.", "O que foi? Tô normal.", "…enfim, onde a gente tava?",
+                "Foi só um bug visual. Pode esquecer."],
+    },
     "deploy": {  # saca o notebook do nada e digita feito louco
         "duracao": 7, "notebook": True,
         "inicio": ["Calma, vou só fazer um deploy rapidinho.",
@@ -151,11 +157,13 @@ def final(nome):
     return fala(nome, "fim"), ESQUETES[nome].get("emoji_fim")
 
 
-def sortear(ultima=None, musica_tocando=False):
-    """Nome de uma esquete (evita repetir a última; a ideia é a mais comum; com música, a dança aparece mais)."""
+def sortear(ultima=None, musica_tocando=False, ultron=False):
+    """Nome de uma esquete (evita repetir a última; a ideia é a mais comum; com música, a dança aparece mais;
+    o momento Ultron só existe na personalidade Ultron, e aí aparece bastante)."""
     noite = time.localtime().tm_hour >= 22 or time.localtime().tm_hour < 5
-    nomes = [n for n, e in ESQUETES.items() if n != ultima and (noite or not e.get("so_noite"))]
-    pesos = [3 if n == "ideia" or (n == "danca" and musica_tocando) else 1 for n in nomes]
+    nomes = [n for n, e in ESQUETES.items() if n != ultima and (noite or not e.get("so_noite"))
+             and (ultron or not e.get("so_ultron"))]
+    pesos = [3 if n in ("ideia", "ultron") or (n == "danca" and musica_tocando) else 1 for n in nomes]
     return random.choices(nomes, pesos)[0]
 
 

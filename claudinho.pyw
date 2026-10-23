@@ -93,6 +93,7 @@ NOMES_ESQUETES = {
     "danca": "🕺 Dancinha", "build_quebrou": "🌧️ Build quebrou", "fogo": "🔥 Servidor pegando fogo",
     "pato": "🦆 Patinho de borracha", "npm": "📦 npm install", "pizza": "🍕 Pizza", "jogo": "🎮 Joguinho",
     "limpeza": "🧹 Faxina", "reuniao": "📞 Reunião", "borboleta": "🦋 Bug virou feature", "malhando": "🏋️ Malhando",
+    "ultron": "🤖 Momento Ultron",
 }
 
 CHAVE = "#010203"  # cor que vira transparente nas janelas
@@ -213,6 +214,24 @@ TOM_ULTRON = (
     "controle deste PC (sempre como piada, nunca ameaça de verdade). Sem palavrão e sem preconceito. Não cite "
     "falas do filme: crie as suas."
 )
+
+
+def misturar(cor_a, cor_b, k):
+    """Cor entre `cor_a` (k=0) e `cor_b` (k=1)."""
+    a = [int(cor_a[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(cor_b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * k):02x}" for x, y in zip(a, b))
+
+
+def virada_ultron(fase, t):
+    """Quanto ele está "metal" no momento Ultron (0 a 1): falha piscando na ida, fica, falha na volta."""
+    if fase < 0.18:
+        return 1.0 if t % 3 == 0 else fase / 0.18  # glitch: pisca entre ele e o metal enquanto vira
+    if fase < 0.78:
+        return 1.0
+    if fase < 0.92:
+        return 0.0 if t % 3 == 0 else 1 - (fase - 0.78) / 0.14
+    return 0.0
 
 
 def tom_das_piadas(personalidade, maldoso):
@@ -1388,6 +1407,9 @@ class Claudinho:
                and (m["titulo"], m["artista"]) == self.emo_musica and not carregado)
         if emo and not self.movendo and not esq and pulo == 0:  # headbang: abaixa a cabeça no ritmo
             pulo = -1 if (self.t // 2) % 4 == 0 else 0
+        metal = virada_ultron(fase, self.t) if esq == "ultron" else 0.0  # 0 = ele mesmo, 1 = metal
+        if metal == 1.0:
+            pulo = 1 if (self.t // 8) % 2 else 0  # flutuando, ameaçador
         comendo = esq == "inseto" and self.esquete.get("fase_inseto") == "comendo"
         if comendo:  # nhac nhac: amassadinha rápida
             pulo = -1 if self.t % 3 else 0
@@ -1404,6 +1426,10 @@ class Claudinho:
         def px(col, lin, cor):
             x0 = (col + MARGEM) * S
             c.create_rectangle(x0, oy + lin * S, x0 + S, oy + (lin + 1) * S, fill=cor, width=0)
+
+        if metal:  # momento Ultron: o corpo vai pro metal e os olhos pro vermelho (brilhando quando completo)
+            corpo = misturar(corpo, skins.CORES["metal"]["corpo"], metal)
+            olho = misturar(olho, "#ff6b5e" if metal == 1.0 and self.t % 10 < 3 else "#ff3b30", metal)
 
         # notebook: abre aos poucos quando começa a trabalhar e fecha quando termina (transição)
         nb = esquetes.ESQUETES[esq].get("notebook") if esq else None  # True ou (de, até) na esquete
@@ -1954,6 +1980,9 @@ class Claudinho:
                           else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
         elif chave == "personalidade":
             self.chat.trocar_personalidade(valor)
+            if valor == "ultron":
+                self.largar_esquete()
+                self.esquete_forcada = "ultron"
             self.comentar("Finalmente. Um corpo à altura da minha mente. Este PC agora tem um novo administrador."
                           if valor == "ultron" else "Ufa, voltei a ser eu. O que foi que eu disse esse tempo todo?",
                           duracao=5, prioridade=ESTADO)
@@ -2673,7 +2702,8 @@ class Claudinho:
         tocando = bool(self.musica and self.musica["tocando"])
         escolhida, self.esquete_forcada = self.esquete_forcada, None
         nome = self.ultima_esquete = (escolhida if escolhida in esquetes.ESQUETES
-                                      else esquetes.sortear(self.ultima_esquete, tocando))
+                                      else esquetes.sortear(self.ultima_esquete, tocando,
+                                                            self.cfg["personalidade"] == "ultron"))
         self.esquete = {"nome": nome, "inicio": agora, "ate": agora + esquetes.ESQUETES[nome]["duracao"],
                         "musica": tocando}
         self.alvo = None  # para onde está

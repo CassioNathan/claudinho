@@ -39,6 +39,41 @@ def comando_texto(*args):
                     for i, p in enumerate(comando_cli(*args)))
 
 
+# ---------- segredos (chave da API) criptografados pelo Windows (DPAPI: só o seu usuário consegue abrir) ----------
+def _dpapi(dados, cifrar):
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class Blob(ctypes.Structure):
+        _fields_ = [("tamanho", wt.DWORD), ("dados", ctypes.POINTER(ctypes.c_char))]
+
+    buffer = ctypes.create_string_buffer(dados, len(dados))
+    entrada, saida = Blob(len(dados), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char))), Blob()
+    funcao = ctypes.windll.crypt32.CryptProtectData if cifrar else ctypes.windll.crypt32.CryptUnprotectData
+    if not funcao(ctypes.byref(entrada), None, None, None, None, 0, ctypes.byref(saida)):
+        raise OSError("o Windows não conseguiu (des)criptografar")
+    try:
+        return ctypes.string_at(saida.dados, saida.tamanho)
+    finally:
+        ctypes.windll.kernel32.LocalFree(saida.dados)
+
+
+def guardar_segredo(nome, valor):
+    arquivo = DADOS / f"{nome}.bin"
+    if not valor:
+        arquivo.unlink(missing_ok=True)
+        return
+    DADOS.mkdir(parents=True, exist_ok=True)
+    arquivo.write_bytes(_dpapi(valor.encode("utf-8"), True))
+
+
+def ler_segredo(nome):
+    try:
+        return _dpapi((DADOS / f"{nome}.bin").read_bytes(), False).decode("utf-8")
+    except (OSError, ValueError):
+        return None
+
+
 def claude_instalado():
     return shutil.which("claude") is not None
 

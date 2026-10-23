@@ -63,6 +63,10 @@ terminam e solta piadas sobre o que está na tela.
 - **Autoconfiança 😎:** ele sabe como está (cor, adereços, emo, venda) e onde aparece no print. De vez em quando a
   piada é ele se gabando (no Haiku e no banco de frases), comenta quando você troca a roupa dele, e se aparecer o
   logo do Claude/Claude Code na tela ele reage ("esse sou eu", "meu irmão gêmeo", "isso é um espelho?").
+- **Motor de IA 🧠** (painel → Sistema): quem pensa no chat, nas piadas olhando a tela e nos resumos —
+  **Claude Code** (instalado e logado), **chave da API da Anthropic** (Haiku 5.5 no dia a dia, Sonnet 5.5 no resumo de
+  tela; a chave fica criptografada pelo Windows), **IA local** pelo Ollama (leve `qwen3:1.7b` só texto, ou o maior
+  `gemma3:4b` que enxerga a tela; não roda com jogo/tela cheia ou placa de vídeo cheia) ou **nenhum**. Tudo em `motores.py`.
 - **Mini cérebro 🧠:** cada aviso do Claude Code (pedido + resultado) e cada troca do chat viram lembrança no
   SQLite, com busca de texto local (FTS5). Ao perguntar algo parecido com o que já rolou, até 3 lembranças curtas
   (~250 tokens) vão junto; sem nada parecido, não vai nada. Guardar e buscar não usa IA nenhuma. Liga/desliga no painel.

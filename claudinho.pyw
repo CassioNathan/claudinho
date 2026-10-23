@@ -46,7 +46,9 @@ import skins
 import memoria
 import musica
 import notificacoes
+import motores
 import sistema
+from motores import env_limpo
 
 PORTA = 47821
 MAX_PERGUNTAS_CONVERSA = 30  # depois disso (ou no dia seguinte) o chat começa uma conversa nova
@@ -68,6 +70,8 @@ CONFIG_PADRAO = {
     "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
     "visual": dict(skins.VISUAL_PADRAO),  # skin: cor do corpo + um adereço por espaço (escolhe no painel)
     "personalidade": "claudinho",        # "claudinho" ou "ultron" (piadas, banco de frases e chat)
+    "motor": "claude_code",              # quem pensa: claude_code, api (chave da Anthropic), ollama (local), nenhum
+    "ollama_modelo": "qwen3:1.7b",       # modelo local (o leve, ou o gemma3:4b que enxerga a tela)
     "lembrancas": True,                  # mini cérebro: o chat recebe lembranças parecidas (busca local)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
@@ -88,7 +92,8 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
-                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre"]
+                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
+                 "ollama_modelo"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -161,6 +166,24 @@ PERSONALIDADES_CHAT = {
         "Mas AJUDE de verdade e faça direitinho o que ele pedir: a personalidade é só o jeito de falar. Sem citar "
         "falas do filme, sem palavrão."),
 }
+
+# a parte do "quem é você" do chat, que vale em qualquer motor
+PROMPT_PERSONA = (
+    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: um bichinho pixelado, "
+    "bem-humorado e cheio de autoconfiança (se acha bonito e talentoso, sem ser chato). A resposta aparece "
+    "num balãozinho de fala: responda em português, curto e direto (de preferência até 4 "
+    "frases), em texto simples, sem tabelas nem markdown. Use a memória e o contexto que "
+    "você tiver do usuário quando ajudar. "
+)
+# chat pela API: as ferramentas são "musica" e "abrir" (os mesmos ajudantes limitados), mais busca na web
+PROMPT_FERRAMENTAS_API = (
+    "Você roda no Windows dele e pode agir no PC pelas ferramentas `abrir` (site, pesquisa, programa) e `musica` "
+    "(o que está tocando, controlar o player, tocar música/artista no YouTube Music, listar músicas de uma banda, "
+    "pesquisar e abrir vídeos do YouTube), que rodam sem pedir confirmação. BANDA: pra músicas de uma banda, SEMPRE "
+    "use musica [\"banda\", \"<banda>\"], mostre a lista numerada (sem ids) e pergunte qual tocar; escolhida, "
+    "[\"tocar_id\", \"<id>\"]. VÍDEOS: [\"videos\", \"<termo>\"], mostre numerados (título, canal, duração, sem id) "
+    "e pergunte qual; escolhido, [\"assistir\", \"<id>\"]. Não tem como ler arquivos nem rodar comandos aqui. "
+)
 
 PROMPT_TELA = (
     "Você é o Claudinho, o mascote de mesa bem-humorado e MUITO autoconfiante de um dev. Você é o bichinho "
@@ -375,19 +398,20 @@ def carregar_config():
         cfg["atalho_comentar"] = CONFIG_PADRAO["atalho_comentar"]
     gravar_json(CONFIG, cfg)
     escrever_perfil(cfg["mestre"])
+    motores.configurar(cfg["motor"], cfg["ollama_modelo"])
     return cfg
 
 
-_CLAUDE = {"tem": None, "visto": 0.0}
-SEM_CLAUDE = ("Pra isso eu preciso do Claude Code instalado e logado (comando `claude`). "
-              "Sem ele eu sigo com o banco de frases, música, esquetes e o resto. 😉")
+def tem_ia():
+    """Dá pra usar IA agora (motor escolhido instalado/configurado)?"""
+    return motores.disponivel()[0]
 
 
-def tem_claude():
-    """O Claude Code está instalado? (confere de novo a cada minuto: dá pra instalar com ele aberto)"""
-    if time.time() - _CLAUDE["visto"] > 60:
-        _CLAUDE.update(tem=sistema.claude_instalado(), visto=time.time())
-    return _CLAUDE["tem"]
+def sem_ia():
+    """O recado quando não dá pra usar IA, dizendo por quê."""
+    motivo = motores.disponivel()[1] or "sem motor de IA"
+    return (f"Pra isso eu preciso de IA, e agora não dá: {motivo} (painel → Sistema → Motor de IA). "
+            "Enquanto isso eu sigo com o banco de frases, música, esquetes e o resto. 😉")
 
 
 def mestre_do_perfil_antigo():
@@ -422,38 +446,6 @@ def escrever_perfil(mestre):
 
 
 # ---------------- Claude ----------------
-def env_limpo():
-    # Se o Claudinho foi aberto de dentro de uma sessão do Claude Code, não herda a sessão dela.
-    env = {k: v for k, v in os.environ.items()
-           if not k.startswith(("CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_AGENT_SDK"))}
-    if "CLAUDE_CODE_ENTRYPOINT" in os.environ:
-        env.pop("ANTHROPIC_BASE_URL", None)
-    env["CLAUDINHO_CHAT"] = "1"  # o hook de aviso ignora estas chamadas
-    return env
-
-
-def rodar_claude(texto, extra=(), sid=None, timeout=600, stream=False, sem_pensar=False):
-    exe = shutil.which("claude")
-    if not exe:
-        raise RuntimeError("Não achei o comando `claude` no PATH.")
-    DADOS.mkdir(exist_ok=True)
-    if stream:  # entrada em JSON, permite mandar imagem direto na mensagem
-        formato = ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]
-    else:
-        formato = ["--output-format", "json"]
-    cmd = [exe, "-p", *formato, *extra] + (["--resume", sid] if sid else [])
-    env = env_limpo()
-    if sem_pensar:  # sem raciocínio estendido: piada não precisa, e caía de ~30s para ~3s
-        env["MAX_THINKING_TOKENS"] = "0"
-    proc = subprocess.run(cmd, input=texto, capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", cwd=DADOS, env=env, timeout=timeout,
-                          creationflags=subprocess.CREATE_NO_WINDOW)
-    linhas = proc.stdout.strip().splitlines()
-    if not linhas:
-        raise RuntimeError((proc.stderr or "sem resposta do claude").strip()[-300:])
-    return json.loads(linhas[-1])
-
-
 class _LimitesBasicos(ctypes.Structure):
     _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
                 ("LimitFlags", wt.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
@@ -524,7 +516,8 @@ class ChatClaude:
     def abrir(self):
         exe = shutil.which("claude")
         if not exe:
-            raise RuntimeError(SEM_CLAUDE)
+            raise RuntimeError("Não achei o Claude Code (comando `claude`): instale e faça login, ou troque o motor "
+                               "de IA no painel (Sistema → Motor de IA).")
         DADOS.mkdir(exist_ok=True)
         # os ajudantes limitados moram na pasta do chat ("python abrir.py …"; empacotado, "sh abrir.sh …",
         # um scriptzinho que chama o claudinho-cli.exe — assim ninguém precisa ter Python instalado)
@@ -730,11 +723,8 @@ def comentar_musica(m, maldoso=False, recentes=(), personalidade="claudinho"):
         titulo=m["titulo"], artista=f", de {m['artista']}" if m["artista"] else "",
         tom=tom_das_piadas(personalidade, maldoso) if personalidade == "ultron" or maldoso else "engraçado e simpático.",
         recentes="; ".join(recentes) or "nada", limites=LIMITES)
-    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
-              "--no-session-persistence", "--tools", ""]
-    d = rodar_claude(prompt, ["--model", "haiku", *enxuto], timeout=120, sem_pensar=True)
-    achado = re.search(r"\{.*\}", d.get("result", ""), re.S)
-    if d.get("is_error") or not achado:
+    achado = re.search(r"\{.*\}", motores.completar(prompt, max_tokens=400, timeout=120), re.S)
+    if not achado:
         return None
     try:
         return str(json.loads(achado.group(0))["comentario"]).strip()
@@ -755,10 +745,7 @@ def artista_de_rock(artista, titulo=""):
     """O Haiku diz se o artista é rock (punk, metal, emo, grunge, alternativo…). Uma chamada curta, só texto."""
     prompt = (f"O artista musical \"{artista}\" (música: \"{titulo}\") é de rock ou de um subgênero de rock "
               "(punk, metal, emo, grunge, hard rock, alternativo, post-hardcore…)? Responda só sim ou não.")
-    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
-              "--no-session-persistence", "--tools", ""]
-    d = rodar_claude(prompt, ["--model", "haiku", *enxuto], timeout=60, sem_pensar=True)
-    return not d.get("is_error") and d.get("result", "").strip().lower().startswith("sim")
+    return motores.completar(prompt, max_tokens=20, timeout=60).strip().lower().startswith("sim")
 
 
 EMO = ["Ninguém me entende… 🖤", "Essa música fala de mim.", "Não é uma fase, mãe.",
@@ -784,13 +771,8 @@ def resumir_notificacoes(lista):
     """Resumo curtinho das notificações (Haiku sem ferramentas, sem memória: é só texto)."""
     linhas = "\n".join(f"- {n['quando']:%d/%m %H:%M} {n['app']}: {n['titulo']} — {n['texto'][:160]}"
                        for n in lista[:60])
-    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
-              "--no-session-persistence", "--tools", ""]
-    d = rodar_claude(PROMPT_NOTIFICACOES.format(lista=linhas), ["--model", "haiku", *enxuto],
-                     timeout=120, sem_pensar=True)
-    if d.get("is_error"):
-        raise RuntimeError(d.get("result") or "erro do Claude")
-    return re.sub(r"\*\*|`|^#+ *", "", d.get("result", ""), flags=re.M).strip()
+    resultado = motores.completar(PROMPT_NOTIFICACOES.format(lista=linhas), max_tokens=500, timeout=120)
+    return re.sub(r"\*\*|`|^#+ *", "", resultado, flags=re.M).strip()
 
 
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
@@ -824,16 +806,12 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
                                 tom=tom_das_piadas(personalidade, maldoso),
                                 estilo=ESTILO_TDAH if tdah else "", angulo=random.choice(ANGULOS),
                                 assuntos="; ".join(assuntos) or "nenhum")
-    mensagem = {"type": "user", "message": {"role": "user", "content": [
-        *imagens, {"type": "text", "text": prompt}]}}
-    # Claude Code no modo enxuto: sem plugins, hooks, MCP, skills e ferramentas. A demora vinha
-    # disso (~5s por chamada) e de ler o print por ferramenta (uma ida e volta a mais), não do Haiku.
-    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
-              "--no-session-persistence", "--tools", ""]
-    d = rodar_claude(json.dumps(mensagem) + "\n", ["--model", modelo, *enxuto], timeout=180,
-                     stream=True, sem_pensar=True)
-    achado = re.search(r"\{.*\}", d.get("result", ""), re.S)
-    if d.get("is_error") or not achado:
+    if not motores.ve_imagem():  # modelo local leve: não enxerga o print, só a lista de janelas
+        prompt = ("ATENÇÃO: você NÃO está vendo a tela agora (não há imagem). Faça a piada só com as janelas abertas "
+                  "e o contexto abaixo, sem fingir que viu algo.\n" + prompt)
+    resultado = motores.completar(prompt, imagens, max_tokens=300, timeout=180)
+    achado = re.search(r"\{.*\}", resultado, re.S)
+    if not achado:
         return None
     try:
         r = json.loads(achado.group(0))
@@ -1307,9 +1285,7 @@ class Claudinho:
         self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
         self.lendo_notificacoes = False
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
-        self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
-                               lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada)),
-                               self.cfg["personalidade"])
+        self.chat = self.criar_chat()
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.esquete = None  # idle: deploy, café… (sai do mesmo timer das piadas)
@@ -1913,7 +1889,7 @@ class Claudinho:
 
     def e_rock(self, m):
         """A música é rock? Guarda a resposta por artista no banco: o Haiku só é chamado pra artista novo."""
-        if not self.cfg["emo_rock"] or not m.get("artista") or not tem_claude():
+        if not self.cfg["emo_rock"] or not m.get("artista") or not tem_ia():
             return False
         generos = self.mem.meta("artistas_rock", {})
         artista = m["artista"].strip().lower()
@@ -1943,7 +1919,7 @@ class Claudinho:
         Em maldoso/TDAH bem menos, que nesses modos a zoeira é sobre a tela."""
         so_tela = self.cfg["modo_maldoso"] or self.cfg["modo_tdah"]
         if (not self.cfg["comentar_tela"] or self.comentando or self.ocupado or self.balao or self.entrada
-                or not tem_claude() or random.random() > (0.15 if so_tela else 0.45)):
+                or not tem_ia() or random.random() > (0.15 if so_tela else 0.45)):
             return
         self.comentando = True
         maldoso, recentes = self.cfg["modo_maldoso"], self.mem.piadas_recentes(8)
@@ -2092,6 +2068,15 @@ class Claudinho:
             self.abrir_painel()
         elif acao == "conversa":
             self.ver_conversa()
+        elif acao.startswith("api_chave:"):
+            chave = acao.split(":", 1)[1].strip()
+            sistema.guardar_segredo("api_chave", chave)
+            self.comentar("Chave guardada (criptografada pelo Windows). 🔑" if chave else "Chave apagada.",
+                          duracao=4, prioridade=ESTADO)
+        elif acao.startswith("ollama_baixar:"):
+            motores.baixar_modelo(acao.split(":", 1)[1].strip())
+        elif acao == "ollama_site":
+            webbrowser.open("https://ollama.com/download")
         elif acao == "pasta_adicionar":
             self.adicionar_pasta()
         elif acao.startswith("pasta_remover:"):
@@ -2143,6 +2128,10 @@ class Claudinho:
             valor = "horizontal" if valor == "horizontal" else "livre"
         elif chave == "personalidade":
             valor = "ultron" if valor == "ultron" else "claudinho"
+        elif chave == "motor":
+            valor = valor if valor in motores.MOTORES else "claude_code"
+        elif chave == "ollama_modelo":
+            valor = str(valor).strip()[:60] or "qwen3:1.7b"
         elif chave == "mestre":
             valor = {"nome": str(valor.get("nome") or "").strip()[:60], "sobre": str(valor.get("sobre") or "").strip()[:4000]}
         else:
@@ -2154,6 +2143,8 @@ class Claudinho:
         if chave == "vendado":
             self.comentar("Ei, quem apagou a luz? Tô sem ver nada, pode ficar tranquilo." if valor
                           else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
+        elif chave in ("motor", "ollama_modelo"):
+            self.trocar_motor()
         elif chave == "mestre":
             escrever_perfil(valor)
             self.chat.trocar_personalidade(self.cfg["personalidade"])  # o chat relê o perfil novo
@@ -2206,8 +2197,11 @@ class Claudinho:
             "musica": musica.descrever(m) if m else None,
             "fila": len(self.falas),
             "lembrancas_total": self.mem.total_lembrancas(),
+            "motor": {"atual": self.cfg["motor"], "pronto": motores.disponivel(), "claude": sistema.claude_instalado(),
+                      "api_chave": bool(motores.chave_api()), "ollama": motores.ollama_status(),
+                      "modelos_ollama": motores.MODELOS_OLLAMA, "ollama_modelo": self.cfg["ollama_modelo"]},
             "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
-                        "claude": tem_claude(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
+                        "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
             "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
         }
 
@@ -2609,6 +2603,44 @@ class Claudinho:
             self.chat.nova_conversa()
             self.comentar("Conversa nova! Pode mandar.", duracao=3, prioridade=ESTADO)
 
+    # ---------- motor de IA (painel → Sistema) ----------
+    def criar_chat(self):
+        """O chat do balão, do motor escolhido (o do Claude Code é um processo; os outros guardam a conversa aqui)."""
+        ao_usar = lambda nome, entrada: self.eventos.put(("ferramenta", nome, entrada))  # noqa: E731
+        motor = self.cfg["motor"]
+        if motor == "api":
+            return motores.ChatAPI(lambda: self.instrucoes_chat("api"), ao_usar)
+        if motor == "ollama":
+            return motores.ChatOllama(lambda: self.instrucoes_chat("ollama"), ao_usar)
+        if motor == "nenhum":
+            return motores.ChatNenhum(lambda: "")
+        return ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao, ao_usar,
+                          self.cfg["personalidade"])
+
+    def instrucoes_chat(self, motor):
+        """O "system" dos chats que não são o Claude Code (esse lê o CLAUDE.md sozinho e usa os ajudantes por Bash)."""
+        partes = [PROMPT_PERSONA]
+        if motor == "api":
+            partes.append(PROMPT_FERRAMENTAS_API)
+        partes.append(PERSONALIDADES_CHAT.get(self.cfg["personalidade"], ""))
+        partes.append("\nQuem é o usuário (o seu mestre):\n" + texto_do_mestre(self.cfg["mestre"]))
+        return "".join(partes)
+
+    def trocar_motor(self):
+        """Trocou o motor: a conversa recomeça do zero (o mini cérebro e as piadas continuam)."""
+        motores.configurar(self.cfg["motor"], self.cfg["ollama_modelo"])
+        velho = self.chat
+        threading.Thread(target=velho.fechar, daemon=True).start()
+        self.mem.nova_conversa()
+        self.chat = self.criar_chat()
+        threading.Thread(target=self.chat.aquecer, daemon=True).start()
+        nomes = {"claude_code": "Claude Code", "api": "a API da Anthropic", "ollama": "um modelo local",
+                 "nenhum": "nenhum motor (modo econômico)"}
+        ok, motivo = motores.disponivel()
+        self.comentar(f"Agora eu penso com {nomes[self.cfg['motor']]}." + ("" if ok or self.cfg["motor"] == "nenhum"
+                                                                            else f" Só falta: {motivo}."),
+                      duracao=5, prioridade=ESTADO)
+
     def ver_conversa(self):
         """A conversa inteira em balões (conversa.html), numa janela que acompanha as mensagens novas."""
         self.abrir_janela_web("/conversa", "Claudinho · Conversa", 600, 780)
@@ -2641,7 +2673,8 @@ class Claudinho:
         self.prox_comentario = time.time() + random.uniform(a, b) * 60
         if esquetes_ligadas and (not piadas or random.random() < 0.35):
             self.iniciar_esquete()
-        elif not tem_claude() or random.random() >= self.cfg["chance_haiku"]:
+        elif (not tem_ia() or random.random() >= self.cfg["chance_haiku"]
+              or (self.cfg["motor"] == "ollama" and not motores.gpu_livre())):
             _, _, area_total = self.area()
             self.comentar_do_banco(janelas.listar(area_total))
         else:
@@ -2697,8 +2730,8 @@ class Claudinho:
         """Menu ou atalho: lê a central de notificações, o Haiku resume e o balão oferece limpar."""
         if self.lendo_notificacoes:
             return
-        if not tem_claude():
-            self.comentar(SEM_CLAUDE, prioridade=IMPORTANTE)
+        if not tem_ia():
+            self.comentar(sem_ia(), prioridade=IMPORTANTE)
             return
         self.lendo_notificacoes = True
 
@@ -2720,8 +2753,12 @@ class Claudinho:
     def resumir_tela(self):
         """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
         A resposta cai no balão de conversa, então dá pra continuar perguntando sobre o mesmo print."""
-        if not tem_claude():
-            self.comentar(SEM_CLAUDE, prioridade=IMPORTANTE)
+        if not tem_ia():
+            self.comentar(sem_ia(), prioridade=IMPORTANTE)
+            return
+        if not motores.ve_imagem():
+            self.comentar("O motor de IA de agora não enxerga a tela: pro resumo, use o Claude Code, a chave da API "
+                          "ou o modelo local maior (painel → Sistema → Motor de IA).", prioridade=IMPORTANTE)
             return
         if self.cfg["vendado"]:
             self.comentar("Tô vendado, não dá pra ler nada! Tira a faixa (Win+Shift+Y) que eu leio.", duracao=5,

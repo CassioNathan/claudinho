@@ -176,6 +176,19 @@
   .campo:focus { outline: none; border-color: var(--laranja); }
   .tirar-pasta { background: none; border: 0; color: var(--apagado); cursor: pointer; margin-left: 4px; font-size: 12px; }
   .tirar-pasta:hover { color: #e8452c; }
+  .motor-detalhe { flex-basis: 100%; background: #232220; border-radius: 12px; padding: 12px 14px; margin-top: 12px;
+                   color: var(--apagado); font-size: 13px; }
+  .motor-detalhe b { color: var(--texto); }
+  .motor-detalhe .linha-campo { display: flex; gap: 8px; margin-top: 8px; }
+  .motor-detalhe .campo { flex: 1; }
+  .aviso-pc { background: rgba(242,140,40,.12); border: 1px solid rgba(242,140,40,.35); color: #f4c08a; border-radius: 10px;
+              padding: 8px 11px; margin-bottom: 10px; }
+  .modelos-locais { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .modelo-local { border: 2px solid #3a3935; border-radius: 10px; padding: 9px 11px; cursor: pointer; }
+  .modelo-local.ativo { border-color: var(--laranja); background: rgba(217,119,87,.08); }
+  .modelo-local b { display: block; }
+  .barra { height: 6px; background: #3a3935; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .barra i { display: block; height: 100%; background: var(--laranja); }
   .toast {
     position: fixed; right: 26px; bottom: 24px; background: #2f3b2f; color: #cdeccd; border: 1px solid #456b45;
     padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; opacity: 0; transform: translateY(8px);
@@ -415,9 +428,14 @@
           <div class="desc" id="descAviso">Registra um aviso no ~/.claude/settings.json (com backup antes).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
       </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Claude Code</div><div class="desc" id="descClaude">—</div></div>
-        <span class="status-ext" id="statusClaude">—</span>
+      <div class="linha" style="flex-wrap:wrap">
+        <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
+          resumos. Ao trocar, a conversa do chat recomeça (o mini cérebro e as piadas continuam).</div></div>
+        <div class="segmentos" id="motores">
+          <button data-v="claude_code">Claude Code</button><button data-v="api">Chave da API</button>
+          <button data-v="ollama">IA local</button><button data-v="nenhum">Nenhum</button>
+        </div>
+        <div class="motor-detalhe" id="detalheMotor"></div>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Versão</div><div class="desc" id="descDados">—</div></div>
@@ -687,18 +705,67 @@ function atualizarVivos() {
   document.getElementById("pastaExt").textContent = ext.pasta;
 }
 
+let motorMontado = "";
+function montarMotor() {
+  const m = estado.motor;
+  for (const b of document.querySelectorAll("#motores button")) {
+    b.classList.toggle("ativo", b.dataset.v === m.atual);
+    b.onclick = () => { estado.cfg.motor = b.dataset.v; mudar("motor", b.dataset.v); estado.motor.atual = b.dataset.v; montarMotor(); };
+  }
+  const [pronto, motivo] = m.pronto;
+  const situacao = pronto ? '<span class="status-ext ok">pronto ✓</span>' : `<span class="status-ext">${motivo}</span>`;
+  const caixa = document.getElementById("detalheMotor");
+  const assinatura = JSON.stringify([m.atual, m.api_chave, m.ollama, m.ollama_modelo, m.pronto]);
+  if (assinatura === motorMontado) return;  // não apaga o que você está digitando (o painel atualiza a cada 3 s)
+  motorMontado = assinatura;
+  if (m.atual === "claude_code") {
+    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa o Claude Code instalado e logado no seu PC (comando <code>claude</code>):
+      chat com ferramentas, piadas olhando a tela e resumos. ${m.claude ? "" : "Instale o Claude Code e rode <code>claude</code> → <code>/login</code>."}</p>`;
+  } else if (m.atual === "api") {
+    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa uma chave da API da Anthropic (crie em console.anthropic.com): paga por uso,
+      com o Haiku nas coisas do dia a dia e o Sonnet no resumo de tela. A chave fica guardada criptografada pelo Windows, só no seu usuário.</p>
+      <div class="linha-campo"><input id="chaveApi" class="campo" type="password" placeholder="${m.api_chave ? "chave salva — cole outra pra trocar" : "sk-ant-…"}" autocomplete="off">
+      <button class="botao principal" id="salvarChave">Salvar</button>${m.api_chave ? '<button class="botao" id="apagarChave">Apagar</button>' : ""}</div>`;
+    document.getElementById("salvarChave").onclick = () => {
+      const v = document.getElementById("chaveApi").value.trim();
+      if (v) acao("api_chave:" + v, "chave salva 🔑");
+    };
+    const apagar = document.getElementById("apagarChave");
+    if (apagar) apagar.onclick = () => acao("api_chave:", "chave apagada");
+  } else if (m.atual === "ollama") {
+    const o = m.ollama, b = o.baixando;
+    const cartoes = Object.entries(m.modelos_ollama).map(([id, info]) => {
+      const tem = o.modelos.some(n => n === id || n === id + ":latest");
+      return `<div class="modelo-local${id === m.ollama_modelo ? " ativo" : ""}" data-modelo="${id}">
+        <b>${info.nome} · ${info.tamanho}</b>${id}<br>${info.visao ? "enxerga a tela 👀" : "só texto (não vê a tela)"}
+        <br><span class="status-ext${tem ? " ok" : ""}">${tem ? "baixado ✓" : "não baixado"}</span></div>`;
+    }).join("");
+    const progresso = b.modelo ? `<div>Baixando ${b.modelo}… ${b.total ? Math.round(b.feito / b.total * 100) + "%" : ""}</div>
+      <div class="barra"><i style="width:${b.total ? b.feito / b.total * 100 : 2}%"></i></div>` : (b.erro ? `<div>⚠ ${b.erro}</div>` : "");
+    caixa.innerHTML = `<div class="aviso-pc">⚠️ Usar um modelo local consome o desempenho do seu PC (processador, memória e placa de vídeo).
+      Escolha com responsabilidade — em jogo ou tela cheia ele não roda e usa o banco de frases.</div>${situacao}
+      <div class="modelos-locais">${cartoes}</div>${progresso}
+      ${o.rodando ? `<button class="botao" id="baixarModelo"${b.modelo ? " disabled" : ""}>Baixar o modelo escolhido</button>`
+                  : `O Ollama ${o.instalado ? "está instalado mas fechado: abra ele" : "não está instalado"}.
+                     <button class="botao" id="siteOllama" style="margin-left:6px">Baixar o Ollama</button>`}`;
+    for (const c of caixa.querySelectorAll(".modelo-local")) c.onclick = () => mudar("ollama_modelo", c.dataset.modelo);
+    const baixar = document.getElementById("baixarModelo");
+    if (baixar) baixar.onclick = () => acao("ollama_baixar:" + m.ollama_modelo, "baixando… ⏬");
+    const site = document.getElementById("siteOllama");
+    if (site) site.onclick = () => acao("ollama_site", "abri o site do Ollama");
+  } else {
+    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Sem IA: não gasta nada e não pesa no PC. O chat fica desligado e as piadas
+      vêm do banco de frases; música, YouTube, esquetes, skins e o resto funcionam normal.</p>`;
+  }
+}
 function montarSistema() {
+  montarMotor();
   const sis = estado.sistema;
   for (const el of document.querySelectorAll("input[data-sistema]")) {
     el.checked = !!sis[el.dataset.sistema];
     el.disabled = el.dataset.sistema === "aviso" && !sis.claude && !sis.aviso;
     el.onchange = () => acao(`${el.dataset.sistema}:${el.checked ? 1 : 0}`, el.checked ? "ligado ✓" : "desligado ✓");
   }
-  document.getElementById("statusClaude").textContent = sis.claude ? "encontrado ✓" : "não encontrado";
-  document.getElementById("statusClaude").className = "status-ext" + (sis.claude ? " ok" : "");
-  document.getElementById("descClaude").textContent = sis.claude
-    ? "Chat, piadas olhando a tela, resumos e avisos funcionando."
-    : "Sem ele, funciona o resto (banco de frases, música, esquetes, skins…). Instale e faça login no Claude Code pra liberar o chat e a IA.";
   document.getElementById("versao").textContent = "v" + sis.versao;
   document.getElementById("descDados").textContent = "Seus dados ficam em " + sis.dados;
 }

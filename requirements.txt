@@ -4,3 +4,6 @@ pystray>=0.19
 winrt-runtime>=2.0
 winrt-Windows.Media.Control>=2.0
 winrt-Windows.Foundation>=2.0
+winrt-Windows.UI.Notifications>=2.0
+winrt-Windows.UI.Notifications.Management>=2.0
+winrt-Windows.ApplicationModel>=2.0

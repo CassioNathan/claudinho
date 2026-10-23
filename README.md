@@ -26,8 +26,12 @@ terminam e solta piadas sobre o que está na tela.
 - **Sprites:** andando, correndo entre monitores, notebook digitando, pensando, sendo carregado, vendado.
 - **Atalhos:** `Win+Y` comenta a tela na hora; `Win+Shift+Y` põe/tira a faixa nos olhos;
   `Win+Shift+E` manda um print da janela da frente pro chat e ele resume/explica bem simplificado
-  (dá pra continuar perguntando sobre o mesmo print).
+  (dá pra continuar perguntando sobre o mesmo print);
+  `Win+Shift+N` resume as notificações da central do Windows, com botão pra limpar as que ele leu.
   Menu no botão direito e no ícone da bandeja.
+- **Conversa:** no balão dá pra anexar um print da janela que você está usando e abrir
+  "ver conversa" com o histórico inteiro. Notificação ou outro programa pulando na frente não fecha
+  a conversa; só clicar fora.
 
 ## Instalar num PC novo
 

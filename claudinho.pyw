@@ -37,6 +37,7 @@ import janelas
 import emojis
 import memoria
 import musica
+import notificacoes
 
 PORTA = 47821
 MAX_PERGUNTAS_CONVERSA = 30  # depois disso (ou no dia seguinte) o chat começa uma conversa nova
@@ -60,6 +61,7 @@ CONFIG_PADRAO = {
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
     "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
     "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
+    "atalho_notificacoes": "Win+Shift+N",  # atalho global: resume as notificações do Windows
     # onde o chat lê arquivos sem perguntar; fora daqui (e qualquer comando ou edição) pede confirmação
     "pastas_leitura": ["D:\\Projetos", "E:\\Stompdesk Projeto"],
 }
@@ -555,6 +557,28 @@ def comentar_musica(m, maldoso=False, recentes=()):
         return None
 
 
+PROMPT_NOTIFICACOES = (
+    "Você é o Claudinho, mascote do Claude na tela do usuário. Estas são as notificações que estão "
+    "na central do Windows dele (da mais nova pra mais velha):\n\n{lista}\n\n"
+    "Faça um resumo BEM curto em português, no máximo 6 linhas, sem markdown (nada de ** ou #). "
+    "Primeiro o que parece importante (mensagem de pessoa, dinheiro, erro, segurança, pedido de "
+    "permissão); depois agrupe o resto por app numa linha só (ex.: 'propaganda: Mercado Livre, AliExpress'). "
+    "Pode fechar com uma piadinha curta se couber. Responda só o resumo.")
+
+
+def resumir_notificacoes(lista):
+    """Resumo curtinho das notificações (Haiku sem ferramentas, sem memória: é só texto)."""
+    linhas = "\n".join(f"- {n['quando']:%d/%m %H:%M} {n['app']}: {n['titulo']} — {n['texto'][:160]}"
+                       for n in lista[:60])
+    enxuto = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
+              "--no-session-persistence", "--tools", ""]
+    d = rodar_claude(PROMPT_NOTIFICACOES.format(lista=linhas), ["--model", "haiku", *enxuto],
+                     timeout=120, sem_pensar=True)
+    if d.get("is_error"):
+        raise RuntimeError(d.get("result") or "erro do Claude")
+    return re.sub(r"\*\*|`|^#+ *", "", d.get("result", ""), flags=re.M).strip()
+
+
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
                   alvo="atividade", ponto=None, assuntos=()):
     """Tira print do monitor e pede um comentário ao Haiku. `alvo` diz do que a piada fala;
@@ -839,14 +863,24 @@ class Balao:
         else:
             self.app.fechar_balao()
 
-    def clique_fora(self):
-        """Botão do mouse apertado fora deste balão (e fora do mascote)?"""
-        if not (user32.GetAsyncKeyState(0x01) & 0x8000):
+    def clique_fora(self, desde_a_ultima=False):
+        """Botão do mouse apertado fora deste balão (e fora do mascote)? `desde_a_ultima` também conta
+        um clique rápido que soltou entre duas olhadas."""
+        if not (user32.GetAsyncKeyState(0x01) & (0x8001 if desde_a_ultima else 0x8000)):
             return False
         x, y = cursor()
-        dentro = self.win.winfo_rootx() <= x < self.win.winfo_rootx() + self.win.winfo_width() and \
-            self.win.winfo_rooty() <= y < self.win.winfo_rooty() + self.win.winfo_height()
-        return not dentro and not self.app.mouse_no_mascote
+        # clicar noutro balão dele (ex.: Pode/Não em cima da conversa) ou na janela da conversa não é "fora"
+        nossas = [self.win] + [b.win for b in (self.app.balao, self.app.entrada) if b]
+        if self.app.janela_conversa:
+            nossas.append(self.app.janela_conversa)
+        for w in nossas:
+            try:
+                if w.winfo_exists() and w.winfo_rootx() <= x < w.winfo_rootx() + w.winfo_width() and \
+                        w.winfo_rooty() <= y < w.winfo_rooty() + w.winfo_height():
+                    return False
+            except tk.TclError:
+                pass
+        return not self.app.mouse_no_mascote
 
     def aparecer(self):
         try:
@@ -879,7 +913,11 @@ class Balao:
         _, (esq, topo, dir_, base), _ = monitor(cx, app.y + app.H // 2)
         x = limitar(cx - w // 2, esq + 6, dir_ - w - 6)
         y = int(app.y) - h + 2
-        if y < topo + 6:  # sem espaço em cima: vai para baixo, sem cauda
+        conversa = app.entrada if app.entrada is not self else None
+        if conversa:  # a conversa está aberta: este balão (ex.: confirmação) empilha em cima dela, sem cobrir
+            y = conversa.win.winfo_y() - fh - 4
+            self.cauda.place_forget()
+        elif y < topo + 6:  # sem espaço em cima: vai para baixo, sem cauda
             y = int(app.y) + app.H + 6
             self.cauda.place_forget()
         else:
@@ -905,6 +943,7 @@ class Claudinho:
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
         self.print_anexado = None  # {"imagem": bloco, "nome": ...} que vai junto da próxima mensagem
+        self.lendo_notificacoes = False
         self.janela_conversa = None
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
         self.chat = ChatClaude(self.mem.meta("session_id"), self.cfg["pastas_leitura"], self.pedir_permissao,
@@ -961,6 +1000,7 @@ class Claudinho:
         iniciar_atalho(self.cfg["atalho_comentar"], self.eventos, "comentar_agora", 1)
         iniciar_atalho(self.cfg["atalho_venda"], self.eventos, "venda", 2)
         iniciar_atalho(self.cfg["atalho_resumir"], self.eventos, "resumir", 3)
+        iniciar_atalho(self.cfg["atalho_notificacoes"], self.eventos, "notificacoes", 4)
         self.root.after(70, self.tick)
 
     # ---------- laço principal ----------
@@ -1292,6 +1332,7 @@ class Claudinho:
             (f"Piadas: {self.nome_frequencia()} (clique p/ trocar)", "freq", None),
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
+            (f"Resumir minhas notificações 🔔 ({self.cfg['atalho_notificacoes']})", "notificacoes", None),
             None,
             ("Nova conversa", "nova", None),
             ("Aviso de teste", "teste", None),
@@ -1419,6 +1460,8 @@ class Claudinho:
             self.comentar_agora()
         elif acao == "resumir":
             self.resumir_tela()
+        elif acao == "notificacoes":
+            self.ver_notificacoes()
         elif acao == "nova":
             self.nova_conversa()
         elif acao == "teste":
@@ -1444,7 +1487,7 @@ class Claudinho:
 
     # ---------- balões ----------
     def reposicionar_baloes(self):
-        for b in (self.balao, self.entrada):
+        for b in (self.entrada, self.balao):  # a conversa primeiro: o outro balão empilha em cima dela
             if b:
                 b.posicionar()
 
@@ -1481,6 +1524,12 @@ class Claudinho:
             except Exception:
                 pass
             self.soltar_emoji("check")  # comemora o chat que terminou
+        elif fala["tipo"] == "notificacoes":  # resumo + limpar só as que ele leu (as que chegarem depois ficam)
+            n = len(fala["ids"])
+            self.balao = Balao(self, "notificacoes", fala["texto"], titulo=f"🔔 {n} notificaç{'ão' if n == 1 else 'ões'}",
+                               duracao=fala["duracao"],
+                               botoes=[("limpar", lambda: self.limpar_notificacoes(fala["ids"]), True),
+                                       ("deixa", self.fechar_balao, False)])
         elif fala.get("piada") and self.cfg["modo_avaliacao"]:  # piada com botões pra avaliar
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
                                botoes=[("boa", lambda: self.avaliar(fala, 1), True),
@@ -1560,20 +1609,24 @@ class Claudinho:
             pass
 
     def conversa_deve_fechar(self):
-        """Fecha a conversa se você clicou fora depois de mexer nela, ou se ela chegou sozinha
-        (uma resposta) e ficou sem ninguém tocar até o tempo acabar."""
-        if not self.entrada or time.time() - self.entrada_desde < 0.6:
+        """Fecha a conversa se você clicou fora dela, ou se ela chegou sozinha (uma resposta) e ficou
+        sem ninguém tocar até o tempo acabar. Perder o foco sem clique (uma notificação ou outro
+        programa que pulou na frente) não fecha: o que você estava escrevendo continua lá."""
+        if not self.entrada:
+            return False
+        if time.time() - self.entrada_desde < 0.6:
+            user32.GetAsyncKeyState(0x01)  # descarta o clique que abriu a conversa
             return False
         try:
             nossas = {int(self.entrada.win.wm_frame(), 16), int(self.root.wm_frame(), 16)}
         except Exception:
             return False
+        if self.entrada.clique_fora(desde_a_ultima=True):
+            return True
         if user32.GetForegroundWindow() in nossas:
             self.entrada_teve_foco = True
             return False
-        if self.entrada_teve_foco:
-            return True
-        return self.entrada.expirou()
+        return not self.entrada_teve_foco and self.entrada.expirou()
 
     def cuidar_dos_baloes(self):
         if self.permissao and self.permissao["evento"].is_set():  # respondida ou esgotou o tempo
@@ -1591,8 +1644,9 @@ class Claudinho:
             # pergunta tem prioridade: enquanto pensa, os avisos esperam
             if not self.ocupado or self.falas[0]["tipo"] == "resposta":
                 self.mostrar(self.falas.popleft())
-        pensando = self.ocupado or self.olhando_forcado
-        rotulo = ("fazendo" if self.usou_ferramenta else "digitando") if self.ocupado else "deixa eu ver"
+        pensando = self.ocupado or self.olhando_forcado or self.lendo_notificacoes
+        rotulo = ("fazendo" if self.usou_ferramenta else "digitando") if self.ocupado else \
+            "lendo as notificações" if self.lendo_notificacoes else "deixa eu ver"
         if pensando and self.balao is None and not self.entrada:
             self.balao = Balao(self, "pensando", rotulo)
         if self.balao and self.balao.tipo == "pensando":
@@ -1647,6 +1701,12 @@ class Claudinho:
     def abrir_conversa(self, texto, por_clique=False):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
         rascunho = self.entrada.entry.get() if self.entrada else ""
+        # estava digitando quando a resposta chegou? o balão novo já volta com o cursor no campo
+        try:
+            digitando = bool(self.entrada) and user32.GetForegroundWindow() == int(self.entrada.win.wm_frame(), 16)
+        except Exception:
+            digitando = False
+        por_clique = por_clique or digitando
         self.fechar_conversa(manter_print=True)  # reabrir o balão não perde o rascunho nem o print
         if self.balao and self.balao.tipo not in ("pensando", "comentario"):
             self.falas.appendleft(self.balao.dados)  # volta para a fila, mostra depois
@@ -1820,6 +1880,27 @@ class Claudinho:
         if img.width > 1800:  # texto precisa de resolução: reduz só se for muito grande
             img = img.resize((1800, round(img.height * 1800 / img.width)))
         return img, nome
+
+    # ---------- notificações do Windows ----------
+    def ver_notificacoes(self):
+        """Menu ou atalho: lê a central de notificações, o Haiku resume e o balão oferece limpar."""
+        if self.lendo_notificacoes:
+            return
+        self.lendo_notificacoes = True
+
+        def trabalho():
+            try:
+                lista = notificacoes.listar()
+                resumo = resumir_notificacoes(lista) if lista else ""
+                self.eventos.put(("notificacoes", resumo, [n["id"] for n in lista], None))
+            except Exception as e:
+                self.eventos.put(("notificacoes", "", [], str(e)))
+        threading.Thread(target=trabalho, daemon=True).start()
+
+    def limpar_notificacoes(self, ids):
+        self.fechar_balao()
+        threading.Thread(target=lambda: notificacoes.limpar(ids), daemon=True).start()
+        self.comentar(f"Prontinho, limpei {len(ids)} notificaç{'ão' if len(ids) == 1 else 'ões'}! ✨", duracao=4)
 
     def resumir_tela(self):
         """Atalho: print da janela da frente vai pro chat dele, pedindo um resumo bem simples.
@@ -2054,6 +2135,15 @@ class Claudinho:
                     self.soltar_emoji("nota")
             elif ev[0] == "menu":
                 self.acao_menu(ev[1])
+            elif ev[0] == "notificacoes":
+                self.lendo_notificacoes = False
+                _, resumo, ids, erro = ev
+                if erro:
+                    self.comentar(f"⚠ Não consegui ler as notificações: {erro[:200]}")
+                elif not ids:
+                    self.comentar("Central de notificações limpinha, nada pra ver! ✨", duracao=5)
+                else:  # na frente da fila: foi você que pediu
+                    self.falas.appendleft({"tipo": "notificacoes", "texto": resumo, "duracao": 90, "ids": ids})
             elif ev[0] == "atalho_ocupado":
                 self.comentar(f"O atalho {ev[1]} já é usado por outro programa. "
                               "Troca o \"atalho_comentar\" no config.json.")

@@ -9,3 +9,6 @@ winrt-Windows.UI.Notifications.Management>=2.0
 winrt-Windows.ApplicationModel>=2.0
 ytmusicapi>=1.8
 anthropic>=0.80
+faster-whisper>=1.1
+sounddevice>=0.5
+numpy>=1.26

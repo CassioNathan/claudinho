@@ -6,6 +6,10 @@ Clique no Claudinho = campo de pergunta. Arraste = muda de lugar.
 Botão direito = menu (movimento livre/horizontal, comentários, nova conversa, sair).
 Configuração: ~/.claudinho/config.json (criado na primeira execução).
 """
+try:  # tem que vir antes do winrt (música, notificações): na ordem inversa o ctranslate2 do Whisper dá violação de acesso
+    import ctranslate2  # noqa: F401
+except ImportError:  # sem o comando por voz instalado, segue sem ele
+    pass
 import base64
 import ctypes
 import ctypes.wintypes as wt
@@ -48,6 +52,7 @@ import musica
 import notificacoes
 import motores
 import sistema
+import voz
 from motores import env_limpo
 
 PORTA = 47821
@@ -72,6 +77,13 @@ CONFIG_PADRAO = {
     "personalidade": "claudinho",        # "claudinho" ou "ultron" (piadas, banco de frases e chat)
     "motor": "claude_code",              # quem pensa: claude_code, api (chave da Anthropic), ollama (local), nenhum
     "ollama_modelo": "qwen3:1.7b",       # modelo local (o leve, ou o gemma3:4b que enxerga a tela)
+    "voz": False,                        # comando por voz: chamou o apelido, o chat abre e ele escuta
+    "voz_apelidos": ["Claudinho"],       # como chamar (só texto, sem treinar; vale mais de um)
+    "voz_silencio": 1.2,                 # segundos calado até ele enviar sozinho
+    "voz_microfone": "",                 # parte do nome do microfone ("" = o padrão do Windows)
+    "voz_sons": True,                    # tuk-tuk quando pode falar, tuk-tuk grave quando para de ouvir
+    "voz_modelo_apelido": "base",        # Whisper que escuta o apelido (leve, na CPU)
+    "voz_modelo_fala": "small",          # Whisper que transcreve o que você pede
     "lembrancas": True,                  # mini cérebro: o chat recebe lembranças parecidas (busca local)
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
@@ -93,7 +105,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
-                 "ollama_modelo"]
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -1287,6 +1299,10 @@ class Claudinho:
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
         self.chat = self.criar_chat()
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
+        self.voz = voz.Voz(lambda: self.cfg, self.voz_acordar, lambda t: self.eventos.put(("voz_texto", t)),
+                           lambda t: self.eventos.put(("voz_enviar", t)), lambda: self.eventos.put(("voz_cancelar",)),
+                           pausado=self.voz_pausada, ao_erro=lambda m: self.eventos.put(("voz_erro", m)))
+        self.ligar_voz()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.esquete = None  # idle: deploy, café… (sai do mesmo timer das piadas)
         self.ultima_esquete = None
@@ -2106,6 +2122,7 @@ class Claudinho:
         elif acao == "sair":
             self.fechar_painel()
             self.icone.stop()
+            self.voz.desligar()
             self.chat.fechar()
             self.root.destroy()
             return
@@ -2132,6 +2149,15 @@ class Claudinho:
             valor = valor if valor in motores.MOTORES else "claude_code"
         elif chave == "ollama_modelo":
             valor = str(valor).strip()[:60] or "qwen3:1.7b"
+        elif chave == "voz_apelidos":
+            valor = [str(a).strip()[:30] for a in (valor if isinstance(valor, list) else []) if str(a).strip()][:8]
+            valor = valor or ["Claudinho"]
+        elif chave == "voz_silencio":
+            valor = max(0.6, min(3.0, float(valor)))
+        elif chave == "voz_microfone":
+            valor = str(valor).strip()[:80]
+        elif chave == "voz_modelo_fala":
+            valor = valor if valor in ("base", "small") else "small"
         elif chave == "mestre":
             valor = {"nome": str(valor.get("nome") or "").strip()[:60], "sobre": str(valor.get("sobre") or "").strip()[:4000]}
         else:
@@ -2145,6 +2171,12 @@ class Claudinho:
                           else "Voltei a enxergar! Nossa, que tela bonita.", duracao=4, prioridade=ESTADO)
         elif chave in ("motor", "ollama_modelo"):
             self.trocar_motor()
+        elif chave == "voz":
+            self.ligar_voz()
+            self.comentar("Tô de ouvido ligado: é só me chamar." if valor else "Parei de escutar.",
+                          duracao=3, prioridade=ESTADO)
+        elif chave == "voz_microfone":
+            self.voz.reiniciar()
         elif chave == "mestre":
             escrever_perfil(valor)
             self.chat.trocar_personalidade(self.cfg["personalidade"])  # o chat relê o perfil novo
@@ -2200,6 +2232,7 @@ class Claudinho:
             "motor": {"atual": self.cfg["motor"], "pronto": motores.disponivel(), "claude": sistema.claude_instalado(),
                       "api_chave": bool(motores.chave_api()), "ollama": motores.ollama_status(),
                       "modelos_ollama": motores.MODELOS_OLLAMA, "ollama_modelo": self.cfg["ollama_modelo"]},
+            "voz": {"estado": self.voz.estado, "microfones": voz.microfones()},
             "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
                         "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
             "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
@@ -2603,6 +2636,38 @@ class Claudinho:
             self.chat.nova_conversa()
             self.comentar("Conversa nova! Pode mandar.", duracao=3, prioridade=ESTADO)
 
+    # ---------- comando por voz (voz.py: roda numa thread própria e fala com esta pela fila de eventos) ----------
+    def ligar_voz(self):
+        if self.cfg["voz"]:
+            self.voz.ligar()
+        else:
+            self.voz.desligar()
+
+    def voz_pausada(self):
+        """Sem escutar com o jogo (tela cheia) na frente: o Whisper não pode brigar com ele pelo PC."""
+        return motores.tela_cheia()
+
+    def voz_acordar(self):
+        """(thread da voz) Chamaram o apelido: pede pra thread da tela abrir o chat e espera a resposta."""
+        feito, resultado = threading.Event(), {}
+        self.eventos.put(("voz_acordar", feito, resultado))
+        return feito.wait(3) and resultado.get("ok", False)
+
+    def abrir_conversa_por_voz(self):
+        """O chat abre já com o cursor no campo, como no clique. Ocupado pensando na outra: não abre."""
+        if self.ocupado:
+            return False
+        if not self.entrada:
+            self.alternar_entrada()
+        self.entrada.win.focus_force()
+        self.root.after(60, self.entrada.entry.focus_set)
+        return True
+
+    def escrever_no_chat(self, texto):
+        if self.entrada:
+            self.entrada.entry.delete(0, "end")
+            self.entrada.entry.insert(0, texto)
+
     # ---------- motor de IA (painel → Sistema) ----------
     def criar_chat(self):
         """O chat do balão, do motor escolhido (o do Claude Code é um processo; os outros guardam a conversa aqui)."""
@@ -2664,6 +2729,7 @@ class Claudinho:
     def talvez_comentar(self):
         """A vez dele de fazer algo à toa: piada ou esquete saem do mesmo timer (mesma fila, tipos diferentes)."""
         self.acompanhar_app_ativo()
+        threading.Thread(target=motores.liberar_gpu_se_jogo, daemon=True).start()
         piadas, esquetes_ligadas = self.cfg["comentar_tela"], self.cfg["esquetes"]
         if not (piadas or esquetes_ligadas) or self.comentando or time.time() < self.prox_comentario:
             return
@@ -3256,6 +3322,19 @@ class Claudinho:
                 return
             if ev[0] == "permissao":
                 self.mostrar_permissao(ev[1])
+            elif ev[0] == "voz_acordar":
+                ev[2]["ok"] = self.abrir_conversa_por_voz()
+                ev[1].set()
+            elif ev[0] == "voz_texto":
+                self.escrever_no_chat(ev[1])
+            elif ev[0] == "voz_enviar":
+                if self.entrada:
+                    self.escrever_no_chat(ev[1])
+                    self.enviar()
+            elif ev[0] == "voz_cancelar":
+                self.fechar_conversa()
+            elif ev[0] == "voz_erro":
+                self.comentar(f"Voz: {ev[1]}", prioridade=IMPORTANTE)
             elif ev[0] == "ferramenta":  # ele está mexendo no PC (abrindo algo, rodando comando)
                 self.usou_ferramenta = True
             elif ev[0] == "musica_nova":

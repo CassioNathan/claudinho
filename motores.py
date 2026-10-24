@@ -121,6 +121,10 @@ def _completar_api(prompt, imagens, esperto, max_tokens):
 # ---------- Ollama (modelo local) ----------
 _OLLAMA_STATUS = {"visto": 0.0, "rodando": False, "modelos": []}
 BAIXANDO = {"modelo": None, "feito": 0, "total": 0, "erro": None}
+# o modelo sai da placa de vídeo sozinho depois de 2 min parado (recarregar leva 2-4 s); o contexto pequeno
+# evita que o cache de atenção cresça e ocupe mais VRAM
+OLLAMA_KEEP_ALIVE = "2m"
+OLLAMA_OPCOES = {"num_ctx": 4096}
 
 
 def _ollama(caminho, corpo=None, timeout=120):
@@ -182,13 +186,13 @@ def _completar_ollama(prompt, imagens, max_tokens, timeout):
     if imagens and MODELOS_OLLAMA.get(modelo, {}).get("visao"):
         mensagem["images"] = _imagens_ollama(imagens)
     r = _ollama("/api/chat", {"model": modelo, "messages": [mensagem], "stream": False, "think": False,
-                              "keep_alive": "2m", "options": {"num_predict": max_tokens}}, timeout=timeout)
+                              "keep_alive": OLLAMA_KEEP_ALIVE,
+                              "options": {**OLLAMA_OPCOES, "num_predict": max_tokens}}, timeout=timeout)
     return r["message"]["content"].strip()
 
 
-def gpu_livre():
-    """Modo jogo do modelo local: com algo em tela cheia na frente, ou pouca memória livre na placa de vídeo,
-    o Claudinho não roda o modelo (usa o banco de frases)."""
+def tela_cheia():
+    """Tem algo em tela cheia na frente (jogo, vídeo)?"""
     try:
         import janelas
         ativa = janelas.janela_ativa()
@@ -197,11 +201,38 @@ def gpu_livre():
             import ctypes
             u = ctypes.windll.user32
             largura, altura = u.GetSystemMetrics(0), u.GetSystemMetrics(1)
-            if esq <= 0 and topo <= 0 and dir_ - esq >= largura and base - topo >= altura and ativa["exe"] not in (
-                    "explorer.exe",):
-                return False  # tela cheia (jogo, vídeo): deixa o PC em paz
+            return (esq <= 0 and topo <= 0 and dir_ - esq >= largura and base - topo >= altura
+                    and ativa["exe"] not in ("explorer.exe",))
     except Exception:
         pass
+    return False
+
+
+_DESCARREGADO = {"em_tela_cheia": False}
+
+
+def liberar_gpu_se_jogo():
+    """Modo jogo de verdade: ao entrar em tela cheia, manda o Ollama tirar o modelo da placa de vídeo na hora
+    (uma vez por vez em tela cheia), em vez de esperar o keep_alive vencer."""
+    if CONFIG["motor"] != "ollama":
+        return
+    cheia = tela_cheia()
+    if cheia and not _DESCARREGADO["em_tela_cheia"]:
+        _DESCARREGADO["em_tela_cheia"] = True
+        try:
+            for m in _ollama("/api/ps", timeout=1.5).get("models", []):
+                _ollama("/api/generate", {"model": m["name"], "keep_alive": 0}, timeout=5)
+        except Exception:
+            pass
+    elif not cheia:
+        _DESCARREGADO["em_tela_cheia"] = False
+
+
+def gpu_livre():
+    """Modo jogo do modelo local: com algo em tela cheia na frente, ou pouca memória livre na placa de vídeo,
+    o Claudinho não roda o modelo (usa o banco de frases)."""
+    if tela_cheia():
+        return False  # tela cheia (jogo, vídeo): deixa o PC em paz
     livre = _vram_livre_mb()
     precisa = 4000 if MODELOS_OLLAMA.get(CONFIG["ollama_modelo"], {}).get("visao") else 2000
     return livre is None or livre >= precisa
@@ -377,7 +408,8 @@ class ChatOllama(ChatSimples):
             mensagem["content"] = "(Ele mandou um print, mas você não enxerga imagens: diga isso.)\n" + texto
         with self.trava:
             try:
-                r = _ollama("/api/chat", {"model": modelo_local, "stream": False, "think": False, "keep_alive": "5m",
+                r = _ollama("/api/chat", {"model": modelo_local, "stream": False, "think": False,
+                                          "keep_alive": OLLAMA_KEEP_ALIVE, "options": OLLAMA_OPCOES,
                                           "messages": [{"role": "system", "content": self.instrucoes()},
                                                        *self.mensagens, mensagem]}, timeout=300)
                 resposta = r["message"]["content"].strip()

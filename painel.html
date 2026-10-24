@@ -213,6 +213,7 @@
     <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
     <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
     <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
+    <a data-alvo="voz"><span class="ic">🎤</span>Voz</a>
     <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
@@ -365,6 +366,42 @@
         <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
         <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
       </div>
+    </div>
+  </section>
+
+  <section id="voz">
+    <h2>🎤 Voz</h2>
+    <p class="sub">Chama ele pelo nome, o chat abre e ele escuta. Tudo local (Whisper), nada de áudio sai do PC.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Ouvir o microfone</div><div class="desc" id="vozEstado">Desligado.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Como chamar</div><div class="desc">Os nomes que ele atende, separados por vírgula. É só texto, sem treinar
+          nada; ele aceita uma escuta meio errada ("Cloudinho"). Evite nomes de gente que você cita muito.</div></div>
+        <form id="formApelidos" style="display:flex;gap:8px">
+          <input id="vozApelidos" autocomplete="off" placeholder="Claudinho, Claudito" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
+          <button class="botao principal">Salvar</button>
+        </form>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Microfone</div><div class="desc">Qual ele escuta.</div></div>
+        <select id="vozMic" style="max-width:260px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Envia sozinho depois de</div><div class="desc">Quanto tempo calado até ele mandar o que você falou.</div></div>
+        <input type="range" min="0.6" max="3" step="0.2" id="vozSilencio"><span class="valor" id="vozSilencioValor"></span>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas demora uns 2 s a mais pra enviar.</div></div>
+        <div class="segmentos" data-cfg="voz_modelo_fala"><button data-v="base">Rápido</button><button data-v="small">Melhor</button></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_sons"><span></span></label>
+      </div>
+      <p class="sub" style="margin:10px 0 0">Com um jogo em tela cheia ele para de escutar sozinho. Diga "cancela" depois de me chamar pra desistir.</p>
     </div>
   </section>
 
@@ -651,6 +688,7 @@ function montarResto() {
   aviso.oninput = () => av.textContent = `${aviso.value} s`;
   aviso.onchange = () => mudar("aviso_segundos", +aviso.value);
 
+  montarVoz();
   const lista = document.getElementById("listaEsquetes");
   lista.innerHTML = "";
   const aleatoria = document.createElement("button");
@@ -769,6 +807,30 @@ function montarSistema() {
   document.getElementById("versao").textContent = "v" + sis.versao;
   document.getElementById("descDados").textContent = "Seus dados ficam em " + sis.dados;
 }
+const NOMES_ESTADO_VOZ = {parado: "Desligado.", ouvindo_apelido: "Ouvindo: é só me chamar. 👂", acordando: "Acordando…",
+  ouvindo_fala: "Tô te ouvindo! 🎙️", enviando: "Mandando o que você disse…"};
+function atualizarVoz() {
+  const e = estado.voz.estado;
+  document.getElementById("vozEstado").textContent = estado.cfg.voz && e === "parado" ? "Ligando… (a primeira vez baixa o Whisper)" : NOMES_ESTADO_VOZ[e] || e;
+}
+function montarVoz() {
+  const ap = document.getElementById("vozApelidos");
+  ap.value = (estado.cfg.voz_apelidos || []).join(", ");
+  document.getElementById("formApelidos").onsubmit = ev => {
+    ev.preventDefault();
+    mudar("voz_apelidos", ap.value.split(",").map(s => s.trim()).filter(Boolean));
+  };
+  const mic = document.getElementById("vozMic");
+  mic.innerHTML = "";
+  const opcoes = [["", "Padrão do Windows"], ...estado.voz.microfones.map(n => [n, n])];
+  for (const [v, t] of opcoes) mic.add(new Option(t, v, false, v === estado.cfg.voz_microfone));
+  mic.onchange = () => mudar("voz_microfone", mic.value);
+  const sil = document.getElementById("vozSilencio"), sv = document.getElementById("vozSilencioValor");
+  sil.value = estado.cfg.voz_silencio; sv.textContent = `${(+sil.value).toFixed(1)} s`;
+  sil.oninput = () => sv.textContent = `${(+sil.value).toFixed(1)} s`;
+  sil.onchange = () => mudar("voz_silencio", +sil.value);
+  atualizarVoz();
+}
 function montarMestre() {
   const m = estado.cfg.mestre || {nome: "", sobre: ""};
   const nome = document.getElementById("mestreNome"), sobre = document.getElementById("mestreSobre");
@@ -851,6 +913,7 @@ async function carregar(primeira) {
       for (const el of document.querySelectorAll("input[data-cfg]")) el.checked = !!estado.cfg[el.dataset.cfg];
       if (mudouVisual) { visual = estado.cfg.visual; montarVisual(); }
       montarSistema();
+      atualizarVoz();
       atualizarVivos();
     }
   } catch (e) {

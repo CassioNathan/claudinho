@@ -1038,7 +1038,7 @@ class Balao:
     CAUDA_W, CAUDA_H = 22, 12
 
     def __init__(self, app, tipo, texto="", titulo=None, rodape=None, duracao=None, entrada=False,
-                 botoes=None, botoes_no_hover=False):
+                 botoes=None, botoes_no_hover=False, barras=False):
         self.app, self.tipo, self.dados = app, tipo, None
         # texto grande vira páginas: clique passa para a próxima. (Rolagem não dá: no Windows a
         # rodinha só chega na janela com foco, e o sistema não deixa o balão pegar o foco.)
@@ -1101,7 +1101,13 @@ class Balao:
                                       border_width=0, fg_color=FUNDO2, text_color=TEXTO,
                                       placeholder_text="responde aqui…" if texto else "pergunta pro claudinho…",
                                       placeholder_text_color=APAGADO, font=f(13))
-            self.entry.pack(padx=10, pady=(4, 10))
+            # conversa por voz: no lugar do campo, a faixa de áudio (o campo continua existindo, escondido,
+            # pra receber o texto que vai ser enviado; clicar na faixa traz o campo de volta pra digitar)
+            self.faixa = tk.Canvas(self.frame, width=340 if texto else 280, height=34, bg=FUNDO2,
+                                   highlightthickness=0, cursor="hand2")
+            self.faixa.bind("<Button-1>", lambda e: self.mostrar_faixa(False, foco=True))
+            self.faixa_ativa = None
+            self.mostrar_faixa(barras)
         self.botoes = botoes or []
         self.linha_botoes = None
         self.botoes_no_hover = botoes_no_hover
@@ -1175,6 +1181,39 @@ class Balao:
                 self.linha_botoes.pack_forget()
         except (tk.TclError, KeyError):
             pass
+
+    def mostrar_faixa(self, ligada, foco=False):
+        """Alterna entre a faixa de áudio (conversa por voz) e o campo de texto."""
+        if ligada == self.faixa_ativa:
+            return
+        self.faixa_ativa = ligada
+        self.entry.pack_forget()
+        self.faixa.pack_forget()
+        (self.faixa if ligada else self.entry).pack(padx=10, pady=(4, 10))
+        if not ligada and foco:
+            self.win.update_idletasks()
+            self.posicionar()
+            self.entry.focus_set()
+
+    def desenhar_faixa(self, niveis, em_voz, carregando, t):
+        """Barrinhas de áudio: andam da direita pra esquerda com o volume do microfone (laranja = ele acha que é
+        fala). Sem o microfone pegar nada ficam rasinhas e cinzas, então dá pra ver que ele não está ouvindo.
+        Preparando/mandando: uma onda varre as barras (está ocupado, calma)."""
+        c = self.faixa
+        c.delete("all")
+        n = len(niveis)
+        largura, altura = int(c["width"]), int(c["height"])
+        passo = largura / n
+        for i, nivel in enumerate(niveis):
+            if carregando:
+                nivel = 0.25 + 0.2 * math.sin(t / 3.0 - i * 0.45)
+            h = 3 + (altura - 8) * min(1.0, nivel) ** 0.8
+            x = i * passo + passo * 0.3
+            if carregando or (em_voz and i >= n - 10):
+                cor = LARANJA
+            else:
+                cor = "#c9a08f" if nivel > 0.12 else APAGADO
+            c.create_rectangle(x, (altura - h) / 2, x + passo * 0.4, (altura + h) / 2, fill=cor, width=0)
 
     def desenhar_rodape(self):
         partes = [self.rodape_base] if self.rodape_base else []
@@ -2580,10 +2619,11 @@ class Claudinho:
         # conversa por voz: o balão fica aberto enquanto durar a conversa (quem encerra é o contador da voz)
         duracao = None if por_clique or self.conversa_voz else limitar(20 + len(texto) / 12, 20, 90)
         self.entrada = Balao(self, "entrada", texto, titulo="claudinho" if texto else None, rodape=self.voz_rodape(),
-                             duracao=duracao, entrada=True)
+                             duracao=duracao, entrada=True, barras=self.conversa_voz)
         self.entrada_desde, self.entrada_teve_foco = time.time(), False
         self.entrada.entry.bind("<Return>", self.enviar)
         self.entrada.entry.bind("<Escape>", lambda e: self.fechar_conversa())
+        self.entrada.win.bind("<Escape>", lambda e: self.fechar_conversa())  # com a faixa, o campo está escondido
         if rascunho:
             self.entrada.entry.insert(0, rascunho)
         if por_clique:  # abriu clicando nele: já pode digitar
@@ -2676,13 +2716,19 @@ class Claudinho:
             self.conversa_voz = False
             if self.entrada:  # o balão da última resposta volta a sumir sozinho, como numa conversa digitada
                 self.entrada.ate = time.time() + 20
+                self.entrada.mostrar_faixa(False)
         if self.entrada and self.entrada.rodape is not None:
             self.entrada.mudar_rodape(self.TEXTOS_VOZ.get(estado, ""))
 
     def animar_voz(self):
-        """Os pontinhos de "preparando…" e "mandando…" (sem isso parece que travou)."""
-        if self.conversa_voz and self.voz_status in ("preparando", "enviando") and self.entrada                 and self.entrada.rodape is not None:
+        """A faixa de áudio (e os pontinhos de "preparando…" e "mandando…": sem isso parece que travou)."""
+        if not (self.conversa_voz and self.entrada and self.entrada.rodape is not None):
+            return
+        carregando = self.voz_status in ("preparando", "enviando")
+        if carregando:
             self.entrada.mudar_rodape(self.TEXTOS_VOZ[self.voz_status] + "." * (self.t // 6 % 4))
+        if self.entrada.faixa_ativa:
+            self.entrada.desenhar_faixa(list(self.voz.niveis), self.voz.em_voz, carregando, self.t)
 
     def abrir_conversa_por_voz(self):
         """O chat abre já com o cursor no campo, como no clique. Ocupado pensando na outra: não abre."""

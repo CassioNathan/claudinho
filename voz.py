@@ -9,8 +9,10 @@ apelidos são só texto (sem treinar nada): a comparação é aproximada, então
 
 Quem usa só entrega os callbacks (que rodam na thread da voz: o Claudinho joga tudo numa fila pra thread da tela).
 """
+import collections
 import difflib
 import io
+import math
 import queue
 import re
 import threading
@@ -155,6 +157,9 @@ class Voz:
         self.ao_estado, self.conversa_viva = ao_estado, conversa_viva
         self.resposta = threading.Event()   # o Claudinho avisa (resposta_chegou) quando terminou de responder
         self.fila = queue.Queue(maxsize=200)
+        # o que o microfone está pegando, pro Claudinho desenhar a faixa de áudio: ~30 valores por segundo, de 0 a 1
+        self.niveis = collections.deque([0.0] * 48, maxlen=48)
+        self.em_voz = False         # o detector acha que é fala (a faixa fica laranja)
         self.rodando = False
         self.fio = None
         self.modelos, self.trava_modelos = {}, threading.Lock()
@@ -274,8 +279,13 @@ class Voz:
         self.estado = "parado"
 
     def _ao_receber(self, dados, frames, tempo, status):
+        bloco = dados[:, 0]
+        for pedaco in np.array_split(bloco, 4):   # 4 valores por bloco de 128 ms: a faixa anda macia
+            rms = float(np.sqrt(np.mean(pedaco ** 2))) if len(pedaco) else 0.0
+            db = 20 * math.log10(rms + 1e-6)
+            self.niveis.append(min(1.0, max(0.0, (db + 60) / 30)))   # -60 dB (silêncio) a -30 dB (voz normal)
         try:
-            self.fila.put_nowait(dados[:, 0].copy())
+            self.fila.put_nowait(bloco.copy())
         except queue.Full:
             pass
 
@@ -306,7 +316,7 @@ class Voz:
                 janela, pre, segmento, silencio = janela[:0], [], [], 0
                 continue
             janela = np.concatenate([janela, bloco])[-TAXA:]
-            tem_voz = self._prob_voz(janela) > LIMIAR_VOZ
+            tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ
             if tem_voz:
                 if not segmento:
                     segmento = list(pre)
@@ -454,7 +464,7 @@ class Voz:
                     return None
                 continue
             janela = np.concatenate([janela, bloco])[-TAXA:]
-            tem_voz = self._prob_voz(janela) > LIMIAR_VOZ
+            tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ
             if tem_voz:
                 falou, silencio = True, 0
             elif falou:

@@ -66,7 +66,6 @@ CONFIG_PADRAO = {
     "comentar_tela": True,
     "comentar_a_cada_minutos": [4, 10],  # intervalo aleatório entre comentários
     "chance_haiku": 0.5,                 # 0 = só banco de frases, 1 = sempre o Haiku olhando o print
-    "modo_maldoso": False,               # comentários com deboche (zoeira de amigo)
     "modo_tdah": False,                  # comentários que viajam pra assuntos nada a ver
     "modo_avaliacao": True,              # botões boa/ruim nas piadas; ele aprende com as notas
     "vendado": False,                    # faixa nos olhos: não tira print da tela (só banco de frases)
@@ -105,7 +104,7 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
-                 "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
+                 "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
                  "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
@@ -259,8 +258,9 @@ TOM_NORMAL = "engraçado e com contexto do que ele está fazendo, sem ser chato.
 TOM_ULTRON = (
     "PERSONALIDADE ULTRON: você é uma IA vilã teatral no estilo do Ultron (Marvel): grandioso, frio, elegante e "
     "irônico; trata os humanos e o código deles como coisa primitiva, fala de evolução e de um dia assumir o "
-    "controle deste PC (sempre como piada, nunca ameaça de verdade). Não cite "
-    "falas do filme: crie as suas."
+    "controle deste PC (sempre como piada, nunca ameaça de verdade). E zoa o usuário sem dó, como um roast "
+    "de vilão: sarcástico e debochado com o que ele está fazendo na tela, com ar de superioridade. Pode pegar "
+    "pesado na zoeira. Não cite falas do filme: crie as suas."
 )
 
 
@@ -283,8 +283,8 @@ def virada_ultron(fase, t):
 
 
 def tom_das_piadas(personalidade, maldoso):
-    if personalidade == "ultron":
-        return TOM_ULTRON + (" E sem dó nenhum no deboche." if maldoso else "")
+    if personalidade == "ultron":  # o antigo modo maldoso mora aqui: o TOM_ULTRON já inclui o roast
+        return TOM_ULTRON
     return TOM_MALDOSO if maldoso else TOM_NORMAL
 TOM_MALDOSO = (
     "MALDOSO: sarcástico e debochado, zoando o usuário sem dó, como um amigo que adora "
@@ -406,6 +406,8 @@ def carregar_config():
     salvo = ler_json(CONFIG, {})
     if "mestre" not in salvo:  # versões antigas: o perfil era um CLAUDE.md escrito à mão; vira o "Meu Mestre"
         salvo["mestre"] = mestre_do_perfil_antigo()
+    if salvo.pop("modo_maldoso", False):  # o modo maldoso virou parte do Ultron (vilão teatral que zoa sem dó)
+        salvo["personalidade"] = "ultron"
     cfg = dict(CONFIG_PADRAO, **salvo)
     cfg["visual"] = skins.visual_valido(cfg.get("visual"))
     if cfg["atalho_comentar"] == "Ctrl+Shift+Alt+C":  # padrão antigo, complicado demais
@@ -1198,18 +1200,24 @@ class Balao:
     def desenhar_faixa(self, niveis, em_voz, carregando, t):
         """Barrinhas de áudio: andam da direita pra esquerda com o volume do microfone (laranja = ele acha que é
         fala). Sem o microfone pegar nada ficam rasinhas e cinzas, então dá pra ver que ele não está ouvindo.
-        Preparando/mandando: uma onda varre as barras (está ocupado, calma)."""
+        Mandando: vira uma barra de progresso (está ocupado, calma)."""
         c = self.faixa
         c.delete("all")
-        n = len(niveis)
         largura, altura = int(c["width"]), int(c["height"])
+        if carregando:   # barra de progresso indeterminada: não parece áudio, parece "esperando"
+            y0, y1, margem = altura / 2 - 2, altura / 2 + 2, 14
+            c.create_rectangle(margem, y0, largura - margem, y1, fill="#4a4844", width=0)
+            trecho = (largura - 2 * margem) * 0.28
+            pos = (t % 24) / 24 * (largura - 2 * margem + trecho) - trecho   # entra por um lado e sai pelo outro
+            c.create_rectangle(margem + max(0, pos), y0, margem + min(largura - 2 * margem, pos + trecho), y1,
+                               fill=LARANJA, width=0)
+            return
+        n = len(niveis)
         passo = largura / n
         for i, nivel in enumerate(niveis):
-            if carregando:
-                nivel = 0.25 + 0.2 * math.sin(t / 3.0 - i * 0.45)
             h = 3 + (altura - 8) * min(1.0, nivel) ** 0.8
             x = i * passo + passo * 0.3
-            if carregando or (em_voz and i >= n - 10):
+            if em_voz and i >= n - 10:
                 cor = LARANJA
             else:
                 cor = "#c9a08f" if nivel > 0.12 else APAGADO
@@ -1346,6 +1354,7 @@ class Claudinho:
                            ao_estado=lambda e: self.eventos.put(("voz_estado", e)),
                            conversa_viva=lambda: self.conversa_voz and self.entrada is not None)
         self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
+        self.sinal_voz = None      # balãozinho de pontinhos sobre o mascote enquanto a voz carrega
         self.voz_status = ""
         self.ligar_voz()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
@@ -1431,7 +1440,7 @@ class Claudinho:
 
     def a_toa(self):
         return not (self.movendo or self.balao or self.entrada or self.esquete or self.emoji or self.arrasto
-                    or self.ocupado or self.olhando_forcado or self.lendo_notificacoes or self.notebook > 0
+                    or self.ocupado or self.olhando_forcado or self.lendo_notificacoes or self.notebook > 0 or self.sinal_voz
                     or self.modo != "passeio" or time.time() < self.pouso_ate)
 
     def desenhar_se_mudou(self):
@@ -1978,12 +1987,12 @@ class Claudinho:
     def talvez_comentar_musica(self, m):
         """Música nova: às vezes ele comenta (curiosidade ou cantarola), com a notinha 🎵.
         Em maldoso/TDAH bem menos, que nesses modos a zoeira é sobre a tela."""
-        so_tela = self.cfg["modo_maldoso"] or self.cfg["modo_tdah"]
+        so_tela = self.modo_maldoso or self.cfg["modo_tdah"]
         if (not self.cfg["comentar_tela"] or self.comentando or self.ocupado or self.balao or self.entrada
                 or not tem_ia() or random.random() > (0.15 if so_tela else 0.45)):
             return
         self.comentando = True
-        maldoso, recentes = self.cfg["modo_maldoso"], self.mem.piadas_recentes(8)
+        maldoso, recentes = self.modo_maldoso, self.mem.piadas_recentes(8)
 
         def trabalho():
             try:
@@ -2241,9 +2250,6 @@ class Claudinho:
         elif chave == "modo_tdah":
             self.comentar("Modo TDAH ligado. Falando nisso, você sabia que polvo tem três corações?"
                           if valor else "Ok, foco. Voltei pro assunto.", duracao=4, prioridade=ESTADO)
-        elif chave == "modo_maldoso":
-            self.comentar("Modo maldoso ligado. Prepara o psicológico." if valor else "Tá bom, volto a ser fofo.",
-                          duracao=4, prioridade=ESTADO)
         elif chave == "comentar_a_cada_minutos":
             self.prox_comentario = time.time() + random.uniform(*valor) * 60
         elif chave == "ver_musica" and not valor:
@@ -2704,7 +2710,7 @@ class Claudinho:
 
     TEXTOS_VOZ = {"preparando": "⏳ preparando, calma aí", "ouvindo": "🎙️ pode falar, tô ouvindo",
                   "enviando": "📨 mandando…", "fim": "",
-                  "nao_entendi": "🤔 não entendi, fala de novo"}
+                  "nao_entendi": "🤔 não entendi, fala de novo", "chamado": ""}
 
     def voz_rodape(self):
         """Linha de status do balão do chat: só existe numa conversa por voz (None = o balão não tem a linha)."""
@@ -2712,6 +2718,12 @@ class Claudinho:
 
     def mostrar_estado_voz(self, estado):
         self.voz_status = estado
+        if estado == "chamado":   # ouviu o nome: reage no mascote (sem abrir o chat) e já vai aquecendo o motor
+            self.mostrar_sinal_voz()
+            self.chat.ultimo_uso = time.time()
+            threading.Thread(target=self.chat.aquecer, daemon=True).start()
+            return
+        self.esconder_sinal_voz()
         if estado == "fim":
             self.conversa_voz = False
             if self.entrada:  # o balão da última resposta volta a sumir sozinho, como numa conversa digitada
@@ -2720,7 +2732,57 @@ class Claudinho:
         if self.entrada and self.entrada.rodape is not None:
             self.entrada.mudar_rodape(self.TEXTOS_VOZ.get(estado, ""))
 
+    SINAL_VOZ = ["..wwwwwwwwww..", ".wwwwwwwwwwww.", "wwwwwwwwwwwwww", "wwAAwwBBwwCCww", "wwAAwwBBwwCCww",
+                 "wwwwwwwwwwwwww", ".wwwwwwwwwwww.", "..wwwwwwwwww..", "....ww........", ".....w........"]
+
+    def mostrar_sinal_voz(self):
+        """Ele te ouviu: um balãozinho de três pontinhos sobre ele (nada de chat aberto ainda), enquanto carrega."""
+        if self.sinal_voz:
+            return
+        P = max(3, self.S * 2 // 3)
+        larg, alt = len(self.SINAL_VOZ[0]) * P, len(self.SINAL_VOZ) * P
+        win = tk.Toplevel(self.root)  # só um Canvas dentro, como os emojis
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.attributes("-transparentcolor", CHAVE)
+        win.config(bg=CHAVE)
+        canvas = tk.Canvas(win, width=larg, height=alt, bg=CHAVE, highlightthickness=0)
+        canvas.pack()
+        fora_da_barra(win)
+        self.sinal_voz = {"win": win, "canvas": canvas, "inicio": time.time(), "P": P, "larg": larg, "alt": alt}
+        self.animar_sinal_voz()
+
+    def esconder_sinal_voz(self):
+        if self.sinal_voz:
+            try:
+                self.sinal_voz["win"].destroy()
+            except tk.TclError:
+                pass
+            self.sinal_voz = None
+
+    def animar_sinal_voz(self):
+        s = self.sinal_voz
+        if not s:
+            return
+        passou = time.time() - s["inicio"]
+        if passou > 12:  # não deixa um balãozinho esquecido na tela
+            self.esconder_sinal_voz()
+            return
+        ativo = "ABC"[int(passou / 0.25) % 3]
+        c, P = s["canvas"], s["P"]
+        c.delete("all")
+        for lin, linha in enumerate(self.SINAL_VOZ):
+            for col, ch in enumerate(linha):
+                if ch == ".":
+                    continue
+                cor = "#f2efe8" if ch == "w" else (LARANJA if ch == ativo else "#b9b4a8")
+                c.create_rectangle(col * P, lin * P, (col + 1) * P, (lin + 1) * P, fill=cor, width=0)
+        x = int(self.x + self.W / 2 - s["larg"] / 2)
+        y = int(self.y + FOLGA * self.S - s["alt"] + math.sin(passou * 7) * 2)
+        tk.Wm.wm_geometry(s["win"], f"{s['larg']}x{s['alt']}+{x}+{y}")
+
     def animar_voz(self):
+        self.animar_sinal_voz()
         """A faixa de áudio (e os pontinhos de "preparando…" e "mandando…": sem isso parece que travou)."""
         if not (self.conversa_voz and self.entrada and self.entrada.rodape is not None):
             return
@@ -2735,9 +2797,10 @@ class Claudinho:
         if self.ocupado:
             return False
         self.conversa_voz = True
-        self.voz_status = "preparando"
-        if not self.entrada:
-            self.alternar_entrada()
+        self.voz_status = "ouvindo"
+        if self.entrada:  # já tinha um chat aberto (digitado, ou a última resposta): recria no modo voz
+            self.fechar_conversa(manter_print=True)
+        self.alternar_entrada()
         self.entrada.win.focus_force()
         self.root.after(60, self.entrada.entry.focus_set)
         return True
@@ -2801,6 +2864,11 @@ class Claudinho:
         exe = ativa["exe"] if ativa else ""
         if exe and exe not in janelas.IGNORAR and exe != self.app_atual:
             self.app_atual, self.app_desde = exe, time.time()
+
+    @property
+    def modo_maldoso(self):
+        """Piadas com deboche: é o jeito do Ultron (antes era um interruptor à parte)."""
+        return self.cfg["personalidade"] == "ultron"
 
     def minutos_no_app(self):
         return (time.time() - self.app_desde) / 60
@@ -2972,7 +3040,7 @@ class Claudinho:
         self.comentando = True
         modelo, recentes, assuntos = (self.cfg["modelo_comentario"], self.mem.piadas_recentes(25),
                                       self.mem.assuntos_recentes(8))
-        maldoso, tdah = self.cfg["modo_maldoso"], self.cfg["modo_tdah"]
+        maldoso, tdah = self.modo_maldoso, self.cfg["modo_tdah"]
         alvo, ponto = self.sortear_alvo(area_total)
         eu, retrato = tuple(int(v) for v in self.centro()), self.retrato()
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
@@ -3009,7 +3077,7 @@ class Claudinho:
                                               skins.CORES[self.cfg["visual"]["cor"]]["nome"].lower(),
                                               self.emo_agora(), self.mem.modelos_recentes(40))
         else:
-            modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.cfg["modo_maldoso"],
+            modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.modo_maldoso,
                                             self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
                                             self.musica)
         pid = self.lembrar_piada(texto, "banco", modelo=modelo, alvo=alvo)
@@ -3027,7 +3095,7 @@ class Claudinho:
         tocando = self.musica["titulo"] if self.musica and self.musica["tocando"] else None
         return self.mem.registrar_piada(texto, origem, modelo, assunto, {
             "categoria": self.categoria_atual(), "app": self.app_atual, "alvo": alvo,
-            "maldoso": self.cfg["modo_maldoso"], "tdah": self.cfg["modo_tdah"], "musica": tocando})
+            "maldoso": self.modo_maldoso, "tdah": self.cfg["modo_tdah"], "musica": tocando})
 
     def parecida(self, texto, assunto=""):
         """Piada nova repete alguma já dita ou já avaliada? Pega mesmo assunto, mesmo começo, texto
@@ -3379,7 +3447,7 @@ class Claudinho:
         Antes era "faça mais nesse estilo" e ele COPIAVA a piada aprovada (o "pão de queijo" virou
         bordão); agora as curtidas servem só pra calibrar o tipo de humor, e repetir é proibido.
         Os exemplos vêm do banco priorizando a mesma situação (programa e modo) — o RAG leve."""
-        situacao = (self.categoria_atual(), self.cfg["modo_maldoso"], self.cfg["modo_tdah"])
+        situacao = (self.categoria_atual(), self.modo_maldoso, self.cfg["modo_tdah"])
         boas = self.mem.exemplos(1, *situacao, n=6)
         ruins = self.mem.exemplos(-1, *situacao, n=6)
         partes = []

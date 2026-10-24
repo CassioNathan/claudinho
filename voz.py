@@ -327,7 +327,8 @@ class Voz:
                 silencio += 1
             else:
                 pre = (pre + [bloco])[-6:]
-            fim = bool(segmento) and (silencio >= 4 or len(segmento) > 8 / SEG_BLOCO)
+            curto = len(segmento) < 2.2 / SEG_BLOCO   # "Claudinho" sozinho é curto: não precisa esperar tanto
+            fim = bool(segmento) and (silencio >= (2 if curto else 4) or len(segmento) > 8 / SEG_BLOCO)
             if fim:
                 audio = np.concatenate(segmento)
                 segmento, silencio, pre = [], 0, []
@@ -342,7 +343,8 @@ class Voz:
         if not apelidos:
             return
         try:
-            texto = self.transcrever(audio, cfg["voz_modelo_apelido"], prompt=", ".join(apelidos) + ".")
+            texto, _ = self.transcrever_detalhado(audio, cfg["voz_modelo_apelido"], prompt=", ".join(apelidos) + ".",
+                                                  beam=1)
         except Exception as e:
             self.ao_erro(f"o Whisper falhou ({e})")
             return
@@ -364,19 +366,18 @@ class Voz:
         voz_silencio (calou: envia) e voz_encerrar (ficou sem falar depois da resposta: encerra a conversa)."""
         cfg = self.config()
         self.estado = "acordando"
-        self.ao_estado("preparando")
-        if not self.ao_acordar():  # o Claudinho não pode agora (pensando, vendo outra coisa)
-            self.estado = "ouvindo_apelido"
-            self.ao_estado("fim")
-            return
+        self.ao_estado("chamado")   # o mascote já reage (sem abrir o chat) enquanto carrega o que precisa
         try:
-            self._whisper(cfg["voz_modelo_fala"])  # a "carregadinha" de 1-2 s: o sinal só vem depois dela
+            self._whisper(cfg["voz_modelo_fala"])  # a "carregadinha" de 1-2 s: o balão só abre depois dela
             self.ultimo_uso_fala = time.time()
         except Exception as e:
             self.ao_erro(f"não consegui carregar o Whisper ({e})")
             self.estado = "ouvindo_apelido"
             self.ao_estado("fim")
-            self.ao_cancelar()
+            return
+        if not self.ao_acordar():  # o Claudinho não pode agora (pensando, vendo outra coisa)
+            self.estado = "ouvindo_apelido"
+            self.ao_estado("fim")
             return
         espera, primeira = ESPERA_INICIAL, True
         while self.rodando and self.conversa_viva():

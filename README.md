@@ -14,7 +14,7 @@ terminam e solta piadas sobre o que está na tela.
   qualquer outro comando ou mudança em arquivo pede **Pode / Não** num balão.
 - **Avisos em fila:** quando um chat do Claude Code termina, ele avisa (projeto, o que foi pedido, resposta).
   Sua pergunta tem prioridade; os avisos esperam e somem sozinhos.
-- **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modos maldoso 😈 e TDAH 🐿️,
+- **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modo TDAH 🐿️ (o deboche maldoso 😈 é o jeito do Ultron),
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
 - **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
   do Windows), zoa a música de vez em quando, comenta quando começa uma música nova (curiosidade sobre

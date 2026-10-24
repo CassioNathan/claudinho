@@ -79,7 +79,9 @@ CONFIG_PADRAO = {
     "ollama_modelo": "qwen3:1.7b",       # modelo local (o leve, ou o gemma3:4b que enxerga a tela)
     "voz": False,                        # comando por voz: chamou o apelido, o chat abre e ele escuta
     "voz_apelidos": ["Claudinho"],       # como chamar (só texto, sem treinar; vale mais de um)
-    "voz_silencio": 1.2,                 # segundos calado até ele enviar sozinho
+    "voz_silencio": 2.5,                 # segundos calado até ele enviar sozinho
+    "voz_depurar": False,                # guarda os últimos áudios em ~/.claudinho/voz_debug (diagnóstico)
+    "voz_encerrar": 8.0,                 # segundos sem falar depois da resposta até encerrar a conversa por voz
     "voz_microfone": "",                 # parte do nome do microfone ("" = o padrão do Windows)
     "voz_sons": True,                    # tuk-tuk quando pode falar, tuk-tuk grave quando para de ouvir
     "voz_modelo_apelido": "base",        # Whisper que escuta o apelido (leve, na CPU)
@@ -105,7 +107,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_maldoso", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
-                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -1301,7 +1303,11 @@ class Claudinho:
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.voz = voz.Voz(lambda: self.cfg, self.voz_acordar, lambda t: self.eventos.put(("voz_texto", t)),
                            lambda t: self.eventos.put(("voz_enviar", t)), lambda: self.eventos.put(("voz_cancelar",)),
-                           pausado=self.voz_pausada, ao_erro=lambda m: self.eventos.put(("voz_erro", m)))
+                           pausado=self.voz_pausada, ao_erro=lambda m: self.eventos.put(("voz_erro", m)),
+                           ao_estado=lambda e: self.eventos.put(("voz_estado", e)),
+                           conversa_viva=lambda: self.conversa_voz and self.entrada is not None)
+        self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
+        self.voz_status = ""
         self.ligar_voz()
         self.emoji, self.prox_emoji = None, time.time() + random.uniform(40, 90)  # reação flutuando
         self.esquete = None  # idle: deploy, café… (sai do mesmo timer das piadas)
@@ -2153,7 +2159,9 @@ class Claudinho:
             valor = [str(a).strip()[:30] for a in (valor if isinstance(valor, list) else []) if str(a).strip()][:8]
             valor = valor or ["Claudinho"]
         elif chave == "voz_silencio":
-            valor = max(0.6, min(3.0, float(valor)))
+            valor = max(0.6, min(5.0, float(valor)))
+        elif chave == "voz_encerrar":
+            valor = max(3.0, min(30.0, float(valor)))
         elif chave == "voz_microfone":
             valor = str(valor).strip()[:80]
         elif chave == "voz_modelo_fala":
@@ -2569,8 +2577,9 @@ class Claudinho:
         if self.balao and self.balao.tipo not in ("pensando", "comentario"):
             self.falas.appendleft(self.balao.dados)  # volta para a fila, mostra depois
         self.fechar_balao()
-        duracao = None if por_clique else limitar(20 + len(texto) / 12, 20, 90)
-        self.entrada = Balao(self, "entrada", texto, titulo="claudinho" if texto else None,
+        # conversa por voz: o balão fica aberto enquanto durar a conversa (quem encerra é o contador da voz)
+        duracao = None if por_clique or self.conversa_voz else limitar(20 + len(texto) / 12, 20, 90)
+        self.entrada = Balao(self, "entrada", texto, titulo="claudinho" if texto else None, rodape=self.voz_rodape(),
                              duracao=duracao, entrada=True)
         self.entrada_desde, self.entrada_teve_foco = time.time(), False
         self.entrada.entry.bind("<Return>", self.enviar)
@@ -2653,10 +2662,34 @@ class Claudinho:
         self.eventos.put(("voz_acordar", feito, resultado))
         return feito.wait(3) and resultado.get("ok", False)
 
+    TEXTOS_VOZ = {"preparando": "⏳ preparando, calma aí", "ouvindo": "🎙️ pode falar, tô ouvindo",
+                  "enviando": "📨 mandando…", "fim": "",
+                  "nao_entendi": "🤔 não entendi, fala de novo"}
+
+    def voz_rodape(self):
+        """Linha de status do balão do chat: só existe numa conversa por voz (None = o balão não tem a linha)."""
+        return self.TEXTOS_VOZ.get(self.voz_status, "") if self.conversa_voz else None
+
+    def mostrar_estado_voz(self, estado):
+        self.voz_status = estado
+        if estado == "fim":
+            self.conversa_voz = False
+            if self.entrada:  # o balão da última resposta volta a sumir sozinho, como numa conversa digitada
+                self.entrada.ate = time.time() + 20
+        if self.entrada and self.entrada.rodape is not None:
+            self.entrada.mudar_rodape(self.TEXTOS_VOZ.get(estado, ""))
+
+    def animar_voz(self):
+        """Os pontinhos de "preparando…" e "mandando…" (sem isso parece que travou)."""
+        if self.conversa_voz and self.voz_status in ("preparando", "enviando") and self.entrada                 and self.entrada.rodape is not None:
+            self.entrada.mudar_rodape(self.TEXTOS_VOZ[self.voz_status] + "." * (self.t // 6 % 4))
+
     def abrir_conversa_por_voz(self):
         """O chat abre já com o cursor no campo, como no clique. Ocupado pensando na outra: não abre."""
         if self.ocupado:
             return False
+        self.conversa_voz = True
+        self.voz_status = "preparando"
         if not self.entrada:
             self.alternar_entrada()
         self.entrada.win.focus_force()
@@ -3315,6 +3348,7 @@ class Claudinho:
 
     # ---------- eventos vindos de threads ----------
     def processar_eventos(self):
+        self.animar_voz()
         while True:
             try:
                 ev = self.eventos.get_nowait()
@@ -3325,13 +3359,18 @@ class Claudinho:
             elif ev[0] == "voz_acordar":
                 ev[2]["ok"] = self.abrir_conversa_por_voz()
                 ev[1].set()
+            elif ev[0] == "voz_estado":
+                self.mostrar_estado_voz(ev[1])
             elif ev[0] == "voz_texto":
                 self.escrever_no_chat(ev[1])
             elif ev[0] == "voz_enviar":
                 if self.entrada:
                     self.escrever_no_chat(ev[1])
                     self.enviar()
+                if not self.ocupado:  # não saiu (campo vazio, ocupado…): não tem resposta pra esperar
+                    self.voz.resposta_chegou()
             elif ev[0] == "voz_cancelar":
+                self.conversa_voz = False
                 self.fechar_conversa()
             elif ev[0] == "voz_erro":
                 self.comentar(f"Voz: {ev[1]}", prioridade=IMPORTANTE)
@@ -3393,6 +3432,9 @@ class Claudinho:
                                      conversa=self.mem.conversa_atual())
                 self.fechar_balao()  # tira o "pensando…"
                 self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
+                if self.conversa_voz:  # a voz espera isso pra fazer o tuk-tuk e ouvir a próxima
+                    self.voz_status = "ouvindo"
+                    self.voz.resposta_chegou()
             elif ev[0] == "comentario":
                 self.comentando = False
                 forcado, self.olhando_forcado = self.olhando_forcado, False

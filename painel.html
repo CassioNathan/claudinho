@@ -392,6 +392,25 @@
         </form>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Reconhecimento da fala ☁️</div><div class="desc" id="sttInfo">O Whisper do PC erra mais que os modelos na nuvem.
+          Com um provedor, só o que você diz DEPOIS da chamada vai pra internet (a chamada "Ei Claudinho" é detectada aqui no PC), e se a nuvem falhar ele
+          volta pro Whisper local. Custa centavos por hora de fala; a chave é sua e fica criptografada.</div></div>
+        <select id="sttProvedor" style="max-width:260px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
+      </div>
+      <div class="linha" id="sttLinhaChave">
+        <div class="info"><div class="titulo">Chave do provedor 🔑</div><div class="desc" id="sttChaveInfo">Cole a chave da sua conta (Groq: console.groq.com, tem
+          plano grátis). Ela é guardada criptografada pelo Windows.</div></div>
+        <form id="sttForm" style="display:flex;gap:8px;align-items:center">
+          <input id="sttChave" type="password" autocomplete="off" placeholder="cole a chave" style="width:200px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
+          <button class="botao principal">Salvar</button><button type="button" class="botao" id="sttTestar">Testar</button>
+        </form>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Ignorar vozes mais baixas que a minha 🔇</div><div class="desc">Depois da chamada, só conta voz com volume parecido com o
+          da chamada: TV e gente falando ao fundo não entram no que ele escuta.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_travar_nivel"><span></span></label>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Melhorar o áudio do microfone 🎚️</div><div class="desc">Ganho automático (sobe o volume quando você fala baixo ou
           longe do microfone) e filtro de ruído (chiado, ventilador). Ajuda com microfone distante.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_limpar"><span></span></label>
@@ -865,6 +884,27 @@ function atualizarVoz() {
   const e = estado.voz.estado;
   document.getElementById("vozEstado").textContent = estado.cfg.voz && e === "parado" ? "Ligando… (a primeira vez baixa o Whisper)" : NOMES_ESTADO_VOZ[e] || e;
 }
+function montarStt() {
+  const st = estado.stt, sel = document.getElementById("sttProvedor");
+  const assinatura = JSON.stringify([st.provedores, st.chave, st.teste, st.erro, estado.cfg.voz_reconhecimento]);
+  if (sel.dataset.assinatura === assinatura) return;
+  sel.dataset.assinatura = assinatura;
+  sel.innerHTML = "";
+  sel.add(new Option("Whisper no PC (grátis, erra mais)", "local", false, estado.cfg.voz_reconhecimento === "local"));
+  for (const p of st.provedores) sel.add(new Option(p.nome, p.id, false, p.id === estado.cfg.voz_reconhecimento));
+  sel.onchange = () => mudar("voz_reconhecimento", sel.value);
+  const nuvem = estado.cfg.voz_reconhecimento !== "local";
+  document.getElementById("sttLinhaChave").style.display = nuvem ? "" : "none";
+  const info = document.getElementById("sttChaveInfo");
+  info.textContent = st.teste ? st.teste : st.erro ? `Última falha: ${st.erro} (usando o Whisper local)` :
+    st.chave ? "Chave salva ✓ (cole outra pra trocar, ou clique em Testar)" : "Cole a chave da sua conta (Groq: console.groq.com, tem plano grátis). Fica criptografada pelo Windows.";
+  document.getElementById("sttForm").onsubmit = ev => {
+    ev.preventDefault();
+    const campo = document.getElementById("sttChave");
+    if (campo.value.trim()) { acao("stt_chave:" + campo.value.trim(), "chave salva 🔑"); campo.value = ""; }
+  };
+  document.getElementById("sttTestar").onclick = () => acao("stt_testar", "testando a chave…");
+}
 function montarVozes(forcar) {
   const sel = document.getElementById("vozVoz"), info = document.getElementById("vozVozInfo");
   const f = estado.fala, baixando = f.baixando;
@@ -906,6 +946,7 @@ function montarVoz() {
   vol.onchange = () => mudar("voz_volume", +vol.value);
   document.getElementById("vozTestar").onclick = () => acao("voz_testar", "falando… 🔊");
   montarVozes();
+  montarStt();
   const enc = document.getElementById("vozEncerrar"), ev = document.getElementById("vozEncerrarValor");
   enc.value = estado.cfg.voz_encerrar; ev.textContent = `${enc.value} s`;
   enc.oninput = () => ev.textContent = `${enc.value} s`;
@@ -996,6 +1037,7 @@ async function carregar(primeira) {
       montarSistema();
       atualizarVoz();
       montarVozes();
+      montarStt();
       atualizarVivos();
     }
   } catch (e) {

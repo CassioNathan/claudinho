@@ -22,6 +22,8 @@ import wave
 import zlib
 from pathlib import Path
 
+import stt
+
 import numpy as np
 
 TAXA = 16000
@@ -49,11 +51,12 @@ def frase_aberta(texto):
 
 INCERTO = object()               # o Whisper não entendeu: pede pra repetir em vez de mandar
 LIMITE_CONFIANCA = -1.0         # log-prob médio abaixo disso = chute
+NIVEL_MINIMO = 0.1                # a voz precisa ter ≥ 10% (−20 dB) do volume da chamada: só barra TV e gente longe
 GANHO_ALVO = 0.08               # volume (RMS) que o ganho automático procura na fala
 GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
 LIMIAR_VOZ = 0.4                # abaixo do 0,5 padrão: pega voz baixa ou longe do microfone
-PROMPT_CONVERSA = "Conversa em português do Brasil com o Claudinho, um assistente de mesa."
 ESPERA_INICIAL = 8.0            # chamou e não falou nada: desiste depois disso
+RUIDO_CLASSICO = {"obrigado", "obrigada", "tchau", "tchau tchau", "muito obrigado", "obrigado por assistir"}
 ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se")
 
 
@@ -208,7 +211,7 @@ def tocar(nome):
 
 class Voz:
     def __init__(self, config, ao_acordar, ao_texto, ao_enviar, ao_cancelar, pausado=lambda: False, ao_erro=print,
-                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None):
+                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None):
         """config(): dict com voz_apelidos, voz_silencio, voz_microfone, voz_modelo_apelido, voz_modelo_fala,
         voz_sons (relido a cada uso: mudar no painel vale na hora)."""
         self.config = config
@@ -216,11 +219,14 @@ class Voz:
         self.ao_cancelar, self.pausado, self.ao_erro = ao_cancelar, pausado, ao_erro
         self.ao_estado, self.conversa_viva = ao_estado, conversa_viva
         self.fala = fala             # fala.Fala: a voz do Claudinho (None = só texto)
+        self.chave_stt = chave_stt   # a chave do provedor de reconhecimento na nuvem (guardada criptografada)
+        self.nuvem_erro = None       # por que a última tentativa na nuvem caiu pro local (None = deu certo)
         self.resposta = threading.Event()   # o Claudinho avisa (resposta_chegou) quando terminou de responder
         self.fila = queue.Queue(maxsize=200)
         # o que o microfone está pegando, pro Claudinho desenhar a faixa de áudio: ~30 valores por segundo, de 0 a 1
         self.niveis = collections.deque([0.0] * 48, maxlen=48)
         self.em_voz = False         # o detector acha que é fala (a faixa fica laranja)
+        self.nivel_chamada = 0.0     # volume da sua chamada ("Ei Claudinho"): referência de quem está falando com ele
         self.ganho, self.piso = 1.0, 1e-3    # ganho automático do microfone e o nível do ruído de fundo
         self.rodando = False
         self.fio = None
@@ -276,9 +282,33 @@ class Voz:
                     del self.modelos[chave]
                 self.ultimo_uso_fala = 0.0
 
+    def usar_nuvem(self):
+        return self.config().get("voz_reconhecimento") in stt.PROVEDORES and bool(self.chave_stt())
+
+    def _transcrever_nuvem(self, audio):
+        """Fala já pronta (depois da chamada) vai pra nuvem; None = não deu, usa o Whisper local."""
+        try:
+            texto, conf = stt.transcrever(preparar(audio, False), self.config()["voz_reconhecimento"], self.chave_stt())
+            self.nuvem_erro = None
+            return texto, conf
+        except stt.ErroSTT as e:
+            if str(e) != self.nuvem_erro:
+                self.ao_erro(f"reconhecimento na nuvem falhou ({e}); usando o Whisper local")
+            self.nuvem_erro = str(e)
+            return None
+
     def transcrever_detalhado(self, audio, modelo, prompt=None, beam=3):
         """(texto, confiança): confiança é a média do log-prob dos trechos (0 = certeza; < -1 = chute) e vira -5 se
         o Whisper achou que não era fala. Texto vazio quando parece alucinação (repetição, legenda inventada)."""
+        if beam >= 3 and self.usar_nuvem():   # beam 1 = detectar a chamada e texto parcial: sempre local
+            r = self._transcrever_nuvem(audio)
+            if r is not None:
+                texto, conf = r
+                if not texto or any(a in texto.lower() for a in ALUCINACOES) or repetitivo(texto):
+                    return "", -9.0
+                if " ".join(normalizar(texto)) in RUIDO_CLASSICO and len(audio) / TAXA < 4 and conf < -0.5:
+                    return "", -9.0
+                return texto, conf
         audio = preparar(audio, bool(self.config().get("voz_limpar", True)))
         with self.trava_transcricao:
             segmentos, _ = self._whisper(modelo).transcribe(
@@ -289,10 +319,14 @@ class Voz:
         texto = " ".join(s.text.strip() for s in segmentos).strip()
         if not segmentos or any(a in texto.lower() for a in ALUCINACOES) or repetitivo(texto):
             return "", -9.0
-        if prompt and " ".join(normalizar(texto)) in " ".join(normalizar(prompt)):   # só repetiu a dica: não era fala
-            return "", -9.0
+        if prompt:   # vazou a dica: o texto é (quase) a dica inteira, não uma chamada curta como "Ei, Claudinho!"
+            t, p = " ".join(normalizar(texto)), " ".join(normalizar(prompt))
+            if len(p.split()) >= 4 and t in p and len(t.split()) >= 0.6 * len(p.split()):
+                return "", -9.0
         logprob = float(np.mean([s.avg_logprob for s in segmentos]))
         sem_fala = float(np.max([s.no_speech_prob for s in segmentos]))
+        if " ".join(normalizar(texto)) in RUIDO_CLASSICO and len(audio) / TAXA < 4 and logprob < -0.5:
+            return "", -9.0   # o Whisper "ouve" um "Obrigado." no meio do ruído
         return texto, (logprob if sem_fala < 0.6 else -5.0)
 
     def transcrever(self, audio, modelo, prompt=None):
@@ -357,9 +391,10 @@ class Voz:
 
     def _ao_receber(self, dados, frames, tempo, status):
         bloco = dados[:, 0]
-        if self.config().get("voz_limpar", True):
-            bloco = self._ganho_automatico(bloco)
-        for pedaco in np.array_split(bloco, 4):   # 4 valores por bloco de 128 ms: a faixa anda macia
+        # o ganho automático só vale pra faixa de áudio na tela: pro Whisper o sinal vai cru (nada de estourar) e
+        # cada fala é normalizada de uma vez em preparar(); antes ele ia amplificado e batia em 1.0 (clipping)
+        visivel = self._ganho_automatico(bloco) if self.config().get("voz_limpar", True) else bloco
+        for pedaco in np.array_split(visivel, 4):   # 4 valores por bloco de 128 ms: a faixa anda macia
             rms = float(np.sqrt(np.mean(pedaco ** 2))) if len(pedaco) else 0.0
             db = 20 * math.log10(rms + 1e-6)
             self.niveis.append(min(1.0, max(0.0, (db + 60) / 30)))   # -60 dB (silêncio) a -30 dB (voz normal)
@@ -367,6 +402,13 @@ class Voz:
             self.fila.put_nowait(bloco.copy())
         except queue.Full:
             pass
+
+    def _nivel_ok(self, bloco):
+        """Voz bem mais baixa que a da chamada (TV, outra pessoa longe) não conta como você falando."""
+        ref = self.nivel_chamada
+        if ref <= 0 or not self.config().get("voz_travar_nivel", True):
+            return True
+        return float(np.percentile(np.abs(bloco), 90)) >= ref * NIVEL_MINIMO
 
     def _limpar_fila(self):
         while True:
@@ -405,7 +447,7 @@ class Voz:
                 segmento.append(bloco)
                 silencio += 1
             else:
-                pre = (pre + [bloco])[-6:]
+                pre = (pre + [bloco])[-10:]
             curto = len(segmento) < 2.2 / SEG_BLOCO   # "Claudinho" sozinho é curto: não precisa esperar tanto
             fim = bool(segmento) and (silencio >= (2 if curto else 4) or len(segmento) > 8 / SEG_BLOCO)
             if fim:
@@ -429,6 +471,7 @@ class Voz:
             return
         achou, resto = achar_apelido(texto, apelidos, inicio_max=3)
         if achou:
+            self.nivel_chamada = float(np.percentile(np.abs(audio), 90))
             self._conversar(resto)
 
     # ---------- a conversa (só nasce de uma chamada por voz; o chat digitado não passa por aqui) ----------
@@ -564,7 +607,7 @@ class Voz:
 
         def transcrever_em_paralelo(audio, n, beam):
             try:
-                texto, conf = self.transcrever_detalhado(audio, modelo, prompt=PROMPT_CONVERSA, beam=beam)
+                texto, conf = self.transcrever_detalhado(audio, modelo, beam=beam)
                 if tr["ativo"]:
                     if texto and conf >= LIMITE_CONFIANCA:
                         self.ao_texto(texto)
@@ -594,7 +637,7 @@ class Voz:
                     return None
                 continue
             janela = np.concatenate([janela, bloco])[-TAXA:]
-            tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ
+            tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ and self._nivel_ok(bloco)
             if tem_voz:
                 falou, silencio = True, 0
             elif falou:
@@ -602,7 +645,7 @@ class Voz:
             if falou:
                 buffer.append(bloco)
             else:
-                pre = (pre + [bloco])[-6:]
+                pre = (pre + [bloco])[-10:]
             if tem_voz and len(buffer) == 1:
                 buffer = pre + buffer
             if tem_voz:
@@ -611,7 +654,7 @@ class Voz:
                 tr["ativo"] = False
                 return None
             if falou and not tr["rodando"]:
-                if tem_voz and len(buffer) - feito_ate >= 12:                       # falando: texto aparecendo
+                if tem_voz and len(buffer) - feito_ate >= 12 and not self.usar_nuvem():   # falando: texto aparecendo
                     disparar(beam=1)
                 elif not tem_voz and silencio >= 5 and feito_ate < ultimo_voz:    # pausou: já vai o caprichado
                     disparar(beam=3)
@@ -637,7 +680,7 @@ class Voz:
             texto, confianca = r[1], r[2]
         else:
             try:
-                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], prompt=PROMPT_CONVERSA, beam=5)
+                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], beam=5)
             except Exception as e:
                 self.ao_erro(f"o Whisper falhou ({e})")
                 return None

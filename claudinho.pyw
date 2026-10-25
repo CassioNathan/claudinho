@@ -54,6 +54,7 @@ import motores
 import sistema
 import voz
 import fala
+import stt
 from motores import env_limpo
 
 PORTA = 47821
@@ -87,7 +88,9 @@ CONFIG_PADRAO = {
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
     "voz_estilo": "normal",              # "normal" ou "anime" (garotinha de anime: tom agudo e brilhante)
-    "voz_limpar": True,                  # ganho automático + filtro de ruído no microfone
+    "voz_limpar": True,                  # ganho automático (na faixa) + filtro de ruído no microfone
+    "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
+    "voz_travar_nivel": True,            # depois da chamada, só conta voz tão alta quanto ela (TV e gente ao fundo não)
     "voz_volume": 80,                    # 0 a 100
     "voz_continua": False,               # EXPERIMENTAL: depois de responder ele volta a ouvir sozinho (só com fone: senão se ouve)
     "voz_interromper": False,            # falar por cima corta a fala dele (só com fone: no alto-falante ele se ouve)
@@ -116,7 +119,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis", "borda", "borda_forca",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
-                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_voz", "voz_estilo", "voz_limpar", "voz_volume", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -1374,6 +1377,7 @@ class Claudinho:
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.fala = fala.Fala(lambda: self.cfg)   # a voz dele (Piper): só fala nas conversas por voz
         self.fala_em_fluxo = False                 # a resposta atual já está sendo falada frase a frase
+        self.stt_teste = ""                        # resultado do "testar a chave" do reconhecimento na nuvem
         self.fala_orcamento = None                 # digitado: só o começo da resposta é falado (None = tudo)
         if self.cfg["voz_fala"]:
             self.fala.carregar()
@@ -1381,7 +1385,8 @@ class Claudinho:
                            lambda t: self.eventos.put(("voz_enviar", t)), lambda: self.eventos.put(("voz_cancelar",)),
                            pausado=self.voz_pausada, ao_erro=lambda m: self.eventos.put(("voz_erro", m)),
                            ao_estado=lambda e: self.eventos.put(("voz_estado", e)),
-                           conversa_viva=lambda: self.conversa_voz and self.entrada is not None, fala=self.fala)
+                           conversa_viva=lambda: self.conversa_voz and self.entrada is not None, fala=self.fala,
+                           chave_stt=lambda: sistema.ler_segredo("stt_chave"))
         self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
         self.sinal_voz = None      # balãozinho de pontinhos sobre o mascote enquanto a voz carrega
         self.voz_status = ""
@@ -2203,6 +2208,16 @@ class Claudinho:
             self.ver_notificacoes()
         elif acao == "nova":
             self.nova_conversa()
+        elif acao.startswith("stt_chave:"):  # chave do reconhecimento na nuvem (guardada criptografada, como a da API)
+            chave = acao.split(":", 1)[1].strip()
+            sistema.guardar_segredo("stt_chave", chave)
+            self.stt_teste = ""
+        elif acao == "stt_testar":
+            self.stt_teste = "testando…"
+
+            def testar():
+                _, self.stt_teste = stt.testar(self.cfg["voz_reconhecimento"], sistema.ler_segredo("stt_chave"))
+            threading.Thread(target=testar, daemon=True).start()
         elif acao.startswith("voz_baixar:"):
             self.fala.baixar(acao.split(":", 1)[1])
         elif acao == "voz_testar":  # botão "Ouvir a voz" do painel
@@ -2257,6 +2272,8 @@ class Claudinho:
             valor = max(0.6, min(5.0, float(valor)))
         elif chave == "voz_volume":
             valor = max(0, min(100, int(valor)))
+        elif chave == "voz_reconhecimento":
+            valor = valor if valor in stt.PROVEDORES else "local"
         elif chave == "voz_estilo":
             valor = valor if valor in fala.ESTILOS else "normal"
         elif chave == "voz_voz":
@@ -2347,6 +2364,9 @@ class Claudinho:
                       "api_chave": bool(motores.chave_api()), "ollama": motores.ollama_status(),
                       "modelos_ollama": motores.MODELOS_OLLAMA, "ollama_modelo": self.cfg["ollama_modelo"]},
             "voz": {"estado": self.voz.estado, "microfones": voz.microfones()},
+            "stt": {"provedores": [{"id": k, "nome": i["nome"]} for k, i in stt.PROVEDORES.items()],
+                    "chave": bool(sistema.ler_segredo("stt_chave")), "teste": self.stt_teste,
+                    "erro": self.voz.nuvem_erro},
             "fala": {"vozes": fala.catalogo(), "baixando": self.fala.baixando, "erro": self.fala.erro_download},
             "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
                         "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},

@@ -51,6 +51,8 @@ def frase_aberta(texto):
 
 INCERTO = object()               # o Whisper não entendeu: pede pra repetir em vez de mandar
 LIMITE_CONFIANCA = -1.0         # log-prob médio abaixo disso = chute
+PICO_MINIMO = 0.04                # fala com pico abaixo disso é ruído de fundo: nem vai pro reconhecimento
+CONFIANCA_CHAMADA = -1.1           # chamada só vale se o Whisper estiver razoavelmente seguro
 NIVEL_MINIMO = 0.1                # a voz precisa ter ≥ 10% (−20 dB) do volume da chamada: só barra TV e gente longe
 GANHO_ALVO = 0.08               # volume (RMS) que o ganho automático procura na fala
 GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
@@ -221,6 +223,7 @@ class Voz:
         self.fala = fala             # fala.Fala: a voz do Claudinho (None = só texto)
         self.chave_stt = chave_stt   # a chave do provedor de reconhecimento na nuvem (guardada criptografada)
         self.nuvem_erro = None       # por que a última tentativa na nuvem caiu pro local (None = deu certo)
+        self.ultimo_motor = "local"  # quem fez a última transcrição: "nuvem" ou "local" (vai pro voz.log)
         self.resposta = threading.Event()   # o Claudinho avisa (resposta_chegou) quando terminou de responder
         self.fila = queue.Queue(maxsize=200)
         # o que o microfone está pegando, pro Claudinho desenhar a faixa de áudio: ~30 valores por segundo, de 0 a 1
@@ -290,6 +293,7 @@ class Voz:
         try:
             texto, conf = stt.transcrever(preparar(audio, False), self.config()["voz_reconhecimento"], self.chave_stt())
             self.nuvem_erro = None
+            self.ultimo_motor = "nuvem"
             return texto, conf
         except stt.ErroSTT as e:
             if str(e) != self.nuvem_erro:
@@ -309,6 +313,7 @@ class Voz:
                 if " ".join(normalizar(texto)) in RUIDO_CLASSICO and len(audio) / TAXA < 4 and conf < -0.5:
                     return "", -9.0
                 return texto, conf
+        self.ultimo_motor = "local"
         audio = preparar(audio, bool(self.config().get("voz_limpar", True)))
         with self.trava_transcricao:
             segmentos, _ = self._whisper(modelo).transcribe(
@@ -463,16 +468,26 @@ class Voz:
         apelidos = [a for a in cfg["voz_apelidos"] if a.strip()]
         if not apelidos:
             return
+        pico = float(np.max(np.abs(audio))) if len(audio) else 0.0
+        if pico < PICO_MINIMO:   # baixo demais pra ser você falando com ele: ruído de fundo, nem gasta reconhecimento
+            return
         try:
-            texto, _ = self.transcrever_detalhado(audio, cfg["voz_modelo_apelido"], prompt=", ".join(apelidos) + ".",
-                                                  beam=1)
+            texto, conf = self.transcrever_detalhado(audio, cfg["voz_modelo_apelido"], prompt=", ".join(apelidos) + ".",
+                                                     beam=1)
         except Exception as e:
             self.ao_erro(f"o Whisper falhou ({e})")
             return
         achou, resto = achar_apelido(texto, apelidos, inicio_max=3)
+        if achou and conf < CONFIANCA_CHAMADA:
+            # com a dica das frases na mão o Whisper "ouve" um "Oi Claudinho" no meio do ruído: sem confiança, não vale
+            registrar(f"chamada IGNORADA (confiança baixa {conf:.2f}, pico={pico:.3f}) | {texto}")
+            return
         if achou:
+            registrar(f"chamada ACORDOU conf={conf:.2f} pico={pico:.3f} | {texto}")
             self.nivel_chamada = float(np.percentile(np.abs(audio), 90))
             self._conversar(resto)
+        elif "claud" in " ".join(normalizar(texto)):   # só registra o que parecia a chamada (nada da conversa da sala)
+            registrar(f"chamada quase, não acordou conf={conf:.2f} pico={pico:.3f} | {texto}")
 
     # ---------- a conversa (só nasce de uma chamada por voz; o chat digitado não passa por aqui) ----------
     def resposta_chegou(self):
@@ -601,6 +616,7 @@ class Voz:
         pre = []     # ~0,8 s antes de detectar a fala: sem isso a primeira palavra chega cortada
         ultimo_voz = 0                      # índice do último bloco com voz
         feito_ate = 0                       # até que bloco já mandei transcrever
+        pico_turno = 0.0                    # o pico mais alto de um bloco COM voz: ruído de fundo não passa do piso
         tr = {"rodando": False, "ativo": True, "resultado": None, "aberta": False}   # a thread do texto parcial
         if inicial:  # você interrompeu a fala dele: esses blocos já são o começo da sua frase
             buffer, falou, ultimo_voz = list(inicial), True, len(inicial)
@@ -650,10 +666,11 @@ class Voz:
                 buffer = pre + buffer
             if tem_voz:
                 ultimo_voz = len(buffer)
+                pico_turno = max(pico_turno, float(np.max(np.abs(bloco))))
             if not falou and decorrido > espera:       # contador de encerrar (ou de desistir da chamada)
                 tr["ativo"] = False
                 return None
-            if falou and not tr["rodando"]:
+            if falou and not tr["rodando"] and pico_turno >= PICO_MINIMO:
                 if tem_voz and len(buffer) - feito_ate >= 12 and not self.usar_nuvem():   # falando: texto aparecendo
                     disparar(beam=1)
                 elif not tem_voz and silencio >= 5 and feito_ate < ultimo_voz:    # pausou: já vai o caprichado
@@ -666,6 +683,10 @@ class Voz:
                 break
         if not falou or not buffer:
             tr["ativo"] = False
+            return None
+        if pico_turno < PICO_MINIMO:   # só ruído de fundo (volume lá embaixo): não tem o que transcrever
+            tr["ativo"] = False
+            registrar(f"fala ignorada: baixa demais (pico={pico_turno:.3f})")
             return None
         self.estado = "enviando"
         self.ao_estado("enviando")
@@ -687,7 +708,7 @@ class Voz:
         self.ultimo_uso_fala = time.time()
         pico = float(np.max(np.abs(audio))) if len(audio) else 0.0
         registrar(f"fala {len(audio) / TAXA:.1f}s pico={pico:.3f} conf={confianca:.2f} "
-                  f"modelo={cfg['voz_modelo_fala']} | {texto}")
+                  f"motor={self.ultimo_motor} | {texto}")
         if cfg.get("voz_depurar"):
             self._guardar_audio(audio)
         if not texto:

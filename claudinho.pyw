@@ -92,8 +92,8 @@ CONFIG_PADRAO = {
     "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
     "voz_travar_nivel": True,            # depois da chamada, só conta voz tão alta quanto ela (TV e gente ao fundo não)
     "voz_volume": 80,                    # 0 a 100
-    "voz_continua": False,               # EXPERIMENTAL: depois de responder ele volta a ouvir sozinho (só com fone: senão se ouve)
-    "voz_interromper": False,            # falar por cima corta a fala dele (só com fone: no alto-falante ele se ouve)
+    "voz_continua": True,                # por turnos: depois de responder ele abre pra você falar de novo (sem chamar outra vez)
+    "voz_interromper": False,            # conversa "natural" (EXPERIMENTAL): falar por cima corta a fala dele; só com fone
     "voz_microfone": "",                 # parte do nome do microfone ("" = o padrão do Windows)
     "voz_sons": True,                    # tuk-tuk quando pode falar, tuk-tuk grave quando para de ouvir
     "voz_modelo_apelido": "base",        # Whisper que escuta o apelido (leve, na CPU)

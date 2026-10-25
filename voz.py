@@ -29,9 +29,30 @@ BLOCO = 2048                    # 128 ms por bloco do microfone
 SEG_BLOCO = BLOCO / TAXA
 FRASES_CANCELAR = {"cancela", "cancelar", "cancelado", "esquece", "esqueca", "deixa pra la", "deixa quieto",
                    "tchau", "encerrar", "encerra", "pode encerrar", "chega", "fim"}
+# frases que terminam nisso quase sempre continuam: espera mais antes de mandar
+PALAVRAS_ABERTAS = {"e", "mas", "que", "entao", "tipo", "ne", "ai", "ou", "porque", "pra", "para", "com", "de", "do",
+                    "da", "dos", "das", "no", "na", "em", "a", "o", "um", "uma", "se", "quando", "como", "tambem",
+                    "porem", "so", "ate", "depois", "antes", "sobre", "entre", "pelo", "pela", "por"}
+EXTRA_FRASE_ABERTA = 1.2        # segundos a mais de silêncio quando a frase parece incompleta
+
+
+def frase_aberta(texto):
+    """A frase parece incompleta (termina em "e", "mas", "tipo", vírgula, reticências…)?"""
+    texto = texto.strip()
+    if not texto or texto.endswith(("?", "!")):
+        return False
+    if texto.endswith((",", "…", "...", "-", ":", ";")):
+        return True
+    palavras = normalizar(texto)
+    return bool(palavras) and palavras[-1] in PALAVRAS_ABERTAS
+
+
 INCERTO = object()               # o Whisper não entendeu: pede pra repetir em vez de mandar
 LIMITE_CONFIANCA = -1.0         # log-prob médio abaixo disso = chute
+GANHO_ALVO = 0.08               # volume (RMS) que o ganho automático procura na fala
+GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
 LIMIAR_VOZ = 0.4                # abaixo do 0,5 padrão: pega voz baixa ou longe do microfone
+PROMPT_CONVERSA = "Conversa em português do Brasil com o Claudinho, um assistente de mesa."
 ESPERA_INICIAL = 8.0            # chamou e não falou nada: desiste depois disso
 ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se")
 
@@ -43,7 +64,7 @@ def normalizar(texto):
     return re.sub(r"[^a-z0-9 ]+", " ", texto).split()
 
 
-def achar_apelido(texto, apelidos, minimo=0.78):
+def achar_apelido(texto, apelidos, minimo=0.78, inicio_max=None):
     """O texto chama algum apelido? Devolve (achou, o_que_veio_depois). Compara palavra a palavra (ou grupos
     de palavras, se o apelido tiver mais de uma), aceitando erro de escuta."""
     palavras = texto.split()
@@ -55,8 +76,16 @@ def achar_apelido(texto, apelidos, minimo=0.78):
         n = len(alvo)
         corte = max(minimo, 0.85 if sum(map(len, alvo)) <= 4 else minimo)
         for i in range(len(norm) - n + 1):
-            janela = " ".join(norm[i:i + n]).strip()
-            if janela and difflib.SequenceMatcher(None, janela, " ".join(alvo)).ratio() >= corte:
+            if inicio_max is not None and i > inicio_max:   # a chamada vem no começo da fala, não no meio de um comentário
+                break
+            janela = norm[i:i + n]
+            if n == 1:
+                bateu = bool(janela[0]) and difflib.SequenceMatcher(None, janela[0], alvo[0]).ratio() >= corte
+            else:   # frase de chamada: cada palavra tem que bater com a sua ("pro" não vale por "oi"); o nome, mais exigente
+                bateu = all(
+                    p and difflib.SequenceMatcher(None, p, a).ratio() >= (0.82 if j == n - 1 else 0.66 if len(a) <= 3 else minimo)
+                    for j, (p, a) in enumerate(zip(janela, alvo)))
+            if bateu:
                 resto = " ".join(palavras[i + n:]).strip(" ,.;:!?-–…")
                 return True, resto
     return False, ""
@@ -104,9 +133,40 @@ def microfones():
         return []
 
 
-def preparar(audio):
-    """Microfone baixo ou longe: tira o DC e sobe o volume até o pico ficar em ~0,6 (no máximo 40x). Áudio quase
-    mudo (só ruído de fundo) fica como está pra não virar chiado alto."""
+def limpar_ruido(audio, taxa=TAXA):
+    """Filtro de ruído por subtração espectral: o ruído de fundo (chiado, ventilador, ar-condicionado) é estimado
+    nos trechos mais quietos do próprio áudio e abatido de cada pedacinho do espectro, com um piso (a voz não
+    fica "robótica"). Corta também o grave abaixo de ~70 Hz (rumble). Áudio já limpo sai quase igual."""
+    n_fft, hop = 512, 128
+    if len(audio) < n_fft * 4:
+        return audio
+    janela = np.hanning(n_fft).astype("float32")
+    x = np.pad(audio.astype("float32"), (n_fft, n_fft))
+    quadros = np.lib.stride_tricks.sliding_window_view(x, n_fft)[::hop] * janela
+    esp = np.fft.rfft(quadros, axis=1)
+    mag = np.abs(esp)
+    energia = (mag ** 2).sum(axis=1)
+    k = max(3, int(len(energia) * 0.15))
+    ruido = np.sqrt(np.mean(mag[np.argsort(energia)[:k]] ** 2, axis=0))      # perfil do ruído por frequência
+    mascara = np.clip(1.0 - 1.6 * ruido[None, :] / np.maximum(mag, 1e-9), 0.12, 1.0)
+    mascara = (mascara + np.roll(mascara, 1, axis=0) + np.roll(mascara, -1, axis=0)) / 3   # suaviza no tempo
+    mascara[:, np.fft.rfftfreq(n_fft, 1 / taxa) < 70] = 0.0
+    saida_q = np.fft.irfft(esp * mascara, n=n_fft, axis=1) * janela
+    saida = np.zeros(len(x), dtype="float32")
+    peso = np.zeros(len(x), dtype="float32")
+    for idx, q in enumerate(saida_q):
+        a = idx * hop
+        saida[a:a + n_fft] += q
+        peso[a:a + n_fft] += janela ** 2
+    saida = saida / np.maximum(peso, 1e-6)
+    return saida[n_fft:-n_fft]
+
+
+def preparar(audio, limpar=True):
+    """Prepara pro Whisper: filtro de ruído e, microfone baixo ou longe, tira o DC e sobe o volume até o pico ficar
+    em ~0,6 (no máximo 40x). Áudio quase mudo (só ruído de fundo) fica como está pra não virar chiado alto."""
+    if limpar:
+        audio = limpar_ruido(audio)
     audio = audio - float(np.mean(audio))
     pico = float(np.percentile(np.abs(audio), 99.5)) if len(audio) else 0.0
     if pico < 0.004:
@@ -148,18 +208,20 @@ def tocar(nome):
 
 class Voz:
     def __init__(self, config, ao_acordar, ao_texto, ao_enviar, ao_cancelar, pausado=lambda: False, ao_erro=print,
-                 ao_estado=lambda e: None, conversa_viva=lambda: True):
+                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None):
         """config(): dict com voz_apelidos, voz_silencio, voz_microfone, voz_modelo_apelido, voz_modelo_fala,
         voz_sons (relido a cada uso: mudar no painel vale na hora)."""
         self.config = config
         self.ao_acordar, self.ao_texto, self.ao_enviar = ao_acordar, ao_texto, ao_enviar
         self.ao_cancelar, self.pausado, self.ao_erro = ao_cancelar, pausado, ao_erro
         self.ao_estado, self.conversa_viva = ao_estado, conversa_viva
+        self.fala = fala             # fala.Fala: a voz do Claudinho (None = só texto)
         self.resposta = threading.Event()   # o Claudinho avisa (resposta_chegou) quando terminou de responder
         self.fila = queue.Queue(maxsize=200)
         # o que o microfone está pegando, pro Claudinho desenhar a faixa de áudio: ~30 valores por segundo, de 0 a 1
         self.niveis = collections.deque([0.0] * 48, maxlen=48)
         self.em_voz = False         # o detector acha que é fala (a faixa fica laranja)
+        self.ganho, self.piso = 1.0, 1e-3    # ganho automático do microfone e o nível do ruído de fundo
         self.rodando = False
         self.fio = None
         self.modelos, self.trava_modelos = {}, threading.Lock()
@@ -217,7 +279,7 @@ class Voz:
     def transcrever_detalhado(self, audio, modelo, prompt=None, beam=3):
         """(texto, confiança): confiança é a média do log-prob dos trechos (0 = certeza; < -1 = chute) e vira -5 se
         o Whisper achou que não era fala. Texto vazio quando parece alucinação (repetição, legenda inventada)."""
-        audio = preparar(audio)
+        audio = preparar(audio, bool(self.config().get("voz_limpar", True)))
         with self.trava_transcricao:
             segmentos, _ = self._whisper(modelo).transcribe(
                 audio, language="pt", beam_size=beam, condition_on_previous_text=False, vad_filter=False,
@@ -226,6 +288,8 @@ class Voz:
             segmentos = list(segmentos)
         texto = " ".join(s.text.strip() for s in segmentos).strip()
         if not segmentos or any(a in texto.lower() for a in ALUCINACOES) or repetitivo(texto):
+            return "", -9.0
+        if prompt and " ".join(normalizar(texto)) in " ".join(normalizar(prompt)):   # só repetiu a dica: não era fala
             return "", -9.0
         logprob = float(np.mean([s.avg_logprob for s in segmentos]))
         sem_fala = float(np.max([s.no_speech_prob for s in segmentos]))
@@ -278,8 +342,23 @@ class Voz:
             self._laco()
         self.estado = "parado"
 
+    def _ganho_automatico(self, bloco):
+        """Microfone longe ou baixo: sobe o ganho devagar (até 25x) enquanto tem voz acima do ruído de fundo, e
+        baixa rápido se a voz ficar alta. No silêncio ele não sobe, pra não amplificar o chiado."""
+        rms = float(np.sqrt(np.mean(bloco ** 2))) + 1e-9
+        self.piso = rms if rms < self.piso else self.piso + (rms - self.piso) * 0.003   # ruído: desce rápido, sobe devagar
+        self.piso = max(self.piso, 1e-5)
+        if rms > self.piso * 2.2 and rms > 0.0012:       # tem sinal de verdade acima do ruído
+            alvo = max(1.0, min(GANHO_MAX, GANHO_ALVO / rms))
+            self.ganho += (alvo - self.ganho) * (0.05 if alvo > self.ganho else 0.3)
+        else:
+            self.ganho += (1.0 - self.ganho) * 0.0015    # aos poucos esquece o ganho no silêncio longo
+        return np.clip(bloco * self.ganho, -1.0, 1.0)
+
     def _ao_receber(self, dados, frames, tempo, status):
         bloco = dados[:, 0]
+        if self.config().get("voz_limpar", True):
+            bloco = self._ganho_automatico(bloco)
         for pedaco in np.array_split(bloco, 4):   # 4 valores por bloco de 128 ms: a faixa anda macia
             rms = float(np.sqrt(np.mean(pedaco ** 2))) if len(pedaco) else 0.0
             db = 20 * math.log10(rms + 1e-6)
@@ -348,7 +427,7 @@ class Voz:
         except Exception as e:
             self.ao_erro(f"o Whisper falhou ({e})")
             return
-        achou, resto = achar_apelido(texto, apelidos)
+        achou, resto = achar_apelido(texto, apelidos, inicio_max=3)
         if achou:
             self._conversar(resto)
 
@@ -380,16 +459,22 @@ class Voz:
             self.ao_estado("fim")
             return
         espera, primeira = ESPERA_INICIAL, True
+        interrupcao, falou_resposta, uma_so = None, False, False
         while self.rodando and self.conversa_viva():
             if not (primeira and inicio):  # "Claudinho, que horas são?" numa frase só: já tem pergunta
                 self.ao_estado("ouvindo")
-                self._sinal("pronto")
-                time.sleep(0.45)    # o próprio tuk-tuk não pode entrar no que ele escuta
-                self._limpar_fila()
-                texto = self._ouvir_turno(espera)
+                if interrupcao:     # você falou por cima dele: já está no meio da frase, sem sinal nem espera
+                    texto = self._ouvir_turno(espera, inicial=interrupcao)
+                else:
+                    if not falou_resposta:  # depois da voz dele não precisa do sinal: o fim da fala já avisa
+                        self._sinal("pronto")
+                    time.sleep(0.15 if falou_resposta else 0.45)  # o próprio tuk-tuk não pode entrar no que ele escuta
+                    self._limpar_fila()
+                    texto = self._ouvir_turno(espera)
             else:
                 texto = inicio
                 self.ao_texto(texto)
+            interrupcao = None
             if texto is INCERTO:    # não entendi: pede pra repetir sem gastar o turno
                 self.ao_estado("nao_entendi")
                 self._sinal("nao_entendi")
@@ -406,18 +491,59 @@ class Voz:
                 break
             primeira = False
             espera = float(self.config().get("voz_encerrar", 8))   # agora vale o contador de encerrar a conversa
-        self._encerrar(primeira)
+            # a resposta pode estar sendo falada (em fluxo, desde a primeira frase): espera acabar, ou você interromper
+            falou_resposta = bool(self.fala and self.config().get("voz_fala", True) and self.fala.ocupada)
+            if falou_resposta:
+                interrupcao = self._esperar_fala()
+            if not self.config().get("voz_continua", False):   # uma pergunta por chamada: respondeu, acabou
+                uma_so = True
+                break
+        self._encerrar(primeira, som=not uma_so)
 
-    def _encerrar(self, sem_resposta):
+    def _esperar_fala(self):
+        """Enquanto ele fala o microfone não vai pro Whisper (senão ele se ouve). Com "poder interromper" ligado (use
+        fone!), voz forte e contínua por cima corta a fala e devolve esses blocos como o começo da sua frase."""
+        self.ao_estado("falando")
+        self.estado = "falando"
+        self._limpar_fila()
+        interromper = bool(self.config().get("voz_interromper")) and bool(self.config().get("voz_continua"))
+        janela = np.zeros(0, dtype="float32")
+        seguidos, blocos = 0, []
+        while self.rodando and self.fala.ocupada:
+            if not self.conversa_viva():     # fechou o chat no meio: para de falar
+                self.fala.parar()
+                return None
+            try:
+                bloco = self.fila.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if not interromper:
+                continue
+            janela = np.concatenate([janela, bloco])[-TAXA:]
+            if self._prob_voz(janela) > 0.75:
+                seguidos += 1
+                blocos.append(bloco)
+                if seguidos >= 3:            # ~0,4 s de voz seguida: interrompeu
+                    self.fala.parar()
+                    return blocos
+            else:
+                seguidos, blocos = 0, []
+        self._limpar_fila()
+        return None
+
+    def _encerrar(self, sem_resposta, som=True):
         """Fim da conversa por voz: volta a escutar só o apelido."""
-        self._sinal("cancelado" if sem_resposta else "fim")
+        if self.fala:
+            self.fala.parar()
+        if som:
+            self._sinal("cancelado" if sem_resposta else "fim")
         self.ao_estado("fim")
         if sem_resposta:        # desistiu antes de mandar algo: o chat aberto à toa fecha
             self.ao_cancelar()
         self._limpar_fila()
         self.estado = "ouvindo_apelido"
 
-    def _ouvir_turno(self, espera):
+    def _ouvir_turno(self, espera, inicial=None):
         """Escuta uma fala. Devolve o texto, INCERTO (não entendi) ou None (não falou nada dentro de `espera` s, ou
         mandou cancelar).
 
@@ -432,15 +558,18 @@ class Voz:
         pre = []     # ~0,8 s antes de detectar a fala: sem isso a primeira palavra chega cortada
         ultimo_voz = 0                      # índice do último bloco com voz
         feito_ate = 0                       # até que bloco já mandei transcrever
-        tr = {"rodando": False, "ativo": True, "resultado": None}   # a thread do texto parcial
+        tr = {"rodando": False, "ativo": True, "resultado": None, "aberta": False}   # a thread do texto parcial
+        if inicial:  # você interrompeu a fala dele: esses blocos já são o começo da sua frase
+            buffer, falou, ultimo_voz = list(inicial), True, len(inicial)
 
         def transcrever_em_paralelo(audio, n, beam):
             try:
-                texto, conf = self.transcrever_detalhado(audio, modelo, beam=beam)
+                texto, conf = self.transcrever_detalhado(audio, modelo, prompt=PROMPT_CONVERSA, beam=beam)
                 if tr["ativo"]:
                     if texto and conf >= LIMITE_CONFIANCA:
                         self.ao_texto(texto)
                     tr["resultado"] = (n, texto, conf)
+                    tr["aberta"] = frase_aberta(texto)
             except Exception:
                 pass
             finally:
@@ -486,7 +615,9 @@ class Voz:
                     disparar(beam=1)
                 elif not tem_voz and silencio >= 5 and feito_ate < ultimo_voz:    # pausou: já vai o caprichado
                     disparar(beam=3)
-            if falou and silencio * SEG_BLOCO >= float(cfg.get("voz_silencio", 2.5)):  # contador de enviar
+            # contador de enviar (a frase parecendo incompleta, tipo "…e", ganha um tempinho extra)
+            limite = float(cfg.get("voz_silencio", 2.5)) + (EXTRA_FRASE_ABERTA if tr["aberta"] else 0.0)
+            if falou and silencio * SEG_BLOCO >= limite:
                 break
             if decorrido > 90:
                 break
@@ -506,7 +637,7 @@ class Voz:
             texto, confianca = r[1], r[2]
         else:
             try:
-                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], beam=5)
+                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], prompt=PROMPT_CONVERSA, beam=5)
             except Exception as e:
                 self.ao_erro(f"o Whisper falhou ({e})")
                 return None

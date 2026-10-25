@@ -11,6 +11,7 @@ porque é um processo que fica aberto; os outros chats moram aqui.
 """
 import base64
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -131,6 +132,31 @@ def _ollama(caminho, corpo=None, timeout=120):
     pedido = urllib.request.Request(OLLAMA + caminho, data=json.dumps(corpo).encode() if corpo is not None else None,
                                     headers={"Content-Type": "application/json"})
     return json.loads(urllib.request.urlopen(pedido, timeout=timeout).read())
+
+
+def _ollama_fluxo(caminho, corpo, timeout=300):
+    """Como _ollama, mas devolve os pedaços da resposta conforme chegam (uma linha de JSON por pedaço)."""
+    pedido = urllib.request.Request(OLLAMA + caminho, data=json.dumps(corpo).encode(),
+                                    headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(pedido, timeout=timeout) as r:
+        for linha in r:
+            if linha.strip():
+                yield json.loads(linha)
+
+
+_FIM_DE_FRASE = re.compile(r"(?<=[.!?…])\s+")
+
+
+def frases_completas(buffer, minimo=18):
+    """Do texto que já chegou, separa as frases completas (>= `minimo` letras) e devolve o resto ainda incompleto."""
+    partes = _FIM_DE_FRASE.split(buffer)
+    frases, atual = [], ""
+    for parte in partes[:-1]:
+        atual = f"{atual} {parte}".strip()
+        if len(atual) >= minimo:
+            frases.append(atual)
+            atual = ""
+    return frases, f"{atual} {partes[-1]}".strip()
 
 
 def ollama_status():
@@ -358,7 +384,7 @@ def rodar_ajudante(nome, argumentos):
 
 
 class ChatAPI(ChatSimples):
-    def perguntar(self, texto, imagem=None, modelo=None):
+    def perguntar(self, texto, imagem=None, modelo=None, ao_frase=None):
         """Devolve (resposta, sid, erro), como o ChatClaude. `modelo="sonnet"` = pergunta que precisa ler direito."""
         self.ultimo_uso = time.time()
         conteudo = ([imagem] if imagem else []) + [{"type": "text", "text": texto}]
@@ -398,7 +424,8 @@ class ChatAPI(ChatSimples):
 
 
 class ChatOllama(ChatSimples):
-    def perguntar(self, texto, imagem=None, modelo=None):
+    FLUXO = True   # sabe devolver a resposta frase a frase (ao_frase), pra voz começar a falar logo
+    def perguntar(self, texto, imagem=None, modelo=None, ao_frase=None):
         self.ultimo_uso = time.time()
         modelo_local = CONFIG["ollama_modelo"]
         mensagem = {"role": "user", "content": texto}
@@ -406,13 +433,24 @@ class ChatOllama(ChatSimples):
             mensagem["images"] = _imagens_ollama([imagem])
         elif imagem:
             mensagem["content"] = "(Ele mandou um print, mas você não enxerga imagens: diga isso.)\n" + texto
+        corpo = {"model": modelo_local, "think": False, "keep_alive": OLLAMA_KEEP_ALIVE, "options": OLLAMA_OPCOES,
+                 "messages": [{"role": "system", "content": self.instrucoes()}, *self.mensagens, mensagem]}
         with self.trava:
             try:
-                r = _ollama("/api/chat", {"model": modelo_local, "stream": False, "think": False,
-                                          "keep_alive": OLLAMA_KEEP_ALIVE, "options": OLLAMA_OPCOES,
-                                          "messages": [{"role": "system", "content": self.instrucoes()},
-                                                       *self.mensagens, mensagem]}, timeout=300)
-                resposta = r["message"]["content"].strip()
+                if ao_frase:  # em fluxo: cada frase pronta vai pra fala (voz) enquanto o resto ainda está sendo escrito
+                    resposta, pendente = "", ""
+                    for pedaco in _ollama_fluxo("/api/chat", dict(corpo, stream=True)):
+                        novo = pedaco.get("message", {}).get("content", "")
+                        resposta += novo
+                        frases, pendente = frases_completas(pendente + novo)
+                        for frase in frases:
+                            ao_frase(frase)
+                    if pendente.strip():
+                        ao_frase(pendente.strip())
+                    resposta = resposta.strip()
+                else:
+                    r = _ollama("/api/chat", dict(corpo, stream=False), timeout=300)
+                    resposta = r["message"]["content"].strip()
                 self.modelos_usados = [modelo_local]
                 self._guardar(texto, resposta)
                 return resposta, None, None
@@ -421,6 +459,6 @@ class ChatOllama(ChatSimples):
 
 
 class ChatNenhum(ChatSimples):
-    def perguntar(self, texto, imagem=None, modelo=None):
+    def perguntar(self, texto, imagem=None, modelo=None, ao_frase=None):
         return None, None, ("Estou sem motor de IA, então não consigo conversar. Escolha um no painel "
                             "(Sistema → Motor de IA): Claude Code, chave da API ou um modelo local.")

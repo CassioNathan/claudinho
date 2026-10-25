@@ -352,6 +352,14 @@
         <label class="chave"><input type="checkbox" data-cfg="emo_rock"><span></span></label>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Bordinha branca ⚪</div><div class="desc">Um contorno de 1 px que faz ele se destacar do fundo (ajuda com cabelo preto, por exemplo).</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="borda"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Força da bordinha</div><div class="desc">Menos = mais discreto, quase transparente.</div></div>
+        <input type="range" min="10" max="100" step="5" id="bordaForca"><span class="valor" id="bordaForcaValor"></span>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Reações com emojis ✨</div><div class="desc">Emojis de pixel que sobem do lado dele.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emojis"><span></span></label>
       </div>
@@ -375,12 +383,18 @@
         <label class="chave"><input type="checkbox" data-cfg="voz"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Como chamar</div><div class="desc">Os nomes que ele atende, separados por vírgula. É só texto, sem treinar
-          nada; ele aceita uma escuta meio errada ("Cloudinho"). Evite nomes de gente que você cita muito.</div></div>
+        <div class="info"><div class="titulo">Frases de chamada</div><div class="desc">O que você diz pra chamar ele, separadas por vírgula. Use frase
+          com cumprimento ("Ei Claudinho", "Fala Claudinho"), não só o nome: senão ele acorda quando você só comenta alguma coisa
+          sobre ele. É só texto, sem treinar; ele aceita uma escuta meio errada. A chamada tem que vir no começo da fala.</div></div>
         <form id="formApelidos" style="display:flex;gap:8px">
-          <input id="vozApelidos" autocomplete="off" placeholder="Claudinho, Claudito" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
+          <input id="vozApelidos" autocomplete="off" placeholder="Ei Claudinho, Fala Claudinho" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
           <button class="botao principal">Salvar</button>
         </form>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Melhorar o áudio do microfone 🎚️</div><div class="desc">Ganho automático (sobe o volume quando você fala baixo ou
+          longe do microfone) e filtro de ruído (chiado, ventilador). Ajuda com microfone distante.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_limpar"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Microfone</div><div class="desc">Qual ele escuta.</div></div>
@@ -398,6 +412,38 @@
       <div class="linha">
         <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas demora uns 2 s a mais pra enviar.</div></div>
         <div class="segmentos" data-cfg="voz_modelo_fala"><button data-v="base">Rápido</button><button data-v="small">Melhor</button></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Responder falando 🔊</div><div class="desc">Em toda mensagem do chat: falada, ou digitada (nesse caso só
+          o começo da resposta é falado; o texto aparece inteiro). Também liga e desliga no 🔊 do balão. Voz offline (Piper).</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_fala"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Voz dele</div><div class="desc" id="vozVozInfo">Escolha uma. As que ainda não estão no PC baixam
+          na hora (o tamanho aparece ao lado).</div></div>
+        <select id="vozVoz" style="max-width:240px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Estilo da voz</div><div class="desc">As vozes em português são masculinas; "Garotinha de anime 🌸" sobe
+          o tom e deixa a voz mais aguda e brilhante. (Na personalidade Ultron a voz metálica manda.)</div></div>
+        <div class="segmentos" data-cfg="voz_estilo"><button data-v="normal">Normal</button><button data-v="anime">Anime 🌸</button></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Volume e teste</div><div class="desc">Ouve como ele fala.</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="range" min="0" max="100" step="5" id="vozVolume"><span class="valor" id="vozVolumeValor"></span>
+          <button class="botao principal" id="vozTestar">▶ Ouvir</button>
+        </div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Conversa contínua 🔁 (experimental)</div><div class="desc">Depois de responder, ele volta a ouvir sozinho, sem
+          precisar chamar de novo. Desligado por padrão: no alto-falante o microfone pega a voz dele e a conversa não para. Use com fone.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_continua"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Posso interrompê-lo 🎧</div><div class="desc">Falar por cima corta a fala dele. Use com fone: no
+          alto-falante o microfone pega a voz dele e ele se interromperia sozinho.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_interromper"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
@@ -690,6 +736,10 @@ function montarResto() {
   aviso.oninput = () => av.textContent = `${aviso.value} s`;
   aviso.onchange = () => mudar("aviso_segundos", +aviso.value);
 
+  const bf = document.getElementById("bordaForca"), bv = document.getElementById("bordaForcaValor");
+  bf.value = estado.cfg.borda_forca; bv.textContent = `${bf.value}%`;
+  bf.oninput = () => bv.textContent = `${bf.value}%`;
+  bf.onchange = () => mudar("borda_forca", +bf.value);
   montarVoz();
   const lista = document.getElementById("listaEsquetes");
   lista.innerHTML = "";
@@ -815,6 +865,25 @@ function atualizarVoz() {
   const e = estado.voz.estado;
   document.getElementById("vozEstado").textContent = estado.cfg.voz && e === "parado" ? "Ligando… (a primeira vez baixa o Whisper)" : NOMES_ESTADO_VOZ[e] || e;
 }
+function montarVozes(forcar) {
+  const sel = document.getElementById("vozVoz"), info = document.getElementById("vozVozInfo");
+  const f = estado.fala, baixando = f.baixando;
+  const assinatura = JSON.stringify([f.vozes, baixando, estado.cfg.voz_voz]);
+  if (!forcar && sel.dataset.assinatura === assinatura) return;
+  sel.dataset.assinatura = assinatura;
+  sel.innerHTML = "";
+  for (const v of f.vozes) {
+    const rotulo = v.instalada ? v.nome : `${v.nome} — baixar (${v.tamanho})`;
+    sel.add(new Option(baixando === v.id ? `${v.nome} — baixando…` : rotulo, v.id, false, v.id === estado.cfg.voz_voz));
+  }
+  sel.disabled = !!baixando;
+  info.textContent = f.erro ? f.erro : baixando ? "Baixando a voz… (uns segundos)" : "Escolha uma. As que ainda não estão no PC baixam na hora (o tamanho aparece ao lado).";
+  sel.onchange = async () => {
+    const v = f.vozes.find(x => x.id === sel.value);
+    if (v.instalada) { await mudar("voz_voz", v.id); acao("voz_testar", "falando… 🔊"); }
+    else { acao("voz_baixar:" + v.id, "baixando… ⏬"); sel.value = estado.cfg.voz_voz; }
+  };
+}
 function montarVoz() {
   const ap = document.getElementById("vozApelidos");
   ap.value = (estado.cfg.voz_apelidos || []).join(", ");
@@ -831,6 +900,12 @@ function montarVoz() {
   sil.value = estado.cfg.voz_silencio; sv.textContent = `${(+sil.value).toFixed(1)} s`;
   sil.oninput = () => sv.textContent = `${(+sil.value).toFixed(1)} s`;
   sil.onchange = () => mudar("voz_silencio", +sil.value);
+  const vol = document.getElementById("vozVolume"), vv = document.getElementById("vozVolumeValor");
+  vol.value = estado.cfg.voz_volume; vv.textContent = `${vol.value}%`;
+  vol.oninput = () => vv.textContent = `${vol.value}%`;
+  vol.onchange = () => mudar("voz_volume", +vol.value);
+  document.getElementById("vozTestar").onclick = () => acao("voz_testar", "falando… 🔊");
+  montarVozes();
   const enc = document.getElementById("vozEncerrar"), ev = document.getElementById("vozEncerrarValor");
   enc.value = estado.cfg.voz_encerrar; ev.textContent = `${enc.value} s`;
   enc.oninput = () => ev.textContent = `${enc.value} s`;
@@ -920,6 +995,7 @@ async function carregar(primeira) {
       if (mudouVisual) { visual = estado.cfg.visual; montarVisual(); }
       montarSistema();
       atualizarVoz();
+      montarVozes();
       atualizarVivos();
     }
   } catch (e) {

@@ -33,6 +33,11 @@ terminam e solta piadas sobre o que está na tela.
 - **Painel:** uma janelinha (HTML servido pelo próprio Claudinho, aberta como app do Edge em modo InPrivate)
   com tudo que é configuração: movimento, piadas, esquetes (dá pra rodar qualquer uma na hora), música e extras,
   ações e atalhos. A API dele só aceita pedidos com o token embutido na página.
+- **Voz 🎤🔊:** chame por uma frase ("Ei Claudinho", configurável, só texto) e o chat abre ouvindo, com uma faixa de áudio ao vivo. Tudo local:
+  Whisper (faster-whisper) escuta e o Piper fala. A conversa é contínua: ele responde falando (já na primeira frase),
+  volta a ouvir sozinho e encerra depois de um tempo sem você falar. Com fone dá pra interrompê-lo falando por cima.
+  Ele fala qualquer resposta do chat (o 🔊 do balão liga e desliga; na digitada só o começo é falado) e dá pra escolher a voz. A voz (~60 MB) fica em `~/.claudinho/vozes`
+  (`python -m piper.download_voices pt_BR-faber-medium --download-dir ~/.claudinho/vozes`).
 - **Skins:** uma cor (10, incluindo arco-íris) e um adereço por espaço (cabeça, olhos, rosto, pescoço, braços),
   28 adereços e 9 pacotes prontos (emo, CEO, natal, cowboy, pirata, anjinho, diabinho, gamer, rei).
   Adereço com "frente" (franja, aba do boné, tapa-olho…) vira pro lado em que ele está olhando.

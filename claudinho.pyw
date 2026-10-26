@@ -12,6 +12,7 @@ except ImportError:  # sem o comando por voz instalado, segue sem ele
     pass
 import base64
 import ctypes
+import gc
 import ctypes.wintypes as wt
 import io
 import json
@@ -1580,6 +1581,7 @@ class Claudinho:
         self.menu_aberto = False
         self.notebook = 0.0           # 0 = guardado, 1 = aberto e digitando (anima entre os dois)
         self.usou_ferramenta = False  # nesta pergunta ele já está fazendo coisas no PC
+        self.ultima_coleta = time.time()
         self.pouso_ate = 0            # logo depois de ser solto: agachadinha
         self.app_atual, self.app_desde = "", time.time()
         self.t = 0
@@ -1633,6 +1635,9 @@ class Claudinho:
     def tick(self):
         try:
             self.t += 1
+            if time.time() - self.ultima_coleta > 30:  # o lixo é recolhido aqui, na thread do Tk (ver main)
+                self.ultima_coleta = time.time()
+                gc.collect()
             self.processar_eventos()
             self.atualizar_modo_jogo()
             self.mover()
@@ -4102,6 +4107,9 @@ def main():
         DADOS.mkdir(exist_ok=True)
         sys.stderr = open(DADOS / "erros.log", "a", encoding="utf-8", buffering=1)
         print(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} Claudinho abriu", file=sys.stderr)
+    # coleta automática desligada: ela roda na thread que estiver alocando, e fonte/variável do Tk solta nela
+    # chama o Tk de fora da thread principal e trava tudo ("não está respondendo"). O tick coleta a cada 30 s.
+    gc.disable()
     eventos = queue.Queue()
     # num reinício o Claudinho antigo pode levar uns segundos pra soltar a porta: espera antes de desistir
     for tentativa in range(16):

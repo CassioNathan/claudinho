@@ -95,6 +95,7 @@ CONFIG_PADRAO = {
     "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
     "voz_travar_nivel": True,            # depois da chamada, só conta voz tão alta quanto ela (TV e gente ao fundo não)
     "voz_volume": 80,                    # 0 a 100
+    "voz_tom": 0,                        # voz da Microsoft: quanto mais agudo (em Hz, 0 a 40); as outras vozes ignoram
     "voz_continua": True,                # por turnos: depois de responder ele abre pra você falar de novo (sem chamar outra vez)
     "voz_interromper": False,            # conversa "natural" (EXPERIMENTAL): falar por cima corta a fala dele; só com fone
     "voz_microfone": "",                 # parte do nome do microfone ("" = o padrão do Windows)
@@ -122,7 +123,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis", "borda", "borda_forca",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
-                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -2505,6 +2506,8 @@ class Claudinho:
             valor = max(0.6, min(5.0, float(valor)))
         elif chave == "voz_volume":
             valor = max(0, min(100, int(valor)))
+        elif chave == "voz_tom":
+            valor = max(0, min(40, int(valor)))
         elif chave == "voz_reconhecimento":
             valor = valor if valor in stt.PROVEDORES else "local"
         elif chave == "voz_estilo":

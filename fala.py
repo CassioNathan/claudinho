@@ -24,6 +24,10 @@ VOZES = {  # id do Piper → nome que aparece no painel
     "kokoro:pf_dora": "Dora (Kokoro, feminina)",
     "kokoro:pm_alex": "Alex (Kokoro)",
     "kokoro:pm_santa": "Santa (Kokoro)",
+    # Microsoft (Edge TTS): vozes neurais naturais, pela internet e sem chave; nada pra baixar
+    "edge:pt-BR-ThalitaMultilingualNeural": "Thalita (Microsoft, online, jovem e animada)",
+    "edge:pt-BR-FranciscaNeural": "Francisca (Microsoft, online)",
+    "edge:pt-BR-AntonioNeural": "Antônio (Microsoft, online)",
 }
 VOZ_PADRAO = "pt_BR-faber-medium"
 ESTILOS = {"normal": "Normal", "anime": "Garotinha de anime 🌸"}   # as vozes do Piper em português são todas masculinas
@@ -41,7 +45,18 @@ def eh_kokoro(voz):
     return bool(voz) and voz.startswith("kokoro:")
 
 
+def eh_edge(voz):
+    return bool(voz) and voz.startswith("edge:")
+
+
 def instalada(voz):
+    if eh_edge(voz):   # não baixa nada: só precisa dos pacotes
+        try:
+            import edge_tts  # noqa: F401
+            import miniaudio  # noqa: F401
+            return True
+        except ImportError:
+            return False
     if eh_kokoro(voz):
         return all((KOKORO_PASTA / a).exists() for a in KOKORO_ARQUIVOS)
     return (PASTA / f"{voz}.onnx").exists()
@@ -50,7 +65,8 @@ def instalada(voz):
 def catalogo():
     """As vozes que o painel oferece e quais já estão no PC."""
     return [{"id": v, "nome": nome, "instalada": instalada(v),
-             "tamanho": "~350 MB, o modelo vale pras 3 vozes do Kokoro" if eh_kokoro(v) else "~60 MB"}
+             "tamanho": ("precisa de internet" if eh_edge(v) else
+                         "~350 MB, o modelo vale pras 3 vozes do Kokoro" if eh_kokoro(v) else "~60 MB")}
             for v, nome in VOZES.items()]
 
 
@@ -156,7 +172,9 @@ class Fala:
 
         def trabalhar():
             try:
-                if eh_kokoro(escolhida):
+                if eh_edge(escolhida):
+                    self.voz = self.kokoro = None   # a síntese é feita pela internet, na hora de falar
+                elif eh_kokoro(escolhida):
                     if self.kokoro is None:
                         from kokoro_onnx import Kokoro
                         self.kokoro = Kokoro(str(KOKORO_PASTA / KOKORO_ARQUIVOS[0]), str(KOKORO_PASTA / KOKORO_ARQUIVOS[1]))
@@ -193,6 +211,28 @@ class Fala:
             finally:
                 self.baixando = None
         threading.Thread(target=trabalhar, daemon=True).start()
+
+    def _sintetizar_edge(self, frase, voz):
+        """Uma frase pela voz neural da Microsoft: (áudio float32 mono, taxa) ou (None, 0) se a internet falhou."""
+        import asyncio
+
+        import edge_tts
+        import miniaudio
+
+        async def pedir():
+            mp3 = b""
+            tom = max(0, min(40, int(self.config().get("voz_tom", 0) or 0)))
+            async for pedaco in edge_tts.Communicate(frase, voz, pitch=f"+{tom}Hz").stream():
+                if pedaco["type"] == "audio":
+                    mp3 += pedaco["data"]
+            return mp3
+        try:
+            mp3 = asyncio.run(asyncio.wait_for(pedir(), timeout=15))
+            dados = miniaudio.decode(mp3, output_format=miniaudio.SampleFormat.FLOAT32, nchannels=1, sample_rate=24000)
+            return np.frombuffer(dados.samples, dtype="float32").copy(), 24000
+        except Exception as e:
+            self.erro = f"a voz da Microsoft não respondeu ({e})"
+            return None, 0
 
     def _baixar_kokoro(self):
         """O modelo (~325 MB) e o arquivo de vozes (~28 MB) do Kokoro; baixa pra .part e só então renomeia."""
@@ -274,8 +314,12 @@ class Fala:
                 if not self.voz_nome or versao != self.versao:
                     continue
                 ultron = self.config().get("personalidade") == "ultron"   # o vilão manda mais que o estilo da voz
-                anime = not ultron and self.config().get("voz_estilo") == "anime"
-                if eh_kokoro(self.voz_nome):
+                anime = not ultron and self.config().get("voz_estilo") == "anime" and not eh_edge(self.voz_nome)
+                if eh_edge(self.voz_nome):
+                    audio, taxa = self._sintetizar_edge(frase, self.voz_nome.split(":", 1)[1])
+                    if audio is None:
+                        continue
+                elif eh_kokoro(self.voz_nome):
                     fator = ANIME_FATOR_KOKORO if anime else 1.0   # fala mais devagar e depois sobe o tom: o ritmo volta
                     audio, taxa = self.kokoro.create(frase, voice=self.voz_nome.split(":", 1)[1], speed=1.0 / fator,
                                                      lang="pt-br")

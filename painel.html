@@ -459,6 +459,12 @@
         <div class="segmentos" data-cfg="voz_estilo"><button data-v="normal">Normal</button><button data-v="anime">Anime 🌸</button></div>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Tom da voz 🎚️</div><div class="desc">Deixa a voz da Microsoft (Thalita, Francisca, Antônio) mais aguda. Não muda as outras vozes.</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="range" min="0" max="40" step="5" id="vozTom"><span class="valor" id="vozTomValor"></span>
+        </div>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Volume e teste</div><div class="desc">Ouve como ele fala.</div></div>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" min="0" max="100" step="5" id="vozVolume"><span class="valor" id="vozVolumeValor"></span>
@@ -958,6 +964,10 @@ function montarVoz() {
   vol.value = estado.cfg.voz_volume; vv.textContent = `${vol.value}%`;
   vol.oninput = () => vv.textContent = `${vol.value}%`;
   vol.onchange = () => mudar("voz_volume", +vol.value);
+  const tom = document.getElementById("vozTom"), tv = document.getElementById("vozTomValor");
+  tom.value = estado.cfg.voz_tom || 0; tv.textContent = `+${tom.value} Hz`;
+  tom.oninput = () => tv.textContent = `+${tom.value} Hz`;
+  tom.onchange = () => mudar("voz_tom", +tom.value);
   document.getElementById("vozTestar").onclick = () => acao("voz_testar", "falando… 🔊");
   montarVozes();
   montarStt();

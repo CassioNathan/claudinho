@@ -133,6 +133,15 @@ A versão fica em `sistema.py` (`VERSAO`).
 
 As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 
+## MCP do Claudinho e consultas no YouTube
+
+- **MCP (`claudinho_mcp.py`)**: servidor com uma única ferramenta, `abrir_programa(nome)`: abre (ou traz pra frente) qualquer
+  programa instalado, pelo nome aproximado ("abre a Steam"), mesmo minimizado ou na bandeja. Não roda comando, não abre
+  site, não fecha nada. O chat liga ele sozinho (`~/.claudinho/mcp.json`); a busca dos programas está em `programas.py`.
+- **Consultar sem mexer na tela**: `python musica.py consultar youtube|ytmusic <modo> [termo]` pede pra extensão do
+  navegador olhar (pesquisa, início, inscrições, canal, descrição e data de um vídeo; início, biblioteca, curtidas,
+  playlists… do YouTube Music) e devolve a lista. **Abrir e levar até lá**: `python musica.py ir youtube|ytmusic <destino>`.
+
 ## Próximos passos
 
 - [Plano: MCP exclusivo do Claudinho](docs/plano-mcp.md): trocar os ajudantes via Bash por um servidor

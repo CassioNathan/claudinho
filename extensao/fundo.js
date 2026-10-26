@@ -3,7 +3,7 @@
 //   YouTube Music: toca no player da barra lateral do Opera, se ele estiver aberto; senão troca a música na aba que
 //                  já está aberta, sem roubar o foco (sem aba: abre uma em segundo plano)
 //   YouTube: sempre numa aba nova, trazida pra frente
-importScripts("config.js");  // self.CLAUDINHO = {porta, token} (gerado pelo Claudinho na instalação)
+importScripts("config.js", "consultas.js");  // self.CLAUDINHO = {porta, token} (gerado pelo Claudinho na instalação)
 
 const BASE = `http://127.0.0.1:${self.CLAUDINHO.porta}`;
 const SITES = {ytmusic: "https://music.youtube.com/*", youtube: "https://www.youtube.com/*"};
@@ -50,6 +50,25 @@ async function executar(c) {
   }
 }
 
+// consulta ("o que tem no YouTube?"): a extensão olha e devolve pro Claudinho, sem mexer na tela do usuário
+async function consultar(c) {
+  let resultado;
+  try {
+    const limite = new Promise((_, falhou) => setTimeout(() => falhou(new Error(
+      "a consulta travou em: " + (self.consultasClaudinho.andamento.etapa || "início"))), 35000));
+    resultado = {ok: true, dados: await Promise.race([self.consultasClaudinho.consultar(c), limite])};
+  } catch (e) {
+    resultado = {ok: false, erro: String((e && e.message) || e)};
+  }
+  try {
+    await fetch(`${BASE}/ext/resultado`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Claudinho-Ext": self.CLAUDINHO.token},
+      body: JSON.stringify({id: c.id, resultado}),
+    });
+  } catch (e) { /* Claudinho fechou */ }
+}
+
 let rodando = false;
 async function ciclo() {
   if (rodando) return;
@@ -66,7 +85,10 @@ async function ciclo() {
     });
     if (r.ok) {
       const dados = await r.json();
-      for (const c of dados.comandos || []) await executar(c);
+      for (const c of dados.comandos || []) {
+        if (c.acao === "consultar") consultar(c);   // sem await: consulta demora e não pode travar o ciclo
+        else await executar(c);
+      }
       // o Claudinho já copiou uma versão nova dos arquivos: recarrega pra usar (atualiza sozinha)
       if (dados.versao && dados.versao !== VERSAO) chrome.runtime.reload();
     }

@@ -297,8 +297,6 @@ class Fala:
                         audio = efeito_anime(audio)
                 if versao != self.versao:
                     continue
-                if ultron:
-                    audio = efeito_ultron(audio, taxa)
                 volume = max(0, min(100, int(self.config().get("voz_volume", 80)))) / 100
                 self.para_tocar.put((versao, audio * volume, taxa))
                 entregue = True

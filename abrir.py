@@ -162,8 +162,10 @@ def app_da_loja(pedacos):
 def abrir_programa(nome):
     programas = liberados()
     nome = nome.lower().strip()
-    if nome not in programas:
-        sys.exit(f"recusado: '{nome}' não está na lista. Liberados: {', '.join(programas)}")
+    if nome not in programas:  # fora da lista fixa: acha qualquer programa instalado pelo nome (programas.py)
+        import programas as instalados
+        print(instalados.abrir(nome))
+        return
     pedacos = programas[nome]
     if pedacos is None:
         abrir_site("https://www.google.com")

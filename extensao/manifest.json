@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Claudinho",
-  "version": "1.3",
-  "description": "Deixa o Claudinho tocar música e vídeo nas abas do YouTube Music e do YouTube que já estão abertas.",
+  "version": "1.15",
+  "description": "Deixa o Claudinho tocar música e vídeo no YouTube Music e no YouTube e consultar o que tem lá (listas, datas, descrições).",
   "icons": {"128": "icone.png"},
-  "permissions": ["alarms"],
+  "permissions": ["alarms", "scripting"],
   "host_permissions": [
     "http://127.0.0.1:47821/*",
     "https://music.youtube.com/*",

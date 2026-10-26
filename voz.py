@@ -52,7 +52,7 @@ def frase_aberta(texto):
 INCERTO = object()               # o Whisper não entendeu: pede pra repetir em vez de mandar
 LIMITE_CONFIANCA = -1.0         # log-prob médio abaixo disso = chute
 PICO_MINIMO = 0.04                # fala com pico abaixo disso é ruído de fundo: nem vai pro reconhecimento
-CONFIANCA_CHAMADA = -1.1           # chamada só vale se o Whisper estiver razoavelmente seguro
+CONFIANCA_CHAMADA = -0.6           # chamada só vale se o Whisper estiver razoavelmente seguro
 NIVEL_MINIMO = 0.1                # a voz precisa ter ≥ 10% (−20 dB) do volume da chamada: só barra TV e gente longe
 GANHO_ALVO = 0.08               # volume (RMS) que o ganho automático procura na fala
 GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
@@ -213,7 +213,7 @@ def tocar(nome):
 
 class Voz:
     def __init__(self, config, ao_acordar, ao_texto, ao_enviar, ao_cancelar, pausado=lambda: False, ao_erro=print,
-                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None):
+                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None, saudacao=lambda: None):
         """config(): dict com voz_apelidos, voz_silencio, voz_microfone, voz_modelo_apelido, voz_modelo_fala,
         voz_sons (relido a cada uso: mudar no painel vale na hora)."""
         self.config = config
@@ -221,6 +221,7 @@ class Voz:
         self.ao_cancelar, self.pausado, self.ao_erro = ao_cancelar, pausado, ao_erro
         self.ao_estado, self.conversa_viva = ao_estado, conversa_viva
         self.fala = fala             # fala.Fala: a voz do Claudinho (None = só texto)
+        self.saudacao = saudacao     # () -> cumprimento curto que ele fala quando a conversa por voz começa (ou None)
         self.chave_stt = chave_stt   # a chave do provedor de reconhecimento na nuvem (guardada criptografada)
         self.nuvem_erro = None       # por que a última tentativa na nuvem caiu pro local (None = deu certo)
         self.ultimo_motor = "local"  # quem fez a última transcrição: "nuvem" ou "local" (vai pro voz.log)
@@ -238,6 +239,8 @@ class Voz:
         self.vad = None
         self.estado = "parado"      # parado | ouvindo_apelido | acordando | ouvindo_fala | enviando
         self.ultimo_uso_fala = 0.0
+        self.ditando = False                  # botão do microfone do chat: grava e entrega o texto (sem chamada, sem enviar)
+        self.parar_ditado = threading.Event()  # o botão de novo: para de gravar e transcreve o que tem
 
     # ---------- ligar / desligar ----------
     def ligar(self):
@@ -429,7 +432,15 @@ class Voz:
         silencio = 0
         ultima_checagem = 0.0
         pausado = False
+        estava_ditando = False
         while self.rodando:
+            if self.ditando:   # o ditado usa o microfone sozinho: a escuta da chamada espera e recomeça limpa
+                estava_ditando = True
+                time.sleep(0.05)
+                continue
+            if estava_ditando:
+                estava_ditando = False
+                janela, pre, segmento, silencio = janela[:0], [], [], 0
             try:
                 bloco = self.fila.get(timeout=0.5)
             except queue.Empty:
@@ -462,6 +473,81 @@ class Voz:
                     self._checar_apelido(audio)
                 janela = janela[:0]
 
+    # ---------- ditado (botão do microfone do chat) ----------
+    def ditar(self, ao_estado, ao_texto, ao_erro=None):
+        """Grava até você parar de falar (ou até `parar_ditado`) e entrega o texto por `ao_texto(texto)`; texto vazio =
+        não ouviu nada. `ao_estado("ouvindo" | "transcrevendo" | "fim")` acompanha. Roda numa thread; não envia nada."""
+        if self.ditando:
+            return
+        self.ditando = True
+        self.parar_ditado.clear()
+        threading.Thread(target=self._ditar, args=(ao_estado, ao_texto, ao_erro or self.ao_erro), daemon=True).start()
+
+    def _ditar(self, ao_estado, ao_texto, ao_erro):
+        import sounddevice as sd
+        cfg = self.config()
+        fluxo = None
+        texto, audio = "", None
+        try:
+            ao_estado("ouvindo")
+            if not (self.fio and self.fio.is_alive() and self.rodando):   # sem a escuta ligada: abre o microfone só pra isso
+                fluxo = sd.InputStream(samplerate=TAXA, channels=1, dtype="float32", blocksize=BLOCO,
+                                       device=self._dispositivo(), callback=self._ao_receber)
+                fluxo.start()
+            self._limpar_fila()
+            if not self.usar_nuvem():   # o modelo local carrega enquanto você fala (a primeira vez demora um pouco)
+                threading.Thread(target=lambda: self._whisper(cfg["voz_modelo_fala"]), daemon=True).start()
+            janela = np.zeros(0, dtype="float32")
+            pre, buffer, falou, silencio = [], [], False, 0
+            inicio = time.time()
+            limite_silencio = max(1.0, float(cfg.get("voz_silencio", 2.5))) / SEG_BLOCO
+            while not self.parar_ditado.is_set() and time.time() - inicio < 120:
+                try:
+                    bloco = self.fila.get(timeout=0.3)
+                except queue.Empty:
+                    continue
+                janela = np.concatenate([janela, bloco])[-TAXA:]
+                tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ
+                if tem_voz:
+                    if not falou:
+                        buffer, falou = list(pre), True
+                    buffer.append(bloco)
+                    silencio = 0
+                elif falou:
+                    buffer.append(bloco)
+                    silencio += 1
+                    if silencio >= limite_silencio:
+                        break
+                else:
+                    pre = (pre + [bloco])[-4:]
+                    if time.time() - inicio > 15:   # 15 s sem ninguém falar: desiste
+                        break
+            if falou:
+                audio = np.concatenate(buffer)
+            elif self.parar_ditado.is_set() and pre:   # parou à mão sem a voz passar do detector: usa o que pegou
+                audio = np.concatenate(pre)
+        except Exception as e:
+            ao_erro(f"o ditado não funcionou ({e})")
+        finally:
+            if fluxo is not None:
+                try:
+                    fluxo.stop()
+                    fluxo.close()
+                except Exception:
+                    pass
+            self.em_voz = False
+        try:
+            if audio is not None and len(audio) > 0.3 * TAXA:
+                ao_estado("transcrevendo")
+                texto, _ = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], beam=3)
+                registrar(f"ditado motor={self.ultimo_motor} | {texto}")
+        except Exception as e:
+            ao_erro(f"o ditado não funcionou ({e})")
+        finally:
+            self.ditando = False   # só agora a escuta da chamada volta
+            ao_estado("fim")
+        ao_texto(texto.strip())
+
     # ---------- apelido ----------
     def _checar_apelido(self, audio):
         cfg = self.config()
@@ -472,12 +558,18 @@ class Voz:
         if pico < PICO_MINIMO:   # baixo demais pra ser você falando com ele: ruído de fundo, nem gasta reconhecimento
             return
         try:
-            texto, conf = self.transcrever_detalhado(audio, cfg["voz_modelo_apelido"], prompt=", ".join(apelidos) + ".",
-                                                     beam=1)
+            # dica só com o nome (a última palavra das frases): a lista inteira de frases o Whisper "ouvia" no ruído
+            nome = max({a.split()[-1] for a in apelidos}, key=lambda n: sum(a.split()[-1] == n for a in apelidos))
+            texto, conf = self.transcrever_detalhado(audio, cfg["voz_modelo_apelido"], prompt=nome + ".", beam=1)
         except Exception as e:
             self.ao_erro(f"o Whisper falhou ({e})")
             return
         achou, resto = achar_apelido(texto, apelidos, inicio_max=3)
+        palavras = normalizar(texto)
+        if achou and sum(1 for a in apelidos if all(w in palavras for w in normalizar(a))) >= 2 and pico < 0.35:
+            # duas frases de chamada diferentes de uma vez, baixinho: é o Whisper repetindo a dica, não você
+            registrar(f"chamada IGNORADA (eco da dica, pico={pico:.3f}) | {texto}")
+            return
         if achou and conf < CONFIANCA_CHAMADA:
             # com a dica das frases na mão o Whisper "ouve" um "Oi Claudinho" no meio do ruído: sem confiança, não vale
             registrar(f"chamada IGNORADA (confiança baixa {conf:.2f}, pico={pico:.3f}) | {texto}")
@@ -518,6 +610,13 @@ class Voz:
             return
         espera, primeira = ESPERA_INICIAL, True
         interrupcao, falou_resposta, uma_so = None, False, False
+        # conversa por voz começando (e você não já veio com a pergunta): ele cumprimenta, pra você saber que abriu
+        oi = self.saudacao() if (not inicio and self.fala and cfg.get("voz_fala", True)
+                                 and cfg.get("voz_saudacao", True)) else None
+        if oi:
+            self.fala.falar(oi)
+            interrupcao = self._esperar_fala()   # microfone fechado enquanto ele fala; o fim da fala já é o sinal
+            falou_resposta = True
         while self.rodando and self.conversa_viva():
             if not (primeira and inicio):  # "Claudinho, que horas são?" numa frase só: já tem pergunta
                 self.ao_estado("ouvindo")

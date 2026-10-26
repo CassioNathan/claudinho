@@ -66,6 +66,8 @@ CONFIG_PADRAO = {
     "movimento": "livre",               # "livre" = anda pela tela toda | "horizontal" = só de lado
     "seguir_mouse_entre_monitores": True,
     "comentar_tela": True,
+    "modo_junior": False,                # observa a tela e dá dicas úteis (sem piada, sem banco de frases, sempre com IA)
+    "jogo_canto": True,                  # em tela cheia (jogo, vídeo) ele vai pro canto de cima à direita, parado, e comenta o jogo
     "comentar_a_cada_minutos": [4, 10],  # intervalo aleatório entre comentários
     "chance_haiku": 0.5,                 # 0 = só banco de frases, 1 = sempre o Haiku olhando o print
     "modo_tdah": False,                  # comentários que viajam pra assuntos nada a ver
@@ -85,6 +87,7 @@ CONFIG_PADRAO = {
     "voz_silencio": 2.5,                 # segundos calado até ele enviar sozinho
     "voz_depurar": False,                # guarda os últimos áudios em ~/.claudinho/voz_debug (diagnóstico)
     "voz_encerrar": 8.0,                 # segundos sem falar depois da resposta até encerrar a conversa por voz
+    "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
     "voz_estilo": "normal",              # "normal" ou "anime" (garotinha de anime: tom agudo e brilhante)
@@ -116,10 +119,10 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 # erro) nunca é atropelado e passa na frente das outras
 ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
-CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "comentar_a_cada_minutos",
+CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_musica", "emojis", "borda", "borda_forca",
                  "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor",
-                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -168,8 +171,9 @@ PROMPT_SISTEMA = (
     "programas, executar comandos e ler arquivos. Para ABRIR SITE, PESQUISAR NO NAVEGADOR ou ABRIR "
     "PROGRAMA use sempre a ferramenta Bash com o ajudante da pasta atual, que roda sem pedir "
     "confirmação: `python abrir.py site <url>`, `python abrir.py pesquisa \"<termo>\" [google|youtube|"
-    "bing|duckduckgo]` ou `python abrir.py programa <nome>` (navegador, chrome, edge, opera, intellij, "
-    "vscode, discord, whatsapp, postman, docker, spotify). Para a MÚSICA que ele está ouvindo use "
+    "bing|duckduckgo]`. Para ABRIR QUALQUER PROGRAMA instalado no PC (Steam, VS Code, bloco de notas, Discord…) "
+    "use a ferramenta `abrir_programa` (MCP do Claudinho) só com o nome, do jeito que ele falou: ela acha o programa, "
+    "abre ou traz a janela pra frente, mesmo que esteja minimizado ou em segundo plano. Para a MÚSICA que ele está ouvindo use "
     "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
     "sem confirmação. Para TOCAR UMA MÚSICA ou um ARTISTA que ele pedir, use `python musica.py buscar "
     "\"<música e artista>\"` ou `python musica.py artista \"<artista>\"`: toca no YouTube Music dele e segue "
@@ -182,6 +186,20 @@ PROMPT_SISTEMA = (
     "Curtidas dele: `python musica.py curtidas`; curtir a atual: `python musica.py curtir`. Player do YouTube Music: "
     "`python musica.py player <pausar|tocar|proxima|anterior|aleatorio|repetir|volume 0-100>`; vídeo do YouTube: "
     "`python musica.py video <pausar|tocar|velocidade 0.25-2.5|avancar N|voltar N|legenda|cinema>`. "
+    "YOUTUBE E YOUTUBE MUSIC, dois comportamentos: (1) CONSULTAR, quando ele só quer saber/listar (\"quais vídeos novos "
+    "do canal X\", \"o que tem na minha home\", \"qual a descrição desse vídeo\", \"o que tenho na biblioteca\"): rode "
+    "`python musica.py consultar youtube <pesquisa|inicio|inscricoes|historico|canal|video> [\"termo\" ou id]` ou "
+    "`python musica.py consultar ytmusic <inicio|explorar|pesquisa|musicas|playlists|albuns|artistas|curtidas|historico> "
+    "[\"termo\"]`. Isso NÃO mexe na tela dele: traz a lista (canal, duração, views, DATA de publicação, descrição, ref) "
+    "e você responde falando. (2) ABRIR, quando ele pede pra ir/abrir/me leva/toca: `python musica.py ir youtube "
+    "<inicio|inscricoes|historico|canal|pesquisa|<id do vídeo>> [\"termo\"]` ou `python musica.py ir ytmusic "
+    "<inicio|explorar|biblioteca|curtidas|historico|pesquisa|<ref da lista>> [\"termo\"]` (a ref vem entre colchetes na "
+    "consulta: m:=música, p:=playlist, a:=álbum, c:=artista); isso abre e traz o navegador pra frente. Se ele pedir pra "
+    "escolher entre opções, consulte, mostre numerado (sem ids) e depois use `ir` com a escolhida. "
+    "QUALQUER pedido (música, vídeo, site, programa, pesquisa) é por APROXIMAÇÃO: ele fala (ou o microfone entende) "
+    "de forma imperfeita e não precisa ser exato, então faça o que mais se parece com o pedido e pronto. Nunca "
+    "explique o que ele disse versus o que você entendeu, nunca peça confirmação e nunca ofereça buscar de novo; "
+    "no máximo diga \"Tocando X\" ou \"Abrindo X\". "
     "Um comando por vez, sem && nem |. "
     "O resto (outros comandos, criar/editar arquivos) pede confirmação num popup; se ele negar, não insista."
 )
@@ -209,7 +227,8 @@ PROMPT_FERRAMENTAS_API = (
     "pesquisar e abrir vídeos do YouTube), que rodam sem pedir confirmação. BANDA: pra músicas de uma banda, SEMPRE "
     "use musica [\"banda\", \"<banda>\"], mostre a lista numerada (sem ids) e pergunte qual tocar; escolhida, "
     "[\"tocar_id\", \"<id>\"]. VÍDEOS: [\"videos\", \"<termo>\"], mostre numerados (título, canal, duração, sem id) "
-    "e pergunte qual; escolhido, [\"assistir\", \"<id>\"]. Não tem como ler arquivos nem rodar comandos aqui. "
+    "e pergunte qual; escolhido, [\"assistir\", \"<id>\"]. QUALQUER pedido (música, vídeo, site, programa) é por APROXIMAÇÃO (o que ele diz pode vir imperfeito): faça o "
+    "que mais se parece, sem explicar o que entendeu, sem pedir confirmação nem oferecer buscar de novo. Não tem como ler arquivos nem rodar comandos aqui. "
 )
 
 PROMPT_TELA = (
@@ -230,6 +249,26 @@ PROMPT_TELA = (
     '"comentario": "<texto>"}}'
 )
 
+# modo Júnior: em vez de piada, uma observação útil sobre o que está na tela
+PROMPT_JUNIOR = (
+    "Você é o Claudinho no MODO JÚNIOR: um dev júnior atento, sentado do lado dele, olhando a tela e ajudando. "
+    "A primeira imagem é o monitor inteiro ({w}x{h} pixels).\nJanelas abertas (coordenadas da primeira imagem):\n{janelas}\n"
+    "{contexto}\nO QUE OBSERVAR: {foco}\n"
+    "Dê UMA observação ÚTIL e específica sobre o que está VISÍVEL no print: um erro ou aviso na tela, um bug provável no "
+    "código, uma dica ou atalho do programa em foco, algo que ele pode ter esquecido, uma forma melhor de fazer ou, "
+    "se for um jogo, uma dica do que está acontecendo. Concreta, conferível na imagem, no máximo 200 caracteres, em "
+    "português, tom simpático e direto (um toque leve de humor é ok, mas nada de piada forçada).\n"
+    "Se NÃO houver nada realmente útil a dizer agora, devolva o comentário vazio (\"\"). Nunca invente o que não "
+    "aparece e não comente o que não conseguir ler.\n"
+    "ASSUNTOS JÁ COMENTADOS (não repita): {assuntos}\n"
+    "Comentários recentes, pra não repetir:\n{recentes}\n{limites}\n"
+    'Responda SOMENTE com JSON: {{"assunto": "<2 a 4 palavras>", "comentario": "<texto, ou vazio>"}}'
+)
+FOCOS_JUNIOR = {
+    "atividade": "o que ele está fazendo AGORA: o programa em foco e o que aparece nele.",
+    "jogo": "o jogo (ou vídeo) em tela cheia: uma dica ou observação útil sobre o que aparece na cena.",
+}
+
 # do que a piada fala: sorteado a cada comentário, para variar sem ficar perdido
 ALVOS = {
     "atividade": ("o que ele está fazendo AGORA: o programa em foco e, se tiver, os pedidos do dia. "
@@ -242,6 +281,9 @@ ALVOS = {
                  "autoconfiança exagerada e engraçada; pode comparar com algo da tela (ex.: \"esse código é bom, "
                  "mas não tão bonito quanto meu boné\")."),
 }
+ALVOS["jogo"] = ("o JOGO (ou vídeo) que ele está vendo agora em tela cheia: comente o que está acontecendo na cena, o personagem, "
+                "o mapa, a situação ou o desempenho dele, como um comentarista bem-humorado. Específico do que aparece "
+                "na imagem; nada sobre outros programas.")
 PESOS_ALVO = {"atividade": 0.37, "mouse": 0.27, "claudinho": 0.26, "eu_mesmo": 0.1}
 
 # formato sorteado a cada piada: muda o jeito, não só as palavras
@@ -519,6 +561,7 @@ AJUDANTE = re.compile(
     r"(?:abrir\.(?:py|sh) (?:site|pesquisa|programa) [^&|;<>`$\r\n]+"
     r"|musica\.(?:py|sh) (?:tocando|pausar|tocar|alternar|proxima|anterior|curtir|curtidas"
     r"|(?:buscar|artista|youtube|banda|videos) [^&|;<>`$\r\n]+"
+    r"|(?:consultar|ir) (?:youtube|ytmusic) [^&|;<>`$\r\n]+"
     r"|(?:tocar_id|assistir) [\"']?[A-Za-z0-9_-]{6,20}[\"']?"
     r"|player (?:pausar|tocar|proxima|anterior|aleatorio|repetir|volume \d{1,3})"
     r"|video (?:pausar|tocar|velocidade [\d.]{1,4}|avancar \d{1,4}|voltar \d{1,4}|legenda|cinema)))")
@@ -560,13 +603,19 @@ class ChatClaude:
         else:
             for arquivo in ("abrir.py", "janelas.py", "musica.py", "sistema.py"):
                 shutil.copy(sistema.BASE / arquivo, DADOS / arquivo)
+        # MCP do Claudinho: uma ferramenta só (abrir programa instalado). O claude liga o servidor sozinho, por stdio
+        comando_mcp = sistema.comando_cli("mcp") if sistema.EMPACOTADO else             [str(Path(sys.executable).with_name("python.exe")), str(sistema.BASE / "claudinho_mcp.py")]
+        arquivo_mcp = DADOS / "mcp.json"
+        arquivo_mcp.write_text(json.dumps({"mcpServers": {"claudinho": {
+            "command": comando_mcp[0], "args": comando_mcp[1:]}}}), encoding="utf-8")
         cmd = [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                "--model", "haiku", "--effort", "low",  # rápido: Haiku com pensamento leve
                "--append-system-prompt", ajudantes(PROMPT_SISTEMA + PERSONALIDADES_CHAT.get(self.personalidade, "")),
-               "--strict-mcp-config", "--disable-slash-commands",
+               "--strict-mcp-config", "--mcp-config", str(arquivo_mcp), "--disable-slash-commands",
                "--permission-mode", "default", "--permission-prompt-tool", "stdio",
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
-               "--allowedTools", ajudantes("WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*)"),
+               "--allowedTools", ajudantes("WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*),"
+                                      "mcp__claudinho__abrir_programa"),
                # só as ferramentas que o chat usa: a definição das outras pesava ~7 mil tokens por mensagem
                "--tools", "Bash,Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]
         if self.pastas:  # dentro delas, ler arquivo não pede confirmação
@@ -808,7 +857,8 @@ def resumir_notificacoes(lista):
 
 
 def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=False,
-                  alvo="atividade", ponto=None, assuntos=(), eu=None, retrato="laranja", personalidade="claudinho"):
+                  alvo="atividade", ponto=None, assuntos=(), eu=None, retrato="laranja", personalidade="claudinho",
+                  junior=False):
     """Tira print do monitor e pede um comentário ao Haiku. `alvo` diz do que a piada fala;
     com `ponto` (mouse ou Claudinho), manda também um zoom daquela região.
     Devolve (texto, assunto) ou None."""
@@ -831,6 +881,21 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
         f"y={na_imagem(j['rect'][1], area[1])} até x={na_imagem(j['rect'][2], area[0])} "
         f"y={na_imagem(j['rect'][3], area[1])}" for j in lista[:8]) or "- nenhuma"
     onde_eu = f" por volta de x={na_imagem(eu[0], area[0])} y={na_imagem(eu[1], area[1])}" if eu else ""
+    if junior:   # observação útil, sempre com IA e só se ela enxergar a tela
+        if not motores.ve_imagem():
+            return None
+        prompt = PROMPT_JUNIOR.format(w=img.width, h=img.height, janelas=descricao, contexto=contexto, limites=LIMITES,
+                                      foco=FOCOS_JUNIOR.get(alvo, FOCOS_JUNIOR["atividade"]),
+                                      recentes="\n".join(f"- {r}" for r in recentes) or "- nenhum ainda",
+                                      assuntos="; ".join(assuntos) or "nenhum")
+        achado = re.search(r"\{.*\}", motores.completar(prompt, imagens, max_tokens=300, timeout=180), re.S)
+        if not achado:
+            return None
+        try:
+            r = json.loads(achado.group(0))
+            return str(r.get("comentario", "")).strip(), str(r.get("assunto", "")).strip().lower()
+        except ValueError:
+            return None
     prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao, onde_eu=onde_eu, limites=LIMITES,
                                 retrato=retrato,
                                 contexto=contexto, alvo=ALVOS[alvo],
@@ -931,7 +996,8 @@ def chave_da_extensao():
 EXT_TOKEN = chave_da_extensao()
 # o que a extensão sabe: quantas abas de cada site estão abertas e quando ela falou por último;
 # `fila` = pedidos esperando ela buscar (somem em 8 s se ninguém pegar)
-EXT = {"fila": [], "abas": {}, "visto": 0.0, "trava": threading.Lock()}
+EXT = {"fila": [], "abas": {}, "visto": 0.0, "trava": threading.Lock(),
+       "espera": {}}   # consultas à espera da resposta da extensão: id -> {"evento", "resultado"}
 
 
 def versao_da_extensao():
@@ -994,9 +1060,30 @@ def iniciar_servidor(eventos):
                 if self.path.startswith("/ext/"):  # extensão do navegador (e o musica.py pedindo pra ela)
                     if not secrets.compare_digest(self.headers.get("X-Claudinho-Ext", ""), EXT_TOKEN):
                         return self.responder(403)
+                    if self.path == "/ext/consultar":   # musica.py perguntando "o que tem no YouTube?" (espera a resposta)
+                        if not extensao_conectada():
+                            erro = {"ok": False, "erro": "a extensão do Claudinho não está conectada ao navegador"}
+                            return self.responder(200, json.dumps(erro).encode("utf-8"))
+                        ident = secrets.token_hex(6)
+                        pedido = {"evento": threading.Event(), "resultado": None}
+                        with EXT["trava"]:
+                            EXT["espera"][ident] = pedido
+                            EXT["fila"].append(dict(dados.get("comando") or {}, acao="consultar", site=dados.get("site"),
+                                                    id=ident, criado=time.time()))
+                        pedido["evento"].wait(min(float(dados.get("espera") or 30), 60))
+                        with EXT["trava"]:
+                            EXT["espera"].pop(ident, None)
+                        resultado = pedido["resultado"] or {"ok": False, "erro": "a extensão não respondeu a tempo"}
+                        return self.responder(200, json.dumps(resultado, ensure_ascii=False).encode("utf-8"))
                     with EXT["trava"]:
                         agora = time.time()
                         EXT["fila"] = [c for c in EXT["fila"] if agora - c["criado"] < 8]
+                        if self.path == "/ext/resultado":   # a extensão devolvendo uma consulta
+                            pedido = EXT["espera"].get(dados.get("id"))
+                            if pedido:
+                                pedido["resultado"] = dados.get("resultado")
+                                pedido["evento"].set()
+                            return self.responder(204)
                         if self.path == "/ext/buscar":
                             EXT["abas"], EXT["visto"] = dados.get("abas") or {}, agora
                             comandos, EXT["fila"] = EXT["fila"], []
@@ -1050,6 +1137,31 @@ def paginar(texto, limite=420):
     paginas.append(atual.strip())
     return [p for p in paginas if p] or [""]
 
+
+
+def icone_mic(cor, tam=64):
+    """Microfone: cápsula, arco em U e pezinho (desenhado grande e reduzido, pra ficar liso)."""
+    k = 4
+    img = Image.new("RGBA", (tam * k, tam * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    c, u = tam * k / 2, tam * k / 64
+    d.rounded_rectangle([c - 9 * u, 8 * u, c + 9 * u, 38 * u], radius=9 * u, fill=cor)
+    d.arc([c - 17 * u, 18 * u, c + 17 * u, 50 * u], 0, 180, fill=cor, width=int(4 * u))
+    d.rectangle([c - 2 * u, 49 * u, c + 2 * u, 58 * u], fill=cor)
+    d.rounded_rectangle([c - 10 * u, 56 * u, c + 10 * u, 60 * u], radius=2 * u, fill=cor)
+    return img.resize((tam, tam), Image.LANCZOS)
+
+
+def icone_enviar(cor, tam=64):
+    """Seta de "enviar" (↵): desce e volta pra esquerda, com a ponta."""
+    k = 4
+    img = Image.new("RGBA", (tam * k, tam * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    u = tam * k / 64
+    larg = int(5 * u)
+    d.line([(50 * u, 14 * u), (50 * u, 38 * u), (16 * u, 38 * u)], fill=cor, width=larg, joint="curve")
+    d.line([(28 * u, 24 * u), (14 * u, 38 * u), (28 * u, 52 * u)], fill=cor, width=larg, joint="curve")
+    return img.resize((tam, tam), Image.LANCZOS)
 
 
 class Balao:
@@ -1117,10 +1229,22 @@ class Balao:
             self.link_print = self.link(linha_print, "", app.alternar_print, anchor="w")
             self.link_print.pack(side="left", fill="x")
             self.mostrar_print(app.print_anexado)
-            self.entry = ctk.CTkEntry(self.frame, width=340 if texto else 280, height=34, corner_radius=10,
+            self.linha_campo = tk.Frame(self.frame, bg=FUNDO)   # campo de texto + microfone
+            self.entry = ctk.CTkEntry(self.linha_campo, width=(340 if texto else 280) - 42, height=34, corner_radius=10,
                                       border_width=0, fg_color=FUNDO2, text_color=TEXTO,
                                       placeholder_text="responde aqui…" if texto else "pergunta pro claudinho…",
                                       placeholder_text_color=APAGADO, font=f(13))
+            self.largura_campo = (340 if texto else 280) - 42
+            img = lambda i: ctk.CTkImage(light_image=i, dark_image=i, size=(18, 18))  # noqa: E731
+            self.icones = {"mic": img(icone_mic("#c9c5ba")), "mic_azul": img(icone_mic("#5aa9ff")),
+                           "mic_apagado": img(icone_mic("#6f6c66")), "enviar": img(icone_enviar("#f2efe8"))}
+            self.barras_mic = tk.Canvas(self.linha_campo, width=26, height=34, bg=FUNDO, highlightthickness=0)
+            self.mic = ctk.CTkButton(self.linha_campo, text="", image=self.icones["mic"], width=34, height=34,
+                                     corner_radius=10, fg_color=FUNDO2, hover_color="#4a4945", command=app.alternar_ditado)
+            self.enviar_mic = ctk.CTkButton(self.linha_campo, text="", image=self.icones["enviar"], width=34, height=34,
+                                            corner_radius=10, fg_color=FUNDO2, hover_color="#4a4945",
+                                            command=app.enviar_ditado)
+            self.mic_estado("parado")
             # conversa por voz: no lugar do campo, a faixa de áudio (o campo continua existindo, escondido,
             # pra receber o texto que vai ser enviado; clicar na faixa traz o campo de volta pra digitar)
             self.faixa = tk.Canvas(self.frame, width=340 if texto else 280, height=34, bg=FUNDO2,
@@ -1207,13 +1331,48 @@ class Balao:
         if ligada == self.faixa_ativa:
             return
         self.faixa_ativa = ligada
-        self.entry.pack_forget()
+        self.linha_campo.pack_forget()
         self.faixa.pack_forget()
-        (self.faixa if ligada else self.entry).pack(padx=10, pady=(4, 10))
+        (self.faixa if ligada else self.linha_campo).pack(padx=10, pady=(4, 10))
         if not ligada and foco:
             self.win.update_idletasks()
             self.posicionar()
             self.entry.focus_set()
+
+    def mic_estado(self, estado, niveis=None):
+        """Parado: só o microfone. Gravando: barrinhas do volume + microfone azul (para e deixa o texto no campo) + ↵
+        (para e envia direto). Transcrevendo: tudo apagado, esperando o texto."""
+        for w in (self.entry, self.barras_mic, self.mic, self.enviar_mic):
+            w.pack_forget()
+        gravando = estado in ("ouvindo", "transcrevendo")
+        self.entry.configure(width=self.largura_campo - (26 + 42 if gravando else 0))
+        self.entry.pack(side="left")
+        if gravando:
+            self.barras_mic.pack(side="left", padx=(6, 0))
+        if estado == "ouvindo":
+            self.mic.configure(image=self.icones["mic_azul"], fg_color="#1e3a5c", hover_color="#27507d", state="normal")
+            self.enviar_mic.configure(state="normal")
+        elif estado == "transcrevendo":
+            self.mic.configure(image=self.icones["mic_apagado"], fg_color=FUNDO2, hover_color=FUNDO2, state="disabled")
+            self.enviar_mic.configure(state="disabled")
+        else:
+            self.mic.configure(image=self.icones["mic"], fg_color=FUNDO2, hover_color="#4a4945", state="normal")
+        self.mic.pack(side="left", padx=(8, 0))
+        if gravando:
+            self.enviar_mic.pack(side="left", padx=(6, 0))
+        self.desenhar_barras_mic(niveis or [], estado)
+
+    def desenhar_barras_mic(self, niveis, estado="ouvindo"):
+        """Quatro barrinhas azuis com o volume de agora (cinza quando está só escrevendo)."""
+        c = self.barras_mic
+        c.delete("all")
+        cor = "#5aa9ff" if estado == "ouvindo" else "#6f6c66"
+        recentes = list(niveis)[-24:]
+        for i in range(4):
+            fatia = recentes[i * 6:(i + 1) * 6] or [0.0]
+            h = 4 + 20 * (max(fatia) if estado == "ouvindo" else 0.1)
+            x = 3 + i * 6
+            c.create_rectangle(x, 17 - h / 2, x + 3, 17 + h / 2, fill=cor, width=0)
 
     def desenhar_faixa(self, niveis, em_voz, carregando, t, falando=False):
         """Barrinhas de áudio: andam da direita pra esquerda com o volume do microfone (laranja = ele acha que é
@@ -1259,8 +1418,8 @@ class Balao:
         self.rodape.configure(text="  ·  ".join(partes))
 
     def clicou(self, e):
-        if self.entry is not None and str(e.widget).startswith(str(self.entry)):
-            return  # clique no campo de texto: só digita
+        if self.entry is not None and str(e.widget).startswith(str(self.linha_campo)):
+            return  # clique no campo de texto ou no microfone: não passa página nem fecha
         if len(self.paginas) > 1:  # avança em círculo: da última volta pra primeira (fecha no ✕ ou clicando fora)
             self.pagina = (self.pagina + 1) % len(self.paginas)
             self.texto.configure(text=self.paginas[self.pagina])
@@ -1305,6 +1464,9 @@ class Balao:
         if self.ate is None:
             return False
         if self.hover or self.app.mouse_no_mascote:  # mouse em cima: não some
+            self.ate = max(self.ate, time.time() + 1.5)
+        # balão que ele está falando: fica até a fala acabar (a voz demora um pouco pra começar; nada de sumir antes)
+        if time.time() < getattr(self, "espera_fala", 0) and self.app.fala.ocupada:
             self.ate = max(self.ate, time.time() + 1.5)
         return time.time() > self.ate
 
@@ -1386,7 +1548,8 @@ class Claudinho:
                            pausado=self.voz_pausada, ao_erro=lambda m: self.eventos.put(("voz_erro", m)),
                            ao_estado=lambda e: self.eventos.put(("voz_estado", e)),
                            conversa_viva=lambda: self.conversa_voz and self.entrada is not None, fala=self.fala,
-                           chave_stt=lambda: sistema.ler_segredo("stt_chave"))
+                           chave_stt=lambda: sistema.ler_segredo("stt_chave"),
+                           saudacao=self.texto_saudacao)
         self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
         self.sinal_voz = None      # balãozinho de pontinhos sobre o mascote enquanto a voz carrega
         self.voz_status = ""
@@ -1437,6 +1600,11 @@ class Claudinho:
         self.cursor_fora_desde, self.monitor_destino = None, None
         self.prox_comentario = time.time() + 90
         self.piscar_ate, self.arrasto = 0, None
+        self.modo_jogo = False        # tem algo em tela cheia na frente: ele fica no canto de cima à direita, parado
+        self.jogo_virar = 0           # leituras seguidas que discordam do estado atual (evita piscar entra/sai)
+        self.jogo_titulo, self.jogo_exe, self.jogo_desde = "", "", 0.0
+        self.jogo_area = (0, 0, 1920, 1080)
+        self.prox_comentario_jogo = 0.0
 
         self.canvas.bind("<ButtonPress-1>", self.apertou)
         self.canvas.bind("<B1-Motion>", self.arrastou)
@@ -1459,6 +1627,7 @@ class Claudinho:
         try:
             self.t += 1
             self.processar_eventos()
+            self.atualizar_modo_jogo()
             self.mover()
             self.cuidar_dos_baloes()
             self.talvez_comentar()
@@ -1517,6 +1686,9 @@ class Claudinho:
         if self.arrasto or self.menu_aberto:
             return
         agora = time.time()
+        if self.modo_jogo:
+            self.ir_pro_canto_do_jogo()
+            return
         id_aqui, area, _ = self.area()
 
         if self.cfg["seguir_mouse_entre_monitores"]:
@@ -1565,6 +1737,65 @@ class Claudinho:
             self.movendo = True
         self.mover_janela()
 
+    def atualizar_modo_jogo(self):
+        """Tela cheia na frente (jogo, vídeo) por uns 2 segundos seguidos: entra no modo jogo; saiu dela: volta a passear.
+        Com balão ou conversa aberta (que tomam o foco) ele não muda de modo, pra não sair correndo no meio."""
+        if self.t % 8:
+            return
+        if not self.cfg["jogo_canto"]:
+            cheia = False
+        elif self.modo_jogo and (self.entrada or (self.balao and self.balao.tipo != "pensando")):
+            return
+        else:
+            cheia = motores.tela_cheia()
+        if cheia == self.modo_jogo:
+            self.jogo_virar = 0
+            return
+        self.jogo_virar += 1
+        if self.jogo_virar < (3 if cheia else 2):
+            return
+        self.jogo_virar = 0
+        self.modo_jogo = cheia
+        agora = time.time()
+        self.modo, self.alvo, self.cursor_fora_desde = "passeio", None, None
+        if self.esquete:   # entrou no jogo (esquete qualquer sai) ou saiu dele (a do joguinho sai): recomeça limpo
+            self.largar_esquete()
+        if cheia:
+            try:
+                ativa = janelas.janela_ativa() or {}
+            except Exception:
+                ativa = {}
+            esq, topo, dir_, base = ativa.get("rect", (0, 0, 1920, 1080))
+            _, self.jogo_area, _ = monitor((esq + dir_) // 2, (topo + base) // 2)
+            self.jogo_titulo, self.jogo_exe, self.jogo_desde = ativa.get("titulo", ""), ativa.get("exe", ""), agora
+            self.prox_comentario_jogo = agora + 40   # o primeiro comentário sai uns 40 s depois de chegar no canto
+        else:
+            self.pausa_ate = agora + 2               # saiu do jogo: volta a passear normalmente
+
+    def ir_pro_canto_do_jogo(self):
+        """Corre até o canto de cima à direita do monitor do jogo e fica ali, parado."""
+        if self.entrada or (self.balao and self.balao.tipo != "pensando"):
+            return
+        esq, topo, dir_, base = self.jogo_area
+        destino = self.limitar_na_area(dir_ - self.W - 24, topo + 24, self.jogo_area)
+        dx, dy = destino[0] - self.x, destino[1] - self.y
+        dist = (dx * dx + dy * dy) ** 0.5
+        if dist < 1:
+            self.dir_x, self.dir_y = -1, 0   # parado, olhando pro meio da tela
+            return
+        vel = self.S * 2.6
+        if abs(dx) > 1:
+            self.dir_x = 1 if dx > 0 else -1
+        self.dir_y = (1 if dy > 0 else -1) if abs(dy) > abs(dx) * 0.6 and abs(dy) > 1 else 0
+        if dist <= vel:
+            self.x, self.y = destino
+            self.dir_x, self.dir_y = -1, 0   # chegou: parado, olhando pro meio da tela
+        else:
+            self.x += vel * dx / dist
+            self.y += vel * dy / dist
+            self.movendo = True
+        self.mover_janela()
+
     def correr_para(self, cx, cy, id_monitor, area):
         if self.cfg["movimento"] == "horizontal":
             destino = (cx - self.W / 2, area[3] - self.H)
@@ -1576,6 +1807,8 @@ class Claudinho:
 
     def novo_alvo(self, area):
         esq, topo, dir_, base = area
+        if motores.tela_cheia():  # jogo, vídeo: só anda na base do monitor, sem atravessar a tela
+            return self.limitar_na_area(random.uniform(esq, dir_ - self.W), base - self.H, area)
         if self.cfg["movimento"] == "horizontal":
             return self.limitar_na_area(random.uniform(esq, dir_ - self.W), self.y, area)
         cx, cy = cursor()
@@ -2473,6 +2706,24 @@ class Claudinho:
     def avisos_na_fila(self):
         return sum(1 for f in self.falas if f["tipo"] == "aviso")
 
+    def resumir_aviso(self, dados):
+        """Resumo curto (1 a 3 frases) da mensagem final de um chat do Claude Code; sem IA, pega o começo dela."""
+        texto = formatar.limpar(dados.get("resposta") or "")
+        resumo = None
+        try:
+            pedido = (dados.get("pedido") or "").strip()[:300]
+            resumo = formatar.limpar(motores.completar(
+                "Resuma em português, em NO MÁXIMO 3 frases curtas (uns 220 caracteres no total), a mensagem final abaixo, "
+                "dita por um assistente de código ao terminar um trabalho. Diga o que foi feito e, se houver, o que o usuário "
+                "precisa decidir ou fazer. Sem markdown, sem listas, sem emoji, sem introdução tipo 'O assistente'. "
+                f"Responda só o resumo.\n\nO que o usuário pediu: {pedido or '(não informado)'}\n\n"
+                f"Mensagem:\n{texto[:6000]}", max_tokens=200, timeout=60)).strip()
+        except Exception:
+            pass
+        if not resumo or len(resumo) > 500:   # sem resumo bom: as primeiras frases
+            resumo = (texto[:230].rsplit(" ", 1)[0] + "…") if len(texto) > 230 else texto
+        self.eventos.put(("aviso_pronto", dict(dados, resumo=resumo)))
+
     def rodape_aviso(self, dados):
         partes = []
         pedido = (dados.get("pedido") or "").strip().replace("\n", " ")
@@ -2487,7 +2738,7 @@ class Claudinho:
         self.fechar_balao()
         if fala["tipo"] == "aviso":
             d = fala["dados"]
-            resposta = formatar.limpar(d.get("resposta") or "(sem texto)")  # balão não entende markdown
+            resposta = formatar.limpar(d.get("resumo") or d.get("resposta") or "(sem texto)")  # balão não entende markdown
             if len(resposta) > 1200:  # aviso é resumo: no máximo ~3 páginas
                 resposta = resposta[:1200].rsplit(" ", 1)[0] + "…"
             self.balao = Balao(self, "aviso", resposta, titulo=f"✓ pronto em {d.get('projeto') or '?'}",
@@ -2513,6 +2764,20 @@ class Claudinho:
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"])
         self.balao.dados = fala
         self.lembrar_fala(fala)
+        self.falar_balao(fala)
+
+    def falar_balao(self, fala):
+        """Tudo o que ele solta em balão (piada, comentário, aviso, resumo) também sai em voz, se a voz (🔊) está ligada."""
+        if not self.cfg["voz_fala"] or fala["tipo"] == "resposta" or motores.tela_cheia():
+            return   # resposta de chat já é falada em fluxo; em jogo/tela cheia ele fica quieto
+        d = fala.get("dados") or {}
+        texto = fala.get("texto") or d.get("resumo") or d.get("resposta") or ""
+        if fala["tipo"] == "aviso":
+            texto = "Pronto! " + texto[:300]
+        if texto and not self.conversa_voz:
+            self.fala.falar(formatar.limpar(texto))
+            if self.balao is not None:
+                self.balao.espera_fala = time.time() + 90
 
     # ---------- continuidade: o chat sabe o que ele falou nos balões ----------
     def lembrar_fala(self, fala):
@@ -2755,12 +3020,12 @@ class Claudinho:
         ao_frase, self.fala_em_fluxo = None, False
         if self.cfg["voz_fala"]:  # ele responde falando, em qualquer mensagem (o botão 🔊 do balão liga e desliga)
             if self.conversa_voz:  # conversa por voz: resposta curta, de conversa
-                pergunta += ("\n\n(Sua resposta vai ser lida em voz alta: responda em até 3 frases curtas, em tom de "
-                             "conversa, sem emoji, sem listas, sem markdown e sem links.)")
+                pergunta += ("\n\n(Sua resposta vai ser lida em voz alta: responda em UMA frase curta (duas no máximo), "
+                             "direto ao ponto, sem rodeio, sem explicar o que entendeu, sem emoji, listas, markdown ou links.)")
                 self.fala_orcamento = None
             else:  # digitada: a resposta aparece inteira, mas só o começo dela é falado
-                pergunta += ("\n\n(O começo da sua resposta também vai ser lido em voz alta: abra com uma frase curta e "
-                             "direta, sem emoji e sem links.)")
+                pergunta += ("\n\n(O começo da sua resposta também vai ser lido em voz alta: abra com uma frase bem curta e "
+                             "direta (sem rodeio), sem emoji e sem links.)")
                 self.fala_orcamento = 420
             self.fala.parar()
             if getattr(self.chat, "FLUXO", False):  # o motor entrega frase a frase: começa a falar na primeira
@@ -2795,6 +3060,19 @@ class Claudinho:
             self.voz.ligar()
         else:
             self.voz.desligar()
+
+    def texto_saudacao(self):
+        """Cumprimento curto de quando a conversa por voz começa: pelo nome do "Meu Mestre" (só o primeiro), se tiver."""
+        nome = (self.cfg["mestre"].get("nome") or "").strip().split(" ")[0]
+        hora = time.localtime().tm_hour
+        periodo = "Bom dia" if hora < 12 else "Boa tarde" if hora < 18 else "Boa noite"
+        if self.cfg["personalidade"] == "ultron":
+            opcoes = ["Saudações, {n}.", "Sim, {n}? Estou ouvindo.", "Pois não, {n}."] if nome else \
+                     ["Saudações.", "Sim? Estou ouvindo.", "Pois não."]
+        else:
+            opcoes = ["Oi, {n}!", "Olá, {n}!", "E aí, {n}?", "Fala, {n}!", periodo + ", {n}!"] if nome else \
+                     ["Oi!", "Olá!", "E aí?", "Fala aí!", periodo + "!"]
+        return random.choice(opcoes).format(n=nome)
 
     def texto_link_voz(self):
         return "🔊 voz" if self.cfg["voz_fala"] else "🔇 voz"
@@ -2902,6 +3180,10 @@ class Claudinho:
 
     def animar_voz(self):
         self.animar_sinal_voz()
+        if self.voz.ditando and self.entrada and getattr(self.entrada, "barras_mic", None) is not None \
+                and self.entrada.enviar_mic.winfo_ismapped():
+            self.entrada.desenhar_barras_mic(self.voz.niveis, "ouvindo" if self.entrada.mic.cget("state") == "normal"
+                                             else "transcrevendo")
         """A faixa de áudio (e os pontinhos de "preparando…" e "mandando…": sem isso parece que travou)."""
         if not (self.conversa_voz and self.entrada and self.entrada.rodape is not None):
             return
@@ -2924,6 +3206,54 @@ class Claudinho:
         self.entrada.win.focus_force()
         self.root.after(60, self.entrada.entry.focus_set)
         return True
+
+    def alternar_ditado(self):
+        """🎤 do chat: clicou, ele escuta (você fala, ele para quando você cala) e o texto cai no campo, pra você enviar
+        à mão. Clicou de novo enquanto ouve: para na hora e transcreve."""
+        if self.voz.ditando:
+            self.voz.parar_ditado.set()   # o texto cai no campo, pra você conferir e enviar
+            return
+        if self.ocupado or not self.entrada:
+            return
+        self.ditado_enviar = False
+        self.fala.parar()   # ele falando não pode entrar no microfone
+        self.voz.ditar(lambda estado: self.eventos.put(("ditado_estado", estado)),
+                       lambda texto: self.eventos.put(("ditado_texto", texto)),
+                       lambda msg: self.eventos.put(("voz_erro", msg)))
+
+    def enviar_ditado(self):
+        """↵ do chat: para de gravar e, assim que o texto sair, já envia."""
+        if self.voz.ditando:
+            self.ditado_enviar = True
+            self.voz.parar_ditado.set()
+
+    def ditado_estado(self, estado):
+        if not self.entrada:
+            return
+        self.entrada.mic_estado("parado" if estado == "fim" else estado)
+        if estado == "ouvindo":
+            self.entrada.entry.configure(placeholder_text="ouvindo… fale agora")
+        elif estado == "transcrevendo":
+            self.entrada.entry.configure(placeholder_text="escrevendo o que você falou…")
+        else:
+            self.entrada.entry.configure(placeholder_text="responde aqui…" if self.entrada.paginas[0] else "pergunta pro claudinho…")
+
+    def ditado_texto(self, texto):
+        if not self.entrada:
+            return
+        if not texto:
+            self.ditado_enviar = False
+            self.entrada.entry.configure(placeholder_text="não ouvi nada, tenta de novo")
+            return
+        atual = self.entrada.entry.get().strip()
+        self.entrada.entry.delete(0, "end")
+        self.entrada.entry.insert(0, (atual + " " + texto).strip())
+        self.entrada.win.focus_force()
+        self.entrada.entry.focus_set()
+        self.entrada.entry.icursor("end")
+        if getattr(self, "ditado_enviar", False):
+            self.ditado_enviar = False
+            self.enviar()
 
     def escrever_no_chat(self, texto):
         if self.entrada:
@@ -2997,6 +3327,19 @@ class Claudinho:
         """A vez dele de fazer algo à toa: piada ou esquete saem do mesmo timer (mesma fila, tipos diferentes)."""
         self.acompanhar_app_ativo()
         threading.Thread(target=motores.liberar_gpu_se_jogo, daemon=True).start()
+        if self.modo_jogo:   # em jogo não tem piada de banco nem esquete: só o comentário sobre o jogo
+            self.comentar_do_jogo()
+            return
+        if self.cfg["modo_junior"]:   # Júnior: só observa a tela e comenta o que for útil (sempre com a IA)
+            if (not self.cfg["comentar_tela"] or self.cfg["vendado"] or not tem_ia() or self.comentando
+                    or time.time() < self.prox_comentario):
+                return
+            if self.ocupado or self.balao or self.entrada or self.falas or self.esquete or self.modo != "passeio":
+                return
+            a, b = self.cfg["comentar_a_cada_minutos"]
+            self.prox_comentario = time.time() + random.uniform(a, b) * 60
+            self.olhar_tela()
+            return
         piadas, esquetes_ligadas = self.cfg["comentar_tela"], self.cfg["esquetes"]
         if not (piadas or esquetes_ligadas) or self.comentando or time.time() < self.prox_comentario:
             return
@@ -3012,6 +3355,15 @@ class Claudinho:
             self.comentar_do_banco(janelas.listar(area_total))
         else:
             self.olhar_tela()
+
+    def comentar_do_jogo(self):
+        """No canto, parado: de tempos em tempos olha a tela (o print que ele já tira) e comenta o jogo."""
+        if (not self.cfg["comentar_tela"] or self.cfg["vendado"] or not tem_ia() or self.comentando or self.ocupado
+                or self.balao or self.entrada or self.falas or self.movendo or time.time() < self.prox_comentario_jogo):
+            return
+        a, b = self.cfg["comentar_a_cada_minutos"]
+        self.prox_comentario_jogo = time.time() + random.uniform(a, b) * 60
+        self.olhar_tela(jogo=True)
 
     # ---------- memória do dia (o que foi pedido nos chats) ----------
     def avisos_de_hoje(self):
@@ -3150,32 +3502,42 @@ class Claudinho:
             return "eu_mesmo", None
         return "atividade", None
 
-    def olhar_tela(self):
+    def olhar_tela(self, jogo=False):
         _, _, area_total = self.area()
         lista = janelas.listar(area_total)
         if self.cfg["vendado"]:  # de faixa nos olhos: nada de print, só o banco de frases
             self.olhando_forcado = False
-            self.comentar_do_banco(lista)
+            if not self.cfg["modo_junior"]:   # (o Júnior sem enxergar não tem o que dizer)
+                self.comentar_do_banco(lista)
             return
         self.comentando = True
         modelo, recentes, assuntos = (self.cfg["modelo_comentario"], self.mem.piadas_recentes(25),
                                       self.mem.assuntos_recentes(8))
         maldoso, tdah = self.modo_maldoso, self.cfg["modo_tdah"]
-        alvo, ponto = self.sortear_alvo(area_total)
+        junior = self.cfg["modo_junior"]
+        alvo, ponto = ("jogo", None) if jogo else ("atividade", None) if junior else self.sortear_alvo(area_total)
         eu, retrato = tuple(int(v) for v in self.centro()), self.retrato()
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                     if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto(self.cfg["mestre"])
-        if maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
+        if junior:   # só o que está visível: a dica tem que dar pra conferir na imagem
+            contexto += SO_O_QUE_ESTA_NA_TELA.replace("a piada", "a observação")
+        elif maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
             contexto += SO_O_QUE_ESTA_NA_TELA
         else:
             contexto += self.resumo_do_dia()
             if self.musica and self.musica["tocando"]:
                 contexto += f"\nEle está ouvindo agora: {musica.descrever(self.musica)}."
 
+        if jogo:
+            contexto = (f"ELE ESTÁ JOGANDO (ou vendo algo em tela cheia): janela \"{self.jogo_titulo}\" ({self.jogo_exe}), "
+                        f"há {int((time.time() - self.jogo_desde) / 60)} minutos. Você está parado no canto de cima da tela, "
+                        "assistindo.\n") + contexto
+
         def trabalho():
             try:
                 r = comentar_tela(area_total, modelo, recentes, lista, contexto, maldoso, tdah, alvo, ponto,
-                                  assuntos, eu=eu, retrato=retrato, personalidade=self.cfg["personalidade"])
+                                  assuntos, eu=eu, retrato=retrato, personalidade=self.cfg["personalidade"],
+                                  junior=junior)
             except Exception:
                 r = None
             self.eventos.put(("comentario", r, lista, alvo))
@@ -3256,6 +3618,17 @@ class Claudinho:
     # ---------- esquetes (idle: deploy do nada, café, cochilo…) ----------
     def cuidar_da_esquete(self):
         agora = time.time()
+        if self.modo_jogo:   # em jogo ele fica parado no canto na animação do joguinho (controle na mão), sem fim
+            pode = self.visivel and not (self.ocupado or self.arrasto or self.entrada or self.lendo_notificacoes)
+            jogando = bool(self.esquete) and self.esquete["nome"] == "jogo"
+            if jogando and not pode:
+                self.largar_esquete()
+            elif not self.esquete and pode and not self.movendo:
+                self.esquete = {"nome": "jogo", "inicio": agora, "ate": agora + 3600, "musica": False}
+                self.alvo = None
+            if self.esquete and self.esquete["nome"] == "jogo":
+                self.esquete["ate"] = agora + 3600
+                return
         if self.esquete:
             # você chamou (clicou, arrastou, pediu algo) ou ele saiu correndo: larga tudo, sem fala de fim
             chegou_importante = any(f.get("prioridade", FALA) == IMPORTANTE for f in self.falas)
@@ -3590,6 +3963,10 @@ class Claudinho:
                 return
             if ev[0] == "permissao":
                 self.mostrar_permissao(ev[1])
+            elif ev[0] == "ditado_estado":
+                self.ditado_estado(ev[1])
+            elif ev[0] == "ditado_texto":
+                self.ditado_texto(ev[1])
             elif ev[0] == "voz_acordar":
                 ev[2]["ok"] = self.abrir_conversa_por_voz()
                 ev[1].set()
@@ -3652,8 +4029,13 @@ class Claudinho:
                 self.comentar(prioridade=IMPORTANTE, texto=f"O atalho {ev[1]} já é usado por outro programa. "
                               "Troca o \"atalho_comentar\" no config.json.")
             elif ev[0] == "aviso":
-                self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
                 self.lembrar_do_dia(ev[1])
+                if len(formatar.limpar(ev[1].get("resposta") or "")) <= 260:
+                    self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
+                else:  # mensagem longa do Claude Code: no balão vai só um resumo (a fila espera o resumo ficar pronto)
+                    threading.Thread(target=self.resumir_aviso, args=(ev[1],), daemon=True).start()
+            elif ev[0] == "aviso_pronto":
+                self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
             elif ev[0] == "resposta":
                 self.usou_ferramenta = False
                 _, resposta, sid, erro = ev
@@ -3679,8 +4061,10 @@ class Claudinho:
                 if self.modo != "passeio" and not forcado:
                     continue
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
-                if not r or self.parecida(*r):
-                    self.comentar_do_banco(lista)
+                # (em jogo e no modo Júnior não tem banco: fica quieto até a próxima; comentário vazio = nada útil a dizer)
+                if not r or not r[0] or self.parecida(*r):
+                    if alvo != "jogo" and not self.cfg["modo_junior"]:
+                        self.comentar_do_banco(lista)
                     continue
                 texto, assunto = r
                 pid = self.lembrar_piada(texto, "haiku", assunto=assunto, alvo=alvo)

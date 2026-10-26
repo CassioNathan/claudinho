@@ -19,6 +19,11 @@ Também é um ajudante limitado do chat, que roda sem confirmação:
     python musica.py videos "<o que procurar>"        lista os vídeos da pesquisa do YouTube (com id)
     python musica.py assistir <id>                    abre esse vídeo do YouTube numa aba nova, na frente
     python musica.py video <acao> [valor]             pausar, tocar, velocidade 0.5-2, avancar N, voltar N, legenda, cinema
+    python musica.py consultar youtube <pesquisa|inicio|inscricoes|historico|canal|video> [termo ou id]
+    python musica.py consultar ytmusic <inicio|explorar|pesquisa|musicas|playlists|albuns|artistas|curtidas|historico|pagina> [termo ou ref]
+                                                      CONSULTA sem mexer na tela: a extensão olha e traz a lista (datas, canal, ref)
+    python musica.py ir youtube <inicio|inscricoes|historico|canal|pesquisa|id> [termo]   ABRE e traz o navegador pra frente
+    python musica.py ir ytmusic <inicio|explorar|biblioteca|curtidas|historico|pesquisa|ref> [termo]   idem, no YouTube Music
 
 Buscar e tocar usa o YouTube Music sem login (ytmusicapi) só pra achar a música; quem toca é o seu
 navegador, logado na sua conta. Com a extensão do Claudinho instalada, usa a aba que já está aberta;
@@ -267,6 +272,109 @@ def tocar_no_youtube(termo):
     return False
 
 
+def consultar_ext(site, comando, espera=40):
+    """Pergunta pra extensão do navegador (via Claudinho) e espera a resposta: {'ok', 'dados'} ou {'ok': False, 'erro'}.
+    Não abre nem puxa nada na tela do usuário."""
+    import json
+    import urllib.request
+    try:
+        chave = (sistema.DADOS / "ext_token").read_text(encoding="utf-8").strip()
+        pedido = urllib.request.Request(
+            "http://127.0.0.1:47821/ext/consultar", data=json.dumps({"site": site, "comando": comando,
+                                                                     "espera": espera}).encode(),
+            headers={"Content-Type": "application/json", "X-Claudinho-Ext": chave})
+        return json.loads(urllib.request.urlopen(pedido, timeout=espera + 5).read())
+    except Exception as e:
+        return {"ok": False, "erro": f"o Claudinho não respondeu ({e})"}
+
+
+def _video_linha(i, v):
+    partes = [p for p in (v.get("canal"), v.get("duracao"), v.get("views"), v.get("publicado")) if p]
+    linha = f"{i}. {v['titulo']} — " + ", ".join(partes) + f" [{v['id']}]"
+    if v.get("resumo"):
+        linha += f"\n   {v['resumo'][:160]}"
+    return linha
+
+
+def consultar(site, modo, termo=""):
+    """Consulta o YouTube/YouTube Music pela extensão e devolve o texto pronto pra imprimir (sem mexer na tela)."""
+    comando = {"modo": modo, "termo": termo, "id": termo, "ref": termo}
+    if modo in ("pesquisa", "canal") and not termo:
+        return f'uso: consultar {site} {modo} "<termo>"'
+    r = consultar_ext(site, comando, espera=55 if modo == "video" else 40)
+    if not r.get("ok"):
+        if site == "youtube" and modo == "pesquisa":   # sem extensão, a pesquisa ainda dá pra ler direto
+            try:
+                lista = videos(termo, 8)
+                if lista:
+                    return "\n".join(_video_linha(i, dict(v, publicado="")) for i, v in enumerate(lista, 1))
+            except Exception:
+                pass
+        return f"não consegui consultar: {r.get('erro', 'erro desconhecido')}"
+    dados = r["dados"]
+    if site == "youtube" and modo == "video":
+        d = dados
+        return (f"{d['titulo']} — {d['canal']}\nPublicado: {d['publicado'][:10]} | Duração: {d['duracao']} | {d['views']}"
+                f"{' | AO VIVO' if d.get('ao_vivo') else ''}\nDescrição:\n{d['descricao'][:1800]}\n[{d['id']}]")
+    if site == "youtube" and modo == "canal":
+        cab = f"Canal {dados['canal']} ({dados['inscritos']}) — últimos vídeos:"
+        return cab + "\n" + "\n".join(_video_linha(i, v) for i, v in enumerate(dados["videos"], 1))
+    if site == "youtube":
+        return "\n".join(_video_linha(i, v) for i, v in enumerate(dados, 1)) or "nada encontrado"
+    saida, secao = [], None   # YouTube Music: itens com a seção da prateleira e a ref pra abrir depois
+    for i, it in enumerate(dados, 1):
+        if it.get("secao") and it["secao"] != secao:
+            secao = it["secao"]
+            saida.append(f"## {secao}")
+        saida.append(f"{i}. {it['titulo']} ({it['tipo']}) — {it['detalhe']} [{it['ref']}]")
+    return "\n".join(saida) or "nada encontrado"
+
+
+PAGINAS_YT = {"inicio": "https://www.youtube.com/", "inscricoes": "https://www.youtube.com/feed/subscriptions",
+              "historico": "https://www.youtube.com/feed/history"}
+PAGINAS_YTM = {"inicio": "https://music.youtube.com/", "explorar": "https://music.youtube.com/explore",
+               "biblioteca": "https://music.youtube.com/library", "curtidas": "https://music.youtube.com/playlist?list=LM",
+               "historico": "https://music.youtube.com/history"}
+
+
+def ir_para(site, alvo, termo=""):
+    """ABRE no navegador e traz pra frente (o oposto de consultar, que não mexe na tela). Devolve o que fez."""
+    import re
+    from urllib.parse import quote_plus
+    if site == "youtube":
+        if alvo in PAGINAS_YT:
+            url = PAGINAS_YT[alvo]
+        elif alvo in ("pesquisa", "canal"):
+            url = f"https://www.youtube.com/results?search_query={quote_plus(termo)}" + (
+                "&sp=EgIQAg%253D%253D" if alvo == "canal" else "")
+        elif re.fullmatch(r"[\w-]{11}", alvo):
+            assistir(alvo)
+            return "abri o vídeo no YouTube, numa aba nova, na frente"
+        else:
+            return f"não sei ir pra '{alvo}' no YouTube"
+        if not pela_extensao("youtube", {"acao": "abrir", "url": url, "focar": True, "nova": alvo in ("pesquisa", "canal")}):
+            abrir_aba_nova(url)
+        return "abri no YouTube e trouxe o navegador pra frente"
+    if alvo == "pesquisa":
+        url = f"https://music.youtube.com/search?q={quote_plus(termo)}"
+    elif alvo in PAGINAS_YTM:
+        url = PAGINAS_YTM[alvo]
+    elif re.fullmatch(r"[mpacb]:[\w-]{3,60}", alvo):
+        tipo, id_ = alvo.split(":")
+        if tipo == "m":
+            atual = tocando()
+            if atual and atual["tocando"] and atual["app"] not in NAVEGADORES:
+                controlar("pausar")
+            url = f"https://music.youtube.com/watch?v={id_}&list=RDAMVM{id_}"
+        else:
+            url = f"https://music.youtube.com/playlist?list={id_}" if tipo == "p" else f"https://music.youtube.com/browse/{id_}"
+    else:
+        return f"não sei ir pra '{alvo}' no YouTube Music"
+    if not pela_extensao("ytmusic", {"acao": "abrir", "url": url, "focar": True}):
+        abrir_aba_nova(url)
+    return "abri no YouTube Music e trouxe o navegador pra frente"
+
+
 def descrever(m):
     if not m:
         return "nada tocando agora"
@@ -344,9 +452,17 @@ def main():
             sys.exit("uso: python musica.py assistir <id>")
         assistir(sys.argv[2].strip())
         print("abri o vídeo no YouTube, numa aba nova")
+    elif acao == "consultar":
+        if len(sys.argv) < 4 or sys.argv[2] not in ("youtube", "ytmusic"):
+            sys.exit("uso: python musica.py consultar <youtube|ytmusic> <modo> [termo]")
+        print(consultar(sys.argv[2], sys.argv[3], " ".join(sys.argv[4:]).strip().strip('"')))
+    elif acao == "ir":
+        if len(sys.argv) < 4 or sys.argv[2] not in ("youtube", "ytmusic"):
+            sys.exit("uso: python musica.py ir <youtube|ytmusic> <destino> [termo]")
+        print(ir_para(sys.argv[2], sys.argv[3], " ".join(sys.argv[4:]).strip().strip('"')))
     else:
         sys.exit(f"recusado: ação '{acao}' não existe (tocando, pausar, tocar, alternar, proxima, anterior, buscar, "
-                 "artista, youtube, curtir, banda, tocar_id, curtidas, player, videos, assistir, video)")
+                 "artista, youtube, curtir, banda, tocar_id, curtidas, player, videos, assistir, video, consultar, ir)")
 
 
 if __name__ == "__main__":

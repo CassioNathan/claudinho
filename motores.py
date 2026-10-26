@@ -358,18 +358,21 @@ FERRAMENTAS = [
         "comando, por exemplo [\"buscar\", \"Helena My Chemical Romance\"], [\"banda\", \"Trivium\"], "
         "[\"tocar_id\", \"<id>\"], [\"videos\", \"<termo>\"], [\"assistir\", \"<id>\"], [\"youtube\", \"<termo>\"], "
         "[\"tocando\"], [\"pausar\"], [\"tocar\"], [\"proxima\"], [\"anterior\"], [\"curtir\"], [\"curtidas\"], "
-        "[\"player\", \"aleatorio\"], [\"player\", \"volume\", \"40\"], [\"video\", \"velocidade\", \"1.5\"]."),
+        "[\"player\", \"aleatorio\"], [\"player\", \"volume\", \"40\"], [\"video\", \"velocidade\", \"1.5\"]. "
+        "CONSULTAR sem mexer na tela: [\"consultar\", \"youtube\", \"pesquisa|inicio|inscricoes|canal|video\", \"<termo ou id>\"], "
+        "[\"consultar\", \"ytmusic\", \"inicio|pesquisa|musicas|playlists|albuns|artistas|curtidas\", \"<termo>\"]; ABRIR e levar o usuário: "
+        "[\"ir\", \"youtube|ytmusic\", \"<destino ou id/ref da lista>\"]."),
      "input_schema": {"type": "object", "properties": {"argumentos": {"type": "array", "items": {"type": "string"}}},
                       "required": ["argumentos"], "additionalProperties": False}},
     {"name": "abrir", "description": (
         "Abre no PC do usuário: [\"site\", \"<url>\"], [\"pesquisa\", \"<termo>\", \"google|youtube|bing|duckduckgo\"] "
-        "ou [\"programa\", \"<nome>\"] (navegador, chrome, edge, opera, intellij, vscode, discord, whatsapp, "
-        "postman, docker, spotify)."),
+        "ou [\"programa\", \"<nome>\"] (qualquer programa instalado no PC, pelo nome aproximado: "
+        "steam, vscode, bloco de notas, discord…)."),
      "input_schema": {"type": "object", "properties": {"argumentos": {"type": "array", "items": {"type": "string"}}},
                       "required": ["argumentos"], "additionalProperties": False}},
 ]
 ACOES = {"musica": {"tocando", "pausar", "tocar", "alternar", "proxima", "anterior", "curtir", "curtidas", "buscar",
-                    "artista", "youtube", "banda", "videos", "tocar_id", "assistir", "player", "video"},
+                    "artista", "youtube", "banda", "videos", "tocar_id", "assistir", "player", "video", "consultar", "ir"},
          "abrir": {"site", "pesquisa", "programa"}}
 
 

@@ -150,8 +150,11 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
   Alt+Tab, qualquer coisa com Win, Ctrl+Shift+Esc, Ctrl+Alt+Del). Com a faixa nos olhos, nada de teclas. Só no motor
   Claude Code.
 - **`abrir_projeto(programa, projeto)`** ("abre o IntelliJ no LC Pedir API"): acha a pasta do projeto pelo nome só
-  dentro das pastas liberadas (`projetos.py`), abre o programa nela e espera a janela do projeto (até 2 min); se já
-  estiver aberto, traz pra frente. Achou mais de uma pasta (ex.: "LC Pedir" tem _API e _WEB dentro) ou nenhuma: devolve a
+  dentro das pastas liberadas (`projetos.py`), abre o programa nela e espera o projeto ficar pronto (até 2 min); se já
+  estiver aberto, traz pra frente.
+- **`esperar_janela(janela)`**: espera sem tempo fixo. Volta assim que a janela apareceu e o programa sossegou (CPU
+  baixa por 2 s: IntelliJ abrindo projeto fica em vários núcleos, pronto fica quase parado), e diz quanto levou. O
+  chat não pode mais usar `sleep` (bloqueado): PC rápido segue logo, PC lento espera o que precisar. Achou mais de uma pasta (ex.: "LC Pedir" tem _API e _WEB dentro) ou nenhuma: devolve a
   lista e o chat pergunta. O chat faz tarefas com etapas de uma vez: abrir_projeto → atalhos_conhecidos → atalho →
   ver_tela(janela=…) pra conferir; e não fecha programa pra "consertar".
 - **Programas** (painel → Programas): tudo o que está instalado (menu Iniciar e Loja), com busca e uma chave por

@@ -5,7 +5,6 @@ abre o programa nela e espera a janela do projeto aparecer, pra próxima etapa (
 Não roda comando nem passa outro argumento além da pasta."""
 import json
 import os
-import time
 from pathlib import Path
 
 import programas
@@ -108,13 +107,14 @@ def abrir(programa, projeto, espera=120):
     os.startfile(item["atalho"], arguments=f'"{pasta}"')
     if not exes:
         return f"mandei abrir {item['nome']} em {pasta}; não sei o nome da janela dele pra esperar"
-    fim = time.time() + espera
-    while time.time() < fim:
-        j = _janela_do_projeto(exes, pasta)
-        if j:
-            time.sleep(1.5)
-            _abrir.forcar_frente(j["hwnd"])
-            return f"abri {item['nome']} em {pasta} e a janela do projeto está pronta ('{j['titulo']}')"
-        time.sleep(1)
-    return (f"mandei abrir {item['nome']} em {pasta}, mas em {espera}s a janela do projeto não apareceu "
-            "(pode estar carregando): confira com ver_tela antes de seguir")
+    # espera a janela do projeto aparecer E o programa sossegar (CPU baixa), sem tempo fixo: PC rápido segue logo
+    import janelas
+    j, levou, pronta = janelas.esperar_pronta(lambda: _janela_do_projeto(exes, pasta), limite=espera)
+    if not j:
+        return (f"mandei abrir {item['nome']} em {pasta}, mas em {espera}s a janela do projeto não apareceu "
+                "(pode estar carregando): confira com ver_tela antes de seguir")
+    _abrir.forcar_frente(j["hwnd"])
+    if pronta:
+        return f"abri {item['nome']} em {pasta} e o projeto está pronto (levou {levou:.0f}s; janela '{j['titulo']}')"
+    return (f"abri {item['nome']} em {pasta} (janela '{j['titulo']}'), mas depois de {levou:.0f}s ele ainda está "
+            "carregando/indexando: dá pra seguir, mas confira com ver_tela")

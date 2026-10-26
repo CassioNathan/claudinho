@@ -79,6 +79,18 @@ def abrir_projeto(programa: str, projeto: str) -> str:
 
 
 @servidor.tool()
+def esperar_janela(janela: str, segundos: int = 120) -> str:
+    """Espera um programa que acabou de abrir ficar PRONTO (a janela apareceu e ele parou de carregar) e volta na
+    hora em que fica, dizendo quanto levou. Use SEMPRE no lugar de sleep entre abrir um programa e mexer nele
+    (ex.: abrir_programa("intellij") → esperar_janela("intellij") → atalho shift+f10). janela: nome do programa ou
+    parte do título. segundos: limite (padrão 120, máx. 300)."""
+    try:
+        return teclas_mod.esperar(janela[:80], segundos)
+    except Exception as e:
+        return f"não consegui esperar: {e}"
+
+
+@servidor.tool()
 def atalhos_conhecidos() -> str:
     """Os atalhos que ele ensinou pra cada programa (lista do painel): "rodar o projeto no IntelliJ" = shift+f10 etc.
     Consulte quando ele pedir uma ação num programa ("roda o projeto", "para o servidor") antes de chutar a tecla."""

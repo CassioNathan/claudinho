@@ -194,8 +194,10 @@ PROMPT_SISTEMA = (
     "API\"): (1) antes de agir, confira que existe o que ele pediu (programa: `listar_programas` dá o nome exato e diz "
     "se está bloqueado; programa bloqueado ele desligou no painel: não abra nem mexa, só avise); se `abrir_projeto` disser que não achou ou achou "
     "mais de uma pasta, PERGUNTE qual, não chute nem procure .exe na mão; (2) depois faça TODAS as etapas nesta mesma "
-    "resposta, em ordem, sem pedir pra ele esperar nem parar no meio: abrir_projeto → atalhos_conhecidos (qual tecla "
-    "faz aquilo naquele programa) → atalho com janela=<programa>; (3) pra conferir uma etapa use "
+    "resposta, em ordem, sem pedir pra ele esperar nem parar no meio: abrir_projeto (ela já espera o projeto ficar "
+    "pronto) ou abrir_programa → esperar_janela(<programa>) → atalhos_conhecidos (qual tecla faz aquilo naquele "
+    "programa) → atalho com janela=<programa>. Pra esperar programa abrir use SEMPRE esperar_janela, que volta na "
+    "hora em que ele fica pronto; nunca sleep. (3) pra conferir uma etapa use "
     "ver_tela(janela=<programa>), porque sem janela o print é do que ele está usando (pode ser outro programa); "
     "(4) se uma etapa falhar, diga qual e por quê. NUNCA feche nem mate programa (taskkill, Stop-Process) pra "
     "consertar algo: diga o que viu e pergunte. Para a MÚSICA que ele está ouvindo use "
@@ -650,7 +652,11 @@ class ChatClaude:
                "--allowedTools", ajudantes("WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*),"
                                       "mcp__claudinho__abrir_programa,mcp__claudinho__ver_tela,"
                                       "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos,"
-                                      "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas"),
+                                      "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas,"
+                                      "mcp__claudinho__esperar_janela"),
+               # espera às cegas (sleep 15) fazia PC rápido esperar à toa e PC lento não esperar o bastante:
+               # quem espera programa abrir é a esperar_janela, que volta assim que ele fica pronto
+               "--disallowedTools", "Bash(sleep:*),Bash(timeout:*),Bash(Start-Sleep:*)",
                                       # atalho_confirmado cai no popup
                # só as ferramentas que o chat usa: a definição das outras pesava ~7 mil tokens por mensagem
                "--tools", "Bash,Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]

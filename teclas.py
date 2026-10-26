@@ -157,6 +157,18 @@ def achar_janela(nome):
     return None
 
 
+def esperar(janela, segundos=120):
+    """Espera o programa abrir de verdade (janela + CPU sossegada) e devolve em quanto tempo, em texto."""
+    segundos = max(5, min(int(segundos or 120), 300))
+    j, levou, pronta = janelas.esperar_pronta(lambda: achar_janela(janela), limite=segundos)
+    if not j:
+        return f"em {levou:.0f}s a janela '{janela}' não apareceu: confira com ver_tela antes de seguir"
+    if pronta:
+        return f"{j['titulo'] or j['exe']} está aberta e pronta (levou {levou:.0f}s)"
+    return (f"{j['titulo'] or j['exe']} abriu mas continua trabalhando depois de {levou:.0f}s (carregando/indexando): "
+            "dá pra seguir, mas confira com ver_tela")
+
+
 def _apertar(vk, solta=False, estendida=False):
     user32.keybd_event(vk, 0, (0x2 if solta else 0) | (0x1 if estendida else 0), 0)
 

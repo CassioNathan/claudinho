@@ -144,5 +144,8 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 
 ## Próximos passos
 
+- [Plano: contexto de projeto (sessões do Claude Code) pro Júnior](docs/plano-contexto-de-projeto.md): saber em qual projeto o usuário está e conferir no código antes de comentar.
+- [Plano: Claudinho orquestrador + Júnior revisor visual](docs/plano-orquestrador.md): manda a tarefa pro Claude Code do projeto e corrige o que o Júnior achou.
+- [Plano: "olha o que está na tela e me responde"](docs/plano-ver-tela.md): ferramenta `ver_tela` no MCP, no chat e na voz.
 - [Plano: MCP exclusivo do Claudinho](docs/plano-mcp.md): trocar os ajudantes via Bash por um servidor
   MCP com ferramentas próprias (livres e com confirmação).

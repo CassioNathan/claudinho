@@ -142,6 +142,17 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
   da janela em foco (padrão), do monitor ou de todos (`tela.py`, ~1280 px em JPEG). Só lê; o balão mostra "olhando a
   tela…". Respeita a faixa nos olhos e a chave "Olhar a tela quando eu pedir" do painel. Vale no chat digitado e na voz
   (mesmo chat), no motor Claude Code (MCP) e na API (ferramenta `ver_tela` em `motores.py`); o Ollama não tem ferramentas.
+- **`atalho(teclas, janela, vezes)` e `atalho_confirmado`** ("vai pra próxima aba", "desce a página", "roda o projeto
+  no IntelliJ"): aperta UMA combinação de teclas (nunca texto livre) na janela pedida, trazendo ela pra frente antes
+  (`teclas.py`). Três faixas: **livre** (setas, Tab, PageUp/PageDown, Home/End, Esc, F5, Ctrl+Tab, Alt+←/→, Ctrl+F/L/T,
+  zoom), **com popup** (o resto: Enter, Delete, Ctrl+S, letras… pela `atalho_confirmado`) e **bloqueada** (Alt+F4,
+  Alt+Tab, qualquer coisa com Win, Ctrl+Shift+Esc, Ctrl+Alt+Del). Com a faixa nos olhos, nada de teclas. Só no motor
+  Claude Code.
+- **Atalhos dos programas** (painel → Atalhos): a lista de "o que cada atalho faz" em cada programa, sem programação.
+  Escolhe um programa aberto, escreve o que a ação faz, clica em **🎧 Escutar atalho**, aperta as teclas e
+  **Adicionar**. Fica no `config.json` (`atalhos_programas`); o chat consulta pela `atalhos_conhecidos` e esses atalhos
+  rodam sem confirmação, só na janela daquele programa. Vem de fábrica com o IntelliJ (Shift+F10 roda o projeto,
+  Ctrl+F2 para). Atalhos que o próprio navegador não deixa escutar (Ctrl+W, Ctrl+T, Ctrl+N) não dá pra gravar.
 - **Consultar sem mexer na tela**: `python musica.py consultar youtube|ytmusic <modo> [termo]` pede pra extensão do
   navegador olhar (pesquisa, início, inscrições, canal, descrição e data de um vídeo; início, biblioteca, curtidas,
   playlists… do YouTube Music) e devolve a lista. **Abrir e levar até lá**: `python musica.py ir youtube|ytmusic <destino>`.

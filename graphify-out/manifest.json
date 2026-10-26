@@ -6,16 +6,16 @@
     "semantic_hash": "101fbf6f02e0f9b0dc620b84535c6010"
   },
   "claudinho.pyw": {
-    "mtime": 1793016484.333367,
-    "seen": 1793016560.0629447,
-    "ast_hash": "018d37753f4c70f2d43f5540550a0993",
+    "mtime": 1793018923.902429,
+    "seen": 1793019124.7958994,
+    "ast_hash": "d76b84996117e22ea838e2be791aed31",
     "semantic_hash": "",
     "language": "language=.py"
   },
   "claudinho_mcp.py": {
-    "mtime": 1793016416.0690203,
-    "seen": 1793016560.0629523,
-    "ast_hash": "9d15070f74ad0176821d9dd98258a5d0",
+    "mtime": 1793018923.2009623,
+    "seen": 1793019124.795907,
+    "ast_hash": "545c03730a9082f8bb89af47d805121d",
     "semantic_hash": ""
   },
   "cli.py": {
@@ -163,9 +163,9 @@
     "semantic_hash": "84b59dc06ba7879736105d0e6eb2dbc2"
   },
   "README.md": {
-    "mtime": 1793016552.4523208,
-    "seen": 1793016560.063066,
-    "ast_hash": "f1a890350643aa22ef363c55e90ec615",
+    "mtime": 1793019107.4184244,
+    "seen": 1793019124.7960203,
+    "ast_hash": "b1fe12de61944d7e3d1f9de9122a70bf",
     "semantic_hash": ""
   },
   "conversa.html": {
@@ -181,10 +181,10 @@
     "semantic_hash": "c66914f18c241eac054743cc40272dc5"
   },
   "docs/plano-mcp.md": {
-    "mtime": 1792702797.283062,
-    "seen": 1793016152.4837747,
-    "ast_hash": "3e7e51755fa886faa5989a3fc4095d43",
-    "semantic_hash": "3e7e51755fa886faa5989a3fc4095d43"
+    "mtime": 1793018819.2799766,
+    "seen": 1793018836.682883,
+    "ast_hash": "ac33547ab42b39b4e516eeafe0807040",
+    "semantic_hash": ""
   },
   "docs/plano-orquestrador.md": {
     "mtime": 1793014170.177501,
@@ -199,9 +199,9 @@
     "semantic_hash": ""
   },
   "painel.html": {
-    "mtime": 1793016459.1152227,
-    "seen": 1793016560.063092,
-    "ast_hash": "5824cf5119621c24d4362d5592871fd8",
+    "mtime": 1793019080.638837,
+    "seen": 1793019124.7960448,
+    "ast_hash": "d592122fd0173d3b95613e6abfb161af",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -214,6 +214,12 @@
     "mtime": 1793016459.1634173,
     "seen": 1793016560.0630565,
     "ast_hash": "964e2edeeec6a5f53413316b060614ce",
+    "semantic_hash": ""
+  },
+  "teclas.py": {
+    "mtime": 1793019095.6179092,
+    "seen": 1793019124.7960079,
+    "ast_hash": "f4837fb43ca75e51426ef70085e3f690",
     "semantic_hash": ""
   }
 }

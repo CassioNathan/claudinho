@@ -59,6 +59,8 @@ Um **servidor MCP só do Claudinho** troca isso por ferramentas de verdade, com 
 - **clique livre** `clicar(x, y)` e **digitação livre** `digitar(texto)`: genéricos demais. A IA decide
   tudo e um texto na tela/página pode tentar mandar nela (prompt injection). Se precisar, criar
   **ações específicas** ("pausar o vídeo", "próxima aba", "colar na janela X") que só fazem aquilo.
+  (26/10/2026: feito do jeito "específico": `atalho`/`atalho_confirmado` mandam uma combinação de tecla por vez, em
+  três faixas, sem texto livre; ver `teclas.py` e o README.)
 - apagar arquivos, mandar mensagens (WhatsApp/Discord/e-mail), qualquer coisa de dinheiro.
 - O **Windows-MCP** já instalado é do tipo genérico (clicar/digitar): não usar no Claudinho sem
   confirmação a cada ação.

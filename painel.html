@@ -176,6 +176,15 @@
   .campo:focus { outline: none; border-color: var(--laranja); }
   .tirar-pasta { background: none; border: 0; color: var(--apagado); cursor: pointer; margin-left: 4px; font-size: 12px; }
   .tirar-pasta:hover { color: #e8452c; }
+  .prog { margin-bottom: 10px; }
+  .prog-topo { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 8px; }
+  .prog-topo b { font-size: 14px; }
+  .prog-topo .tirar-pasta { margin-left: auto; }
+  .novo-acao, .novo-prog { gap: 8px; }
+  .novo-acao input, .novo-prog input, .novo-prog select { flex: 1; min-width: 0; background: var(--fundo2, #3a3936);
+    color: var(--texto); border: 1px solid #55534e; border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 13px; }
+  .escutando { outline: 2px solid #d97757; animation: pisca 1s infinite; }
+  @keyframes pisca { 50% { opacity: .6; } }
   .motor-detalhe { flex-basis: 100%; background: #232220; border-radius: 12px; padding: 12px 14px; margin-top: 12px;
                    color: var(--apagado); font-size: 13px; }
   .motor-detalhe b { color: var(--texto); }
@@ -539,6 +548,16 @@
     <h2>⌨️ Atalhos</h2>
     <p class="sub">Funcionam de qualquer lugar. Pra trocar, edite o config.json em ~/.claudinho.</p>
     <div class="cartao" id="listaAtalhos"></div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 4px">Atalhos dos programas</h3>
+    <p class="sub" style="margin-top:0">Ensine o que cada atalho faz e peça no chat ou na voz ("roda o projeto no IntelliJ"): ele aperta sozinho, só na janela daquele programa. Teclas com Win, Alt+F4 e Alt+Tab não entram.</p>
+    <div id="programas"></div>
+    <div class="cartao" style="margin-top:10px">
+      <div class="linha novo-prog">
+        <select id="novoProgExe"><option value="">escolha um programa aberto…</option></select>
+        <input id="novoProgNome" placeholder="nome (ex.: IntelliJ IDEA)" maxlength="60">
+        <button class="botao" id="addProg">+ Adicionar programa</button>
+      </div>
+    </div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
     <div id="pastas"></div>
     <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
@@ -802,6 +821,24 @@ function montarResto() {
     `<div class="linha"><div class="info"><div class="titulo">${nomesAtalhos[k] || k}</div></div>` +
     v.split("+").map(p => `<kbd>${p}</kbd>`).join(" + ") + `</div>`).join("");
   montarPastas();
+  montarProgramas();
+  document.getElementById("novoProgExe").onfocus = carregarJanelas;
+  document.getElementById("novoProgExe").onchange = e => {
+    const nome = document.getElementById("novoProgNome");
+    if (!nome.value) nome.value = e.target.value.replace(/\.exe$/, "");
+  };
+  document.getElementById("addProg").onclick = () => {
+    const exe = document.getElementById("novoProgExe").value;
+    if (!exe) return avisar("escolha o programa na lista");
+    const lista = programasAgora();
+    if (lista.some(p => p.exes.includes(exe))) return avisar("esse programa já está na lista");
+    const nome = document.getElementById("novoProgNome").value.trim() || exe.replace(/\.exe$/, "");
+    lista.push({programa: nome, exes: [exe], acoes: []});
+    document.getElementById("novoProgNome").value = "";
+    document.getElementById("novoProgExe").value = "";
+    salvarProgramas(lista, "programa adicionado ✓");
+  };
+  carregarJanelas();
   document.getElementById("addPasta").onclick = () => acao("pasta_adicionar", "escolha a pasta na janela que abriu 📂");
   for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
   atualizarVivos();
@@ -823,8 +860,123 @@ function montarPastas() {
     caixa.appendChild(item);
   }
 }
+// ---------- atalhos dos programas (ensinar: escolhe o programa, escreve o que faz e escuta o atalho) ----------
+const CODIGOS = {ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", PageUp: "pageup",
+  PageDown: "pagedown", Home: "home", End: "end", Enter: "enter", NumpadEnter: "enter", Escape: "esc", Space: "space",
+  Tab: "tab", Backspace: "backspace", Delete: "delete", Insert: "insert", Equal: "plus", NumpadAdd: "plus",
+  Minus: "minus", NumpadSubtract: "minus"};
+const BLOQUEADOS = ["alt+f4", "alt+tab", "alt+shift+tab", "ctrl+shift+esc", "ctrl+alt+delete", "alt+esc"];
+let escuta = null;  // {botao, ao_ouvir}: esperando o atalho
+
+function programasAgora() { return JSON.parse(JSON.stringify(estado.cfg.atalhos_programas || [])); }
+async function salvarProgramas(lista, texto) {
+  await mudar("atalhos_programas", lista);
+  montarProgramas(true);
+  avisar(texto);
+}
+function teclaDe(e) {
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3).toLowerCase();
+  if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
+  if (/^Numpad\d$/.test(e.code)) return e.code.slice(6);
+  if (/^F([1-9]|1[0-2])$/.test(e.code)) return e.code.toLowerCase();
+  return CODIGOS[e.code];
+}
+function kbds(combo) { return combo.split("+").map(p => `<kbd>${p}</kbd>`).join(" + "); }
+function pararEscuta() {
+  if (!escuta) return;
+  escuta.botao.classList.remove("escutando");
+  if (!escuta.ouviu) escuta.botao.textContent = "🎧 Escutar atalho";
+  escuta = null;
+}
+// a escuta pega a tecla antes do navegador (Shift+F10 não abre menu, F5 não recarrega)
+window.addEventListener("keydown", e => {
+  if (!escuta) return;
+  e.preventDefault(); e.stopPropagation();
+  if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;  // esperando a tecla principal
+  const tecla = teclaDe(e);
+  if (!tecla) { avisar("essa tecla eu não sei apertar"); return; }
+  const mods = [e.ctrlKey && "ctrl", e.altKey && "alt", e.shiftKey && "shift", e.metaKey && "win"].filter(Boolean);
+  const combo = [...mods, tecla].join("+");
+  if (e.metaKey || BLOQUEADOS.includes(combo)) { avisar(`${combo} é bloqueado`); return; }
+  const fim = escuta;
+  fim.ouviu = true;
+  fim.botao.innerHTML = kbds(combo);
+  fim.ao_ouvir(combo);
+  pararEscuta();
+}, true);
+window.addEventListener("contextmenu", e => { if (escuta) e.preventDefault(); }, true);
+
+async function carregarJanelas() {
+  try {
+    const abertas = await api("/api/janelas");
+    const sel = document.getElementById("novoProgExe");
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">escolha um programa aberto…</option>' + abertas.map(j =>
+      `<option value="${j.exe}">${j.exe.replace(/\.exe$/, "")} — ${j.titulo.replace(/</g, "&lt;")}</option>`).join("");
+    sel.value = atual;
+  } catch (e) { /* o Claudinho fechou: a página avisa sozinha */ }
+}
+function montarProgramas(forcar) {
+  const caixa = document.getElementById("programas");
+  const assinatura = JSON.stringify(estado.cfg.atalhos_programas);
+  // não remonta à toa nem no meio de uma edição (o painel atualiza a cada 3 s)
+  if (!forcar && (caixa.dataset.assinatura === assinatura || escuta || caixa.contains(document.activeElement))) return;
+  caixa.dataset.assinatura = assinatura;
+  caixa.innerHTML = "";
+  const lista = estado.cfg.atalhos_programas || [];
+  if (!lista.length) caixa.innerHTML = '<span class="desc">Nenhum programa ainda: adicione um abaixo.</span>';
+  lista.forEach((prog, i) => {
+    const cartao = document.createElement("div");
+    cartao.className = "cartao prog";
+    const topo = document.createElement("div");
+    topo.className = "prog-topo";
+    topo.innerHTML = `<b></b><span class="desc"></span>`;
+    topo.querySelector("b").textContent = prog.programa;
+    topo.querySelector(".desc").textContent = prog.exes.join(", ");
+    const tirar = document.createElement("button");
+    tirar.className = "tirar-pasta"; tirar.textContent = "✕"; tirar.title = "tirar o programa";
+    tirar.onclick = () => { const l = programasAgora(); l.splice(i, 1); salvarProgramas(l, "tirei ✓"); };
+    topo.appendChild(tirar);
+    cartao.appendChild(topo);
+    prog.acoes.forEach((a, k) => {
+      const linha = document.createElement("div");
+      linha.className = "linha";
+      linha.innerHTML = `<div class="info"><div class="titulo"></div></div>${kbds(a.teclas)}`;
+      linha.querySelector(".titulo").textContent = a.nome;
+      const x = document.createElement("button");
+      x.className = "tirar-pasta"; x.textContent = "✕"; x.title = "tirar o atalho";
+      x.onclick = () => { const l = programasAgora(); l[i].acoes.splice(k, 1); salvarProgramas(l, "tirei ✓"); };
+      linha.appendChild(x);
+      cartao.appendChild(linha);
+    });
+    const novo = document.createElement("div");
+    novo.className = "linha novo-acao";
+    novo.innerHTML = `<input placeholder="o que faz (ex.: rodar o projeto)" maxlength="60">` +
+      `<button class="botao">🎧 Escutar atalho</button><button class="botao">Adicionar</button>`;
+    const [campo, ouvir, adicionar] = novo.querySelectorAll("input, button");
+    let combo = "";
+    ouvir.onclick = () => {
+      if (escuta && escuta.botao === ouvir) return pararEscuta();
+      pararEscuta();
+      ouvir.textContent = "aperte o atalho…";
+      ouvir.classList.add("escutando");
+      escuta = {botao: ouvir, ao_ouvir: c => { combo = c; }};
+    };
+    adicionar.onclick = () => {
+      if (!campo.value.trim()) return avisar("escreva o que o atalho faz");
+      if (!combo) return avisar("clique em Escutar e aperte o atalho");
+      const l = programasAgora();
+      l[i].acoes.push({nome: campo.value.trim(), teclas: combo});
+      salvarProgramas(l, "aprendi ✓");
+    };
+    cartao.appendChild(novo);
+    caixa.appendChild(cartao);
+  });
+}
+
 function atualizarVivos() {
   montarPastas();
+  montarProgramas();
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");

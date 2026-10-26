@@ -135,9 +135,13 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 
 ## MCP do Claudinho e consultas no YouTube
 
-- **MCP (`claudinho_mcp.py`)**: servidor com uma única ferramenta, `abrir_programa(nome)`: abre (ou traz pra frente) qualquer
+- **MCP (`claudinho_mcp.py`)**: servidor com duas ferramentas. `abrir_programa(nome)`: abre (ou traz pra frente) qualquer
   programa instalado, pelo nome aproximado ("abre a Steam"), mesmo minimizado ou na bandeja. Não roda comando, não abre
   site, não fecha nada. O chat liga ele sozinho (`~/.claudinho/mcp.json`); a busca dos programas está em `programas.py`.
+- **`ver_tela(alvo)`** ("olha a tela e me responde", "que erro é esse?"): o chat tira o print sozinho quando você pede,
+  da janela em foco (padrão), do monitor ou de todos (`tela.py`, ~1280 px em JPEG). Só lê; o balão mostra "olhando a
+  tela…". Respeita a faixa nos olhos e a chave "Olhar a tela quando eu pedir" do painel. Vale no chat digitado e na voz
+  (mesmo chat), no motor Claude Code (MCP) e na API (ferramenta `ver_tela` em `motores.py`); o Ollama não tem ferramentas.
 - **Consultar sem mexer na tela**: `python musica.py consultar youtube|ytmusic <modo> [termo]` pede pra extensão do
   navegador olhar (pesquisa, início, inscrições, canal, descrição e data de um vídeo; início, biblioteca, curtidas,
   playlists… do YouTube Music) e devolve a lista. **Abrir e levar até lá**: `python musica.py ir youtube|ytmusic <destino>`.
@@ -146,6 +150,5 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 
 - [Plano: contexto de projeto (sessões do Claude Code) pro Júnior](docs/plano-contexto-de-projeto.md): saber em qual projeto o usuário está e conferir no código antes de comentar.
 - [Plano: Claudinho orquestrador + Júnior revisor visual](docs/plano-orquestrador.md): manda a tarefa pro Claude Code do projeto e corrige o que o Júnior achou.
-- [Plano: "olha o que está na tela e me responde"](docs/plano-ver-tela.md): ferramenta `ver_tela` no MCP, no chat e na voz.
 - [Plano: MCP exclusivo do Claudinho](docs/plano-mcp.md): trocar os ajudantes via Bash por um servidor
   MCP com ferramentas próprias (livres e com confirmação).

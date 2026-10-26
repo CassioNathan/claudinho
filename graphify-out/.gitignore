@@ -1,0 +1,5 @@
+# local da máquina (caminho do Python, raiz) e cópias/caches que o graphify refaz sozinho
+.graphify_python
+.graphify_root
+cache/
+20*-*-*/

@@ -1,0 +1,219 @@
+{
+  "abrir.py": {
+    "mtime": 1793014170.1759367,
+    "seen": 1793016152.4836464,
+    "ast_hash": "101fbf6f02e0f9b0dc620b84535c6010",
+    "semantic_hash": "101fbf6f02e0f9b0dc620b84535c6010"
+  },
+  "claudinho.pyw": {
+    "mtime": 1793016484.333367,
+    "seen": 1793016560.0629447,
+    "ast_hash": "018d37753f4c70f2d43f5540550a0993",
+    "semantic_hash": "",
+    "language": "language=.py"
+  },
+  "claudinho_mcp.py": {
+    "mtime": 1793016416.0690203,
+    "seen": 1793016560.0629523,
+    "ast_hash": "9d15070f74ad0176821d9dd98258a5d0",
+    "semantic_hash": ""
+  },
+  "cli.py": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.4836707,
+    "ast_hash": "58a8e18ff8de25274f920d61ba0f7f75",
+    "semantic_hash": "58a8e18ff8de25274f920d61ba0f7f75"
+  },
+  "emojis.py": {
+    "mtime": 1792702441.6416595,
+    "seen": 1793016152.4836757,
+    "ast_hash": "3cf1ab3cf33cb27c8dbf9a5e5028ae81",
+    "semantic_hash": "3cf1ab3cf33cb27c8dbf9a5e5028ae81"
+  },
+  "empacotar.py": {
+    "mtime": 1792786903.2237122,
+    "seen": 1793016152.4836795,
+    "ast_hash": "7e17dcef73f62a88a9d4b82c9e0ba8e9",
+    "semantic_hash": "7e17dcef73f62a88a9d4b82c9e0ba8e9"
+  },
+  "esquetes.py": {
+    "mtime": 1792783720.208577,
+    "seen": 1793016152.4836836,
+    "ast_hash": "9c1ac84f1262c454dfb1f37ceef67fe3",
+    "semantic_hash": "9c1ac84f1262c454dfb1f37ceef67fe3"
+  },
+  "extensao/consultas.js": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.4836876,
+    "ast_hash": "144fa43c6f85d7752d48bb7dd15c9418",
+    "semantic_hash": "144fa43c6f85d7752d48bb7dd15c9418"
+  },
+  "extensao/fundo.js": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.4836917,
+    "ast_hash": "7b13523ea8078912cecf97a7e391567f",
+    "semantic_hash": "7b13523ea8078912cecf97a7e391567f"
+  },
+  "extensao/manifest.json": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.483696,
+    "ast_hash": "6048f5d35889dad071d48530d52675ac",
+    "semantic_hash": "6048f5d35889dad071d48530d52675ac"
+  },
+  "extensao/youtube.js": {
+    "mtime": 1792782311.9226875,
+    "seen": 1793016152.4837,
+    "ast_hash": "aba34e65c7bdaa2fd8deadcc5af4a03d",
+    "semantic_hash": "aba34e65c7bdaa2fd8deadcc5af4a03d"
+  },
+  "extensao/ytmusic.js": {
+    "mtime": 1792782311.8116593,
+    "seen": 1793016152.4837043,
+    "ast_hash": "339cd0e43ff0a5a368de5085cfea28ce",
+    "semantic_hash": "339cd0e43ff0a5a368de5085cfea28ce"
+  },
+  "fala.py": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.4837081,
+    "ast_hash": "d761df7ac8efbae78aefa66189385f7d",
+    "semantic_hash": "d761df7ac8efbae78aefa66189385f7d"
+  },
+  "formatar.py": {
+    "mtime": 1792777565.1215014,
+    "seen": 1793016152.4837115,
+    "ast_hash": "dcd525a14788525809777071c9499687",
+    "semantic_hash": "dcd525a14788525809777071c9499687"
+  },
+  "frases.py": {
+    "mtime": 1792781372.4582791,
+    "seen": 1793016152.483715,
+    "ast_hash": "d1c995ed0d7e95e8c6411cb1210ac212",
+    "semantic_hash": "d1c995ed0d7e95e8c6411cb1210ac212"
+  },
+  "hook/claudinho_notificar.py": {
+    "mtime": 1792701312.3484187,
+    "seen": 1793016152.483719,
+    "ast_hash": "4c1d9e20f817addc9a10b93b7fa262bc",
+    "semantic_hash": "4c1d9e20f817addc9a10b93b7fa262bc"
+  },
+  "instalar.py": {
+    "mtime": 1792787098.1992013,
+    "seen": 1793016152.483723,
+    "ast_hash": "760fa8768228db636ce6dd94abe278ec",
+    "semantic_hash": "760fa8768228db636ce6dd94abe278ec"
+  },
+  "janelas.py": {
+    "mtime": 1793016400.3307807,
+    "seen": 1793016560.0630193,
+    "ast_hash": "9e1856a96f2c63b8de3503267bbd4f3f",
+    "semantic_hash": ""
+  },
+  "memoria.py": {
+    "mtime": 1792777627.3330505,
+    "seen": 1793016152.4837298,
+    "ast_hash": "6059a857aff2f697952e9f9ab223cc53",
+    "semantic_hash": "6059a857aff2f697952e9f9ab223cc53"
+  },
+  "motores.py": {
+    "mtime": 1793016477.0254476,
+    "seen": 1793016560.0630267,
+    "ast_hash": "0fe948434b7583f379fb7794c96611ca",
+    "semantic_hash": ""
+  },
+  "musica.py": {
+    "mtime": 1793014170.1823902,
+    "seen": 1793016152.4837368,
+    "ast_hash": "c049818a2e4c6e7e9f46b8fd69b2118f",
+    "semantic_hash": "c049818a2e4c6e7e9f46b8fd69b2118f"
+  },
+  "notificacoes.py": {
+    "mtime": 1792763291.5477746,
+    "seen": 1793016152.4837406,
+    "ast_hash": "06d3f4c7288c9ad8bfa0d58c15d5faea",
+    "semantic_hash": "06d3f4c7288c9ad8bfa0d58c15d5faea"
+  },
+  "programas.py": {
+    "mtime": 1793014170.183402,
+    "seen": 1793016152.4837441,
+    "ast_hash": "f451d1a08c9ddee2829acdec095bf3e7",
+    "semantic_hash": "f451d1a08c9ddee2829acdec095bf3e7"
+  },
+  "sistema.py": {
+    "mtime": 1792789003.1646733,
+    "seen": 1793016152.4837487,
+    "ast_hash": "ff135711fa9916ef02e354b33b6a505c",
+    "semantic_hash": "ff135711fa9916ef02e354b33b6a505c"
+  },
+  "skins.py": {
+    "mtime": 1792781381.7803261,
+    "seen": 1793016152.4837525,
+    "ast_hash": "3046bea7f141c02f21131211084494d5",
+    "semantic_hash": "3046bea7f141c02f21131211084494d5"
+  },
+  "stt.py": {
+    "mtime": 1793014170.183402,
+    "seen": 1793016152.4837563,
+    "ast_hash": "453b3cdce36e3dd141a3b02dbdfadc01",
+    "semantic_hash": "453b3cdce36e3dd141a3b02dbdfadc01"
+  },
+  "voz.py": {
+    "mtime": 1793014170.183402,
+    "seen": 1793016152.4837596,
+    "ast_hash": "84b59dc06ba7879736105d0e6eb2dbc2",
+    "semantic_hash": "84b59dc06ba7879736105d0e6eb2dbc2"
+  },
+  "README.md": {
+    "mtime": 1793016552.4523208,
+    "seen": 1793016560.063066,
+    "ast_hash": "f1a890350643aa22ef363c55e90ec615",
+    "semantic_hash": ""
+  },
+  "conversa.html": {
+    "mtime": 1792779036.4000437,
+    "seen": 1793016152.4837673,
+    "ast_hash": "abedc57680fff0c49337b7f73c5ba7ce",
+    "semantic_hash": "abedc57680fff0c49337b7f73c5ba7ce"
+  },
+  "docs/plano-contexto-de-projeto.md": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.483771,
+    "ast_hash": "c66914f18c241eac054743cc40272dc5",
+    "semantic_hash": "c66914f18c241eac054743cc40272dc5"
+  },
+  "docs/plano-mcp.md": {
+    "mtime": 1792702797.283062,
+    "seen": 1793016152.4837747,
+    "ast_hash": "3e7e51755fa886faa5989a3fc4095d43",
+    "semantic_hash": "3e7e51755fa886faa5989a3fc4095d43"
+  },
+  "docs/plano-orquestrador.md": {
+    "mtime": 1793014170.177501,
+    "seen": 1793016152.483778,
+    "ast_hash": "a99a1ce5368b8ed44d1580a3311e6c88",
+    "semantic_hash": "a99a1ce5368b8ed44d1580a3311e6c88"
+  },
+  "docs/plano-ver-tela.md": {
+    "mtime": 1793016552.4905136,
+    "seen": 1793016560.0630877,
+    "ast_hash": "1b8041da885463ff192c345f57df5d67",
+    "semantic_hash": ""
+  },
+  "painel.html": {
+    "mtime": 1793016459.1152227,
+    "seen": 1793016560.063092,
+    "ast_hash": "5824cf5119621c24d4362d5592871fd8",
+    "semantic_hash": ""
+  },
+  "requirements.txt": {
+    "mtime": 1793014170.183402,
+    "seen": 1793016152.4837887,
+    "ast_hash": "f738edc68c949bbb888e11f96ce20df6",
+    "semantic_hash": "f738edc68c949bbb888e11f96ce20df6"
+  },
+  "tela.py": {
+    "mtime": 1793016459.1634173,
+    "seen": 1793016560.0630565,
+    "ast_hash": "964e2edeeec6a5f53413316b060614ce",
+    "semantic_hash": ""
+  }
+}

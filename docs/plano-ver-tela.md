@@ -1,7 +1,10 @@
 # Plano: "Claudinho, olha o que está na tela e me responde"
 
-Status: **planejado, ainda não começou** (25/10/2026). A ideia nasceu numa conversa e a implementação fica pro dia seguinte.
-Este documento é pra retomar sem precisar da conversa original.
+Status: **feito** (26/10/2026): `tela.py` (print + bloqueio pela faixa/chave), `ver_tela` no `claudinho_mcp.py` e na
+API (`motores.py`), `--allowedTools` e prompts no `claudinho.pyw`, balão "olhando a tela…", chave `ver_tela` no painel.
+Testado: MCP por stdio (janela e monitor), Claude Code chamando a ferramenta, faixa/chave bloqueando. Falta testar: voz,
+motor API com chave. Ollama ficou de fora (o chat local não tem ferramentas). As janelas do Claudinho não são escondidas
+na hora do print (a ferramenta pula a janela dele ao escolher a "janela em foco").
 
 ## O que a gente quer
 

@@ -12,7 +12,8 @@ user32.GetForegroundWindow.restype = wt.HWND
 ENUM = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
 WS_EX_TOOLWINDOW = 0x80
 IGNORAR = {"python.exe", "pythonw.exe", "textinputhost.exe", "applicationframehost.exe",
-           "shellexperiencehost.exe", "searchhost.exe", "startmenuexperiencehost.exe"}
+           "shellexperiencehost.exe", "searchhost.exe", "startmenuexperiencehost.exe",
+           "claudinho.exe", "claudinho-cli.exe"}  # o próprio Claudinho empacotado
 
 
 def exe_de(hwnd):

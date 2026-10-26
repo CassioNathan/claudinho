@@ -122,11 +122,22 @@
       return null;
     }
     const lerTexto = area => (area.innerText || "").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 15000);
-    if (p.tipo === "ler" && a.pagina) {  // a página toda: espera ela ter texto (site que monta tudo depois de carregar)
-      for (let i = 0; i < 30 && lerTexto(document.body).length < 15; i++) await dormir(500);
-      await dormir(1000);
-      return {ok: true, texto: lerTexto(document.body)};
+    // site que monta a lista depois de carregar (kanban busca os cards à parte): lê quando o texto PARA de mudar,
+    // no máximo 20 s. A moldura (filtros, colunas vazias) chega antes dos cards e fica parada um tempo: página que
+    // acabou de abrir espera 4 s de texto igual; página aberta há tempo (já carregada) só 1,5 s
+    async function lerQuandoAssentar(area) {
+      const precisa = performance.now() < 20000 ? 8 : 3;  // amostras iguais seguidas, de 0,5 s
+      let antes = -1, iguais = 0;
+      for (let i = 0; i < 40; i++) {
+        const agora = lerTexto(area).length;
+        iguais = agora === antes && agora > 0 ? iguais + 1 : 0;
+        if (iguais >= precisa) break;
+        antes = agora;
+        await dormir(500);
+      }
+      return lerTexto(area);
     }
+    if (p.tipo === "ler" && a.pagina) return {ok: true, texto: await lerQuandoAssentar(document.body)};
     let el = null;
     const tentativas = p.tipo === "ler" ? 60 : 40;  // até 15 s pra área de leitura (kanban demora a montar), 10 s pro resto
     for (let i = 0; i < tentativas && !el; i++) {
@@ -135,9 +146,8 @@
     }
     if (p.tipo === "ler") {
       if (!el)  // a área mudou de jeito: lê a página toda em vez de falhar (o chat ainda acha o que ele pediu)
-        return {ok: true, texto: "(não achei a área marcada; li a página toda)\n" + lerTexto(document.body)};
-      await dormir(800);  // listas que carregam aos poucos (kanban, tabelas)
-      return {ok: true, texto: lerTexto(el)};
+        return {ok: true, texto: "(não achei a área marcada; li a página toda)\n" + await lerQuandoAssentar(document.body)};
+      return {ok: true, texto: await lerQuandoAssentar(el)};
     }
     if (!el) return {ok: false, erro: `não achei "${p.rotulo || a.texto || a.rotulo || a.css}" na página`};
     el.scrollIntoView({block: "center"});
@@ -181,9 +191,14 @@
     const valores = c.valores || {};
     if (!(await chrome.permissions.contains({origins: [r.site + "/*"]})))
       throw new Error(`o site ${r.site} não está liberado na extensão (ícone do Claudinho → Liberar este site)`);
-    let [aba] = await chrome.tabs.query({url: r.site + "/*"});
-    aba = aba ? await chrome.tabs.update(aba.id, {url: r.inicio, active: true})
-              : await chrome.tabs.create({url: r.inicio, active: true});
+    // aba do site já aberta no mesmo endereço: usa como está (recarregar perde o quadro aberto e demora);
+    // em outro endereço do site, vai pro início da rotina; sem aba, abre uma
+    const semHash = u => (u || "").split("#")[0].replace(/\/$/, "");
+    const abas = await chrome.tabs.query({url: r.site + "/*"});
+    let aba = abas.find(t => semHash(t.url) === semHash(r.inicio)) || abas[0];
+    if (aba && semHash(aba.url) === semHash(r.inicio)) aba = await chrome.tabs.update(aba.id, {active: true});
+    else aba = aba ? await chrome.tabs.update(aba.id, {url: r.inicio, active: true})
+                   : await chrome.tabs.create({url: r.inicio, active: true});
     await chrome.windows.update(aba.windowId, {focused: true});
     await dormir(500);
     await carregada(aba.id);

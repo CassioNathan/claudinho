@@ -2526,11 +2526,14 @@ class Claudinho:
             self.adicionar_pasta()
         elif acao.startswith("pasta_remover:"):
             self.mudar_pastas([x for x in self.cfg["pastas_leitura"] if x != acao.split(":", 1)[1]])
-        elif acao.startswith("rotina_rodar:"):  # botão ▶ do painel: testa a rotina com os valores gravados
+        elif acao.startswith("rotina_rodar:"):  # botão ▶ do painel
             nome = acao.split(":", 1)[1]
+            if tem_ia():  # pelo chat: ele roda, organiza o que leu e conta (falando, se a voz estiver ligada)
+                self.enviar(texto=f"Roda a rotina \"{nome}\" e me conta o que ela leu (ou o que fez).")
+                return
             self.comentar(f"▶ Rodando a rotina \"{nome}\"…", duracao=4, prioridade=ESTADO)
 
-            def trabalho():
+            def trabalho():  # sem IA: roda direto e mostra o texto lido como veio
                 resultado = rotinas.rodar(nome, confirmado=True)  # foi ele que clicou no painel
                 self.eventos.put(("rotina_feita", resultado))
             threading.Thread(target=trabalho, daemon=True).start()
@@ -2829,21 +2832,24 @@ class Claudinho:
         return sum(1 for f in self.falas if f["tipo"] == "aviso")
 
     def resumir_aviso(self, dados):
-        """Resumo curto (1 a 3 frases) da mensagem final de um chat do Claude Code; sem IA, pega o começo dela."""
+        """Briefing de uma linha da mensagem final de um chat do Claude Code: o que foi feito e se deu certo (o
+        conteúdo ele vê no próprio chat). Sem IA, pega o começo dela."""
         texto = formatar.limpar(dados.get("resposta") or "")
         resumo = None
         try:
             pedido = (dados.get("pedido") or "").strip()[:300]
             resumo = formatar.limpar(motores.completar(
-                "Resuma em português, em NO MÁXIMO 3 frases curtas (uns 220 caracteres no total), a mensagem final abaixo, "
-                "dita por um assistente de código ao terminar um trabalho. Diga o que foi feito e, se houver, o que o usuário "
-                "precisa decidir ou fazer. Sem markdown, sem listas, sem emoji, sem introdução tipo 'O assistente'. "
-                f"Responda só o resumo.\n\nO que o usuário pediu: {pedido or '(não informado)'}\n\n"
-                f"Mensagem:\n{texto[:6000]}", max_tokens=200, timeout=60)).strip()
+                "Faça um BRIEFING de UMA frase curta (no máximo uns 110 caracteres), em português, da mensagem final "
+                "abaixo, dita por um assistente de código ao terminar um trabalho: o que foi feito e se deu certo, falhou "
+                "ou está esperando ele decidir algo. Só o essencial: sem detalhes, números, nomes de arquivo, listas, "
+                "markdown, emoji ou introdução tipo 'O assistente'. Ex.: \"Corrigiu o login, testes passando.\" / "
+                "\"Tentou subir a API, falhou no banco.\" / \"Plano pronto, esperando seu ok.\" "
+                f"Responda só o briefing.\n\nO que o usuário pediu: {pedido or '(não informado)'}\n\n"
+                f"Mensagem:\n{texto[:6000]}", max_tokens=80, timeout=60)).strip()
         except Exception:
             pass
-        if not resumo or len(resumo) > 500:   # sem resumo bom: as primeiras frases
-            resumo = (texto[:230].rsplit(" ", 1)[0] + "…") if len(texto) > 230 else texto
+        if not resumo or len(resumo) > 220:   # sem briefing bom: o começo da mensagem
+            resumo = (texto[:120].rsplit(" ", 1)[0] + "…") if len(texto) > 120 else texto
         self.eventos.put(("aviso_pronto", dict(dados, resumo=resumo)))
 
     def rodape_aviso(self, dados):
@@ -3149,16 +3155,22 @@ class Claudinho:
             self.entrada.win.focus_force()
             self.root.after(60, self.entrada.entry.focus_set)
 
-    def enviar(self, e=None):
-        texto = self.entrada.entry.get().strip()
+    def enviar(self, e=None, texto=None):
+        """Manda a pergunta pro chat. `texto`: pergunta vinda de outro lugar (ex.: ▶ do painel), sem mexer no campo."""
+        do_campo = texto is None
+        texto = (self.entrada.entry.get() if do_campo else texto).strip()
         if not texto:
             return
         if self.ocupado:
-            self.entrada.entry.delete(0, "end")
-            self.entrada.entry.configure(placeholder_text="calma, ainda tô pensando na outra…")
+            if do_campo:
+                self.entrada.entry.delete(0, "end")
+                self.entrada.entry.configure(placeholder_text="calma, ainda tô pensando na outra…")
+            else:
+                self.comentar("Calma, ainda tô fazendo a outra…", duracao=4, prioridade=ESTADO)
             return
-        anexado = self.print_anexado
-        self.fechar_conversa()
+        anexado = self.print_anexado if do_campo else None
+        if do_campo:
+            self.fechar_conversa()
         # agora o Claudinho está em primeiro plano (você acabou de digitar nele): libera a próxima
         # janela que ele abrir (navegador, programa) pra vir pra frente em vez de abrir escondida
         user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
@@ -4155,6 +4167,8 @@ class Claudinho:
             elif ev[0] == "ferramenta":  # ele está mexendo no PC (abrindo algo, rodando comando)
                 # print pedido: o balão avisa que ele está olhando (o print vai pra IA)
                 nome, entrada = ev[1], ev[2] or {}
+                if "rodar_rotina" in nome:  # rotina que lê algo: ele conta o que leu inteiro, não só o começo
+                    self.fala_orcamento = None
                 self.usou_ferramenta = ("olhando a tela" if nome.endswith("ver_tela") else
                                         f"apertando {entrada.get('teclas', '')}" if "__atalho" in nome else
                                         "fazendo a rotina no site" if "rodar_rotina" in nome else True)
@@ -4182,11 +4196,9 @@ class Claudinho:
                 self.aplicar_cfg("rotinas", outras + [nova])
                 self.comentar(f"📼 Aprendi a rotina \"{nova['nome']}\" ({len(nova['passos'])} passos). "
                               "É só me pedir!", duracao=6, prioridade=IMPORTANTE)
-            elif ev[0] == "rotina_feita":
-                texto = ev[1]
-                resumo = texto.split("\n\nTEXTO LIDO", 1)[0]
-                lido = " (li a página: peça no chat pra eu resumir)" if "TEXTO LIDO" in texto else ""
-                self.comentar(resumo[:300] + lido, duracao=6, prioridade=IMPORTANTE)
+            elif ev[0] == "rotina_feita":  # rotina rodada sem IA (▶ do painel): mostra o que leu, do jeito que veio
+                texto = re.sub(r"\n\nTEXTO LIDO[^\n]*\n", "\n\n", ev[1]).strip()
+                self.comentar(texto[:3000], duracao=20, prioridade=IMPORTANTE)
             elif ev[0] == "musica_pedida":
                 _, termo, m = ev
                 if m:

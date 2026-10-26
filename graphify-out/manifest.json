@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "claudinho.pyw": {
-    "mtime": 1793041256.2846365,
-    "seen": 1793041777.9354632,
-    "ast_hash": "3254485b81b9ce6aa697a9ab7c4a65e3",
+    "mtime": 1793041889.4883103,
+    "seen": 1793043266.782774,
+    "ast_hash": "351fc2267a9d27c7e07c768c667e46fa",
     "semantic_hash": "",
     "language": "language=.py"
   },
@@ -55,9 +55,9 @@
     "semantic_hash": ""
   },
   "extensao/manifest.json": {
-    "mtime": 1793040281.3466506,
-    "seen": 1793040468.3100693,
-    "ast_hash": "6abeb9cbececa54c4660d53c2461617c",
+    "mtime": 1793042885.4100473,
+    "seen": 1793043266.7828207,
+    "ast_hash": "7d1b157958f03412fc398f349325c46d",
     "semantic_hash": ""
   },
   "extensao/youtube.js": {
@@ -241,9 +241,9 @@
     "semantic_hash": ""
   },
   "extensao/rotinas.js": {
-    "mtime": 1793040368.8245103,
-    "seen": 1793040468.3100774,
-    "ast_hash": "45bd7d091fda048ac3f0a07de7760722",
+    "mtime": 1793042922.2840278,
+    "seen": 1793043266.782829,
+    "ast_hash": "ead20f1569c42ff130e43f839fecde53",
     "semantic_hash": ""
   },
   "rotinas.py": {

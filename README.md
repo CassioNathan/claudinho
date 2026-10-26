@@ -138,8 +138,9 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 - **MCP (`claudinho_mcp.py`)**: servidor com duas ferramentas. `abrir_programa(nome)`: abre (ou traz pra frente) qualquer
   programa instalado, pelo nome aproximado ("abre a Steam"), mesmo minimizado ou na bandeja. Não roda comando, não abre
   site, não fecha nada. O chat liga ele sozinho (`~/.claudinho/mcp.json`); a busca dos programas está em `programas.py`.
-- **`ver_tela(alvo)`** ("olha a tela e me responde", "que erro é esse?"): o chat tira o print sozinho quando você pede,
-  da janela em foco (padrão), do monitor ou de todos (`tela.py`, ~1280 px em JPEG). Só lê; o balão mostra "olhando a
+- **`ver_tela(alvo, janela)`** ("olha a tela e me responde", "que erro é esse?"): o chat tira o print sozinho quando
+  você pede, da janela em foco (padrão) ou de um programa pelo nome (`janela="intellij"`, que vem pra frente), do
+  monitor ou de todos (`tela.py`, ~1280 px em JPEG). Só lê; o balão mostra "olhando a
   tela…". Respeita a faixa nos olhos e a chave "Olhar a tela quando eu pedir" do painel. Vale no chat digitado e na voz
   (mesmo chat), no motor Claude Code (MCP) e na API (ferramenta `ver_tela` em `motores.py`); o Ollama não tem ferramentas.
 - **`atalho(teclas, janela, vezes)` e `atalho_confirmado`** ("vai pra próxima aba", "desce a página", "roda o projeto
@@ -148,6 +149,16 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
   zoom), **com popup** (o resto: Enter, Delete, Ctrl+S, letras… pela `atalho_confirmado`) e **bloqueada** (Alt+F4,
   Alt+Tab, qualquer coisa com Win, Ctrl+Shift+Esc, Ctrl+Alt+Del). Com a faixa nos olhos, nada de teclas. Só no motor
   Claude Code.
+- **`abrir_projeto(programa, projeto)`** ("abre o IntelliJ no LC Pedir API"): acha a pasta do projeto pelo nome só
+  dentro das pastas liberadas (`projetos.py`), abre o programa nela e espera a janela do projeto (até 2 min); se já
+  estiver aberto, traz pra frente. Achou mais de uma pasta (ex.: "LC Pedir" tem _API e _WEB dentro) ou nenhuma: devolve a
+  lista e o chat pergunta. O chat faz tarefas com etapas de uma vez: abrir_projeto → atalhos_conhecidos → atalho →
+  ver_tela(janela=…) pra conferir; e não fecha programa pra "consertar".
+- **Programas** (painel → Programas): tudo o que está instalado (menu Iniciar e Loja), com busca e uma chave por
+  programa. Desligado = o Claudinho não abre, não aperta tecla nem olha ele pelo nome (`programas_bloqueados` no
+  config). O chat confere o que existe e o nome exato pela `listar_programas` antes de abrir.
+- **Nada destrutivo no chat**: fechar processo (taskkill, Stop-Process, kill), apagar (rm, del, Remove-Item), desligar o
+  PC ou mexer no registro é recusado sem nem abrir o popup (`PERIGOSO` no `claudinho.pyw`).
 - **Atalhos dos programas** (painel → Atalhos): a lista de "o que cada atalho faz" em cada programa, sem programação.
   Escolhe um programa aberto, escreve o que a ação faz, clica em **🎧 Escutar atalho**, aperta as teclas e
   **Adicionar**. Fica no `config.json` (`atalhos_programas`); o chat consulta pela `atalhos_conhecidos` e esses atalhos

@@ -175,6 +175,9 @@ def apertar(teclas, janela="", vezes=1, confirmado=False):
     j = achar_janela(janela)
     if not j:
         return f"não achei a janela '{janela}' aberta" if janela.strip() else "não achei nenhuma janela pra apertar"
+    import programas
+    if programas.exe_bloqueado(j["exe"]):
+        return f"{j['exe']} está bloqueado no painel (Programas): não aperto nada nele"
     prog = programa_de(j)
     if prog and combo in {a["teclas"] for a in prog.get("acoes", [])}:
         f = "livre"  # atalho ensinado daquele programa

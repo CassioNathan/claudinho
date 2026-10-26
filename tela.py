@@ -6,6 +6,7 @@ import ctypes
 import ctypes.wintypes as wt
 import io
 import json
+import time
 
 from PIL import ImageGrab
 
@@ -49,14 +50,29 @@ def monitor_de(x, y):
     return (r.left, r.top, r.right, r.bottom)
 
 
-def capturar(alvo="janela"):
-    """-> (imagem PIL, descrição). `alvo`: janela (a em foco), monitor (o dela inteiro) ou tudo (todos)."""
+def capturar(alvo="janela", nome=""):
+    """-> (imagem PIL, descrição). `alvo`: janela (a em foco), monitor (o dela inteiro) ou tudo (todos).
+    `nome`: olhar uma janela específica (programa ou parte do título): ela vem pra frente antes do print."""
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)  # coordenadas reais, senão o recorte sai torto com escala
     except Exception:
         pass
     alvo = alvo if alvo in ALVOS else "janela"
-    janela = janela_da_frente()
+    if nome.strip():
+        import abrir
+        import teclas
+        janela = teclas.achar_janela(nome)
+        if not janela:
+            raise LookupError(f"não achei a janela '{nome}' aberta")
+        import programas
+        if programas.exe_bloqueado(janela["exe"]):
+            raise PermissionError(f"{janela['exe']} está bloqueado no painel (Programas): não olho ele")
+        if ctypes.windll.user32.GetForegroundWindow() != janela["hwnd"]:
+            abrir.forcar_frente(janela["hwnd"])
+            time.sleep(0.4)  # dar tempo de redesenhar na frente
+        janela = janelas.descrever(janela["hwnd"])  # posição de agora (podia estar minimizada)
+    else:
+        janela = janela_da_frente()
     if alvo == "tudo":
         img, descricao = ImageGrab.grab(all_screens=True), "todos os monitores"
     else:

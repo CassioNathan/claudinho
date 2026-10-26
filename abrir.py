@@ -160,6 +160,10 @@ def app_da_loja(pedacos):
 
 
 def abrir_programa(nome):
+    import programas as instalados
+    motivo = instalados.recusa(nome)  # desligado no painel (Programas)
+    if motivo:
+        sys.exit(motivo)
     programas = liberados()
     nome = nome.lower().strip()
     if nome not in programas:  # fora da lista fixa: acha qualquer programa instalado pelo nome (programas.py)

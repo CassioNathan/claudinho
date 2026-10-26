@@ -226,6 +226,7 @@
     <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
+    <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
     <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
   </nav>
   <div class="cartao-ext">
@@ -562,6 +563,17 @@
     <div id="pastas"></div>
     <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
   </section>
+  <section id="programas_sec">
+    <h2>🧩 Programas</h2>
+    <p class="sub">Tudo o que está instalado no PC (menu Iniciar e Loja). Desligue o que o Claudinho não deve abrir, apertar tecla nem olhar pelo nome.</p>
+    <div class="cartao">
+      <div class="linha novo-prog">
+        <input id="buscaProg" placeholder="procurar programa…" maxlength="60">
+        <span class="desc" id="contaProg">carregando…</span>
+      </div>
+      <div id="listaProg"></div>
+    </div>
+  </section>
   <section id="sistema">
     <h2>🖥️ Sistema</h2>
     <p class="sub">Como ele roda neste PC.</p>
@@ -839,6 +851,7 @@ function montarResto() {
     salvarProgramas(lista, "programa adicionado ✓");
   };
   carregarJanelas();
+  carregarInstalados();
   document.getElementById("addPasta").onclick = () => acao("pasta_adicionar", "escolha a pasta na janela que abriu 📂");
   for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
   atualizarVivos();
@@ -974,9 +987,54 @@ function montarProgramas(forcar) {
   });
 }
 
+// ---------- programas instalados (liberar/bloquear pro Claudinho) ----------
+let instalados = null;
+async function carregarInstalados() {
+  try { instalados = await api("/api/programas"); } catch (e) { instalados = null; }
+  montarInstalados(true);
+}
+function montarInstalados(forcar) {
+  const caixa = document.getElementById("listaProg");
+  if (!instalados) { document.getElementById("contaProg").textContent = "carregando…"; return; }
+  const bloq = new Set(estado.cfg.programas_bloqueados || []);
+  const busca = document.getElementById("buscaProg").value.trim().toLowerCase();
+  const assinatura = busca + "|" + [...bloq].join("|");
+  if (!forcar && caixa.dataset.assinatura === assinatura) return;
+  caixa.dataset.assinatura = assinatura;
+  // bloqueados primeiro (fáceis de achar pra liberar de novo), depois o resto em ordem alfabética
+  const lista = instalados.filter(p => !busca || p.nome.toLowerCase().includes(busca) || p.exe.includes(busca))
+    .sort((a, b) => (bloq.has(b.nome) - bloq.has(a.nome)) || a.nome.localeCompare(b.nome));
+  document.getElementById("contaProg").textContent =
+    `${instalados.length} instalados · ${bloq.size} bloqueado${bloq.size === 1 ? "" : "s"}`;
+  caixa.innerHTML = "";
+  for (const p of lista.slice(0, 150)) {
+    const linha = document.createElement("div");
+    linha.className = "linha";
+    linha.innerHTML = `<div class="info"><div class="titulo"></div><div class="desc"></div></div>` +
+      `<label class="chave"><input type="checkbox"><span></span></label>`;
+    linha.querySelector(".titulo").textContent = p.nome;
+    linha.querySelector(".desc").textContent = bloq.has(p.nome) ? "bloqueado: ele não mexe" : (p.exe || "app da Loja");
+    const chave = linha.querySelector("input");
+    chave.checked = !bloq.has(p.nome);
+    chave.onchange = async () => {
+      const novo = new Set(estado.cfg.programas_bloqueados || []);
+      chave.checked ? novo.delete(p.nome) : novo.add(p.nome);
+      await mudar("programas_bloqueados", [...novo]);
+      montarInstalados(true);
+      avisar(chave.checked ? `${p.nome} liberado ✓` : `${p.nome} bloqueado 🔒`);
+    };
+    caixa.appendChild(linha);
+  }
+  if (lista.length > 150) caixa.insertAdjacentHTML("beforeend",
+    `<div class="desc" style="padding:8px 0">e mais ${lista.length - 150}… procure pelo nome.</div>`);
+  if (!lista.length) caixa.innerHTML = '<div class="desc" style="padding:8px 0">Nenhum programa com esse nome.</div>';
+}
+document.getElementById("buscaProg").oninput = () => montarInstalados();
+
 function atualizarVivos() {
   montarPastas();
   montarProgramas();
+  montarInstalados();
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");

@@ -20,11 +20,12 @@ import time
 import unicodedata
 from pathlib import Path
 
+# com os padrões do Windows caso a variável falte (um processo aberto com ambiente enxuto não acharia nada)
 PASTAS_ATALHOS = [
-    Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
-    Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+    Path(os.environ.get("APPDATA") or Path.home() / "AppData/Roaming") / "Microsoft/Windows/Start Menu/Programs",
+    Path(os.environ.get("PROGRAMDATA") or "C:/ProgramData") / "Microsoft/Windows/Start Menu/Programs",
     Path.home() / "Desktop",
-    Path(os.environ.get("PUBLIC", "")) / "Desktop",
+    Path(os.environ.get("PUBLIC") or "C:/Users/Public") / "Desktop",
 ]
 RUIM = re.compile(r"uninstall|desinstal|remover|readme|leia-?me|manual|licen|ajuda|help|documenta|release notes|"
                   r"website|site d[aeo]|support|suporte|changelog", re.I)
@@ -175,6 +176,45 @@ def _janelas_minimizadas(exes):
     return achadas
 
 
+def bloqueados():
+    """Os programas que ele desligou no painel (Programas): o Claudinho não abre nem mexe neles. Lido na hora."""
+    try:
+        import sistema
+        cfg = json.loads((sistema.DADOS / "config.json").read_text(encoding="utf-8"))
+        return {str(n) for n in cfg.get("programas_bloqueados") or []}
+    except (OSError, ValueError, ImportError):
+        return set()
+
+
+def esta_bloqueado(item):
+    return item["nome"] in bloqueados()
+
+
+def exe_bloqueado(exe):
+    """A janela desse .exe é de um programa bloqueado?"""
+    nomes = bloqueados()
+    return bool(nomes and exe and any(i["exe"] == exe and i["nome"] in nomes for i in indexar()))
+
+
+def recusa(pedido):
+    """Se o programa pedido está bloqueado no painel, a frase de recusa; senão None."""
+    achados = achar(pedido) if bloqueados() else []
+    if achados and esta_bloqueado(achados[0][1]):
+        return f"{achados[0][1]['nome']} está bloqueado no painel (Programas): não abro nem mexo nele"
+    return None
+
+
+def listar(busca="", n=20):
+    """Programas instalados (nome, liberado) que parecem com a busca; sem busca, os primeiros em ordem alfabética."""
+    nomes = bloqueados()
+    itens = indexar()
+    if busca.strip():
+        itens = [i for _, i in achar(busca, minimo=0.6, n=n)]
+    else:
+        itens = sorted(itens, key=lambda i: i["nome"].lower())[:n]
+    return [{"nome": i["nome"], "exe": i["exe"], "liberado": i["nome"] not in nomes} for i in itens]
+
+
 def abrir(pedido):
     """Abre (ou traz pra frente) o programa que mais se parece com o pedido. Devolve o que fez, em uma frase."""
     import abrir as _abrir
@@ -183,6 +223,8 @@ def abrir(pedido):
     if not achados:
         return f"não achei nenhum programa parecido com '{pedido}' instalado"
     item = achados[0][1]
+    if esta_bloqueado(item):
+        return f"{item['nome']} está bloqueado no painel (Programas): não abro nem mexo nele"
     # já está aberto? (visível ou minimizado) → só traz pra frente
     jans = _janelas_do(item)
     hwnds = [j["hwnd"] for j in jans] or (_janelas_minimizadas(_exes(item)) if item["exe"] else [])

@@ -1,21 +1,21 @@
 {
   "abrir.py": {
-    "mtime": 1793014170.1759367,
-    "seen": 1793016152.4836464,
-    "ast_hash": "101fbf6f02e0f9b0dc620b84535c6010",
-    "semantic_hash": "101fbf6f02e0f9b0dc620b84535c6010"
+    "mtime": 1793020693.1500585,
+    "seen": 1793020874.726943,
+    "ast_hash": "679ad46bee6e108005bdbf54e72951d2",
+    "semantic_hash": ""
   },
   "claudinho.pyw": {
-    "mtime": 1793018923.902429,
-    "seen": 1793019124.7958994,
-    "ast_hash": "d76b84996117e22ea838e2be791aed31",
+    "mtime": 1793020707.1390674,
+    "seen": 1793020874.7269633,
+    "ast_hash": "1585b7042c9017f1cb3f6aaac7c4d50f",
     "semantic_hash": "",
     "language": "language=.py"
   },
   "claudinho_mcp.py": {
-    "mtime": 1793018923.2009623,
-    "seen": 1793019124.795907,
-    "ast_hash": "545c03730a9082f8bb89af47d805121d",
+    "mtime": 1793020693.3351188,
+    "seen": 1793020874.7269776,
+    "ast_hash": "00f64c418b3d42f96d54ad1f94036261",
     "semantic_hash": ""
   },
   "cli.py": {
@@ -133,10 +133,10 @@
     "semantic_hash": "06d3f4c7288c9ad8bfa0d58c15d5faea"
   },
   "programas.py": {
-    "mtime": 1793014170.183402,
-    "seen": 1793016152.4837441,
-    "ast_hash": "f451d1a08c9ddee2829acdec095bf3e7",
-    "semantic_hash": "f451d1a08c9ddee2829acdec095bf3e7"
+    "mtime": 1793020693.1011605,
+    "seen": 1793020874.7271757,
+    "ast_hash": "4b0efd84ae2f41fbd600f4b3bbc10bd8",
+    "semantic_hash": ""
   },
   "sistema.py": {
     "mtime": 1792789003.1646733,
@@ -163,9 +163,9 @@
     "semantic_hash": "84b59dc06ba7879736105d0e6eb2dbc2"
   },
   "README.md": {
-    "mtime": 1793019107.4184244,
-    "seen": 1793019124.7960203,
-    "ast_hash": "b1fe12de61944d7e3d1f9de9122a70bf",
+    "mtime": 1793020870.053326,
+    "seen": 1793020874.7272525,
+    "ast_hash": "126c7b7a593fa498da81c3c9a5cb3c60",
     "semantic_hash": ""
   },
   "conversa.html": {
@@ -199,9 +199,9 @@
     "semantic_hash": ""
   },
   "painel.html": {
-    "mtime": 1793019080.638837,
-    "seen": 1793019124.7960448,
-    "ast_hash": "d592122fd0173d3b95613e6abfb161af",
+    "mtime": 1793020737.5362687,
+    "seen": 1793020874.7273147,
+    "ast_hash": "864e9c5f5491dabcf12fe92f63a7b196",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -211,15 +211,21 @@
     "semantic_hash": "f738edc68c949bbb888e11f96ce20df6"
   },
   "tela.py": {
-    "mtime": 1793016459.1634173,
-    "seen": 1793016560.0630565,
-    "ast_hash": "964e2edeeec6a5f53413316b060614ce",
+    "mtime": 1793020693.2845404,
+    "seen": 1793020874.727233,
+    "ast_hash": "9fead1da5d604e480e2cb82e5326c2f6",
     "semantic_hash": ""
   },
   "teclas.py": {
-    "mtime": 1793019095.6179092,
-    "seen": 1793019124.7960079,
-    "ast_hash": "f4837fb43ca75e51426ef70085e3f690",
+    "mtime": 1793020693.2400484,
+    "seen": 1793020874.7272234,
+    "ast_hash": "234bfaec79f7f5ca1d10d8a26aa8df11",
+    "semantic_hash": ""
+  },
+  "projetos.py": {
+    "mtime": 1793020693.1968107,
+    "seen": 1793020874.727185,
+    "ast_hash": "4a577299c88059b3ad8c0dc36a9f6404",
     "semantic_hash": ""
   }
 }

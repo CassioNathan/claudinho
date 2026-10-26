@@ -57,6 +57,7 @@ import voz
 import fala
 import stt
 import teclas
+import programas
 from motores import env_limpo
 
 PORTA = 47821
@@ -117,6 +118,7 @@ CONFIG_PADRAO = {
     "pastas_leitura": [],
     # atalhos ensinados por programa (painel): o chat aperta eles sem perguntar, só na janela daquele programa
     "atalhos_programas": teclas.PADRAO,
+    "programas_bloqueados": [],          # programas que o chat não abre nem mexe (painel → Programas)
     "mestre": {"nome": "", "sobre": ""},  # "Meu Mestre" no painel: quem usa o Claudinho (vira o CLAUDE.md do chat)
 }
 
@@ -127,7 +129,7 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "emojis", "borda", "borda_forca",
-                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas",
+                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados",
                  "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
@@ -186,7 +188,17 @@ PROMPT_SISTEMA = (
     "Para NAVEGAR num programa (\"próxima aba\", \"desce a página\", \"volta\", \"roda o projeto no IntelliJ\") use "
     "`atalho` (teclas de navegação e os atalhos que ele ensinou pra cada programa, sem confirmação; pra saber quais "
     "são, `atalhos_conhecidos`); outras teclas (Enter, "
-    "Delete, Ctrl+S…) só pela `atalho_confirmado`, que pede confirmação. Só quando ele pedir. Para a MÚSICA que ele está ouvindo use "
+    "Delete, Ctrl+S…) só pela `atalho_confirmado`, que pede confirmação. Só quando ele pedir. "
+    "Para abrir um programa JÁ NUM PROJETO (\"abre o IntelliJ no LC Pedir\") use `abrir_projeto(programa, projeto)`: "
+    "ela acha a pasta, abre e espera a janela do projeto. TAREFA COM ETAPAS (\"abre o IntelliJ no projeto X e roda a "
+    "API\"): (1) antes de agir, confira que existe o que ele pediu (programa: `listar_programas` dá o nome exato e diz "
+    "se está bloqueado; programa bloqueado ele desligou no painel: não abra nem mexa, só avise); se `abrir_projeto` disser que não achou ou achou "
+    "mais de uma pasta, PERGUNTE qual, não chute nem procure .exe na mão; (2) depois faça TODAS as etapas nesta mesma "
+    "resposta, em ordem, sem pedir pra ele esperar nem parar no meio: abrir_projeto → atalhos_conhecidos (qual tecla "
+    "faz aquilo naquele programa) → atalho com janela=<programa>; (3) pra conferir uma etapa use "
+    "ver_tela(janela=<programa>), porque sem janela o print é do que ele está usando (pode ser outro programa); "
+    "(4) se uma etapa falhar, diga qual e por quê. NUNCA feche nem mate programa (taskkill, Stop-Process) pra "
+    "consertar algo: diga o que viu e pergunte. Para a MÚSICA que ele está ouvindo use "
     "`python musica.py <acao>` (tocando, pausar, tocar, alternar, proxima, anterior), que também roda "
     "sem confirmação. Para TOCAR UMA MÚSICA ou um ARTISTA que ele pedir, use `python musica.py buscar "
     "\"<música e artista>\"` ou `python musica.py artista \"<artista>\"`: toca no YouTube Music dele e segue "
@@ -582,6 +594,12 @@ AJUDANTE = re.compile(
     r"|video (?:pausar|tocar|velocidade [\d.]{1,4}|avancar \d{1,4}|voltar \d{1,4}|legenda|cinema)))")
 # tentativas de abrir coisa por fora do ajudante
 ABRIR_NA_MAO = re.compile(r"(?i)(?:cmd(?:\.exe)?\s+/c\s+)?(?:start|start-process|explorer(?:\.exe)?|invoke-item)\b")
+# fechar processo, apagar arquivo/pasta, desligar o PC, mexer no registro: recusado sem nem perguntar. O popup sozinho
+# não segurava: o chat "consertava" o IntelliJ matando ele e apagando pasta, e no meio da conversa o "Pode" sai fácil.
+PERIGOSO = re.compile(
+    r"(?i)(?:^|[\s;&|(`$\"'])(?:taskkill|tskill|stop-process|spps|pkill|killall|kill|rm|rmdir|rd|del|erase|"
+    r"remove-item|ri|format|diskpart|shutdown|restart-computer|stop-computer|logoff|reg(?:\.exe)?\s+delete|"
+    r"remove-itemproperty|clear-content|cipher|takeown|icacls|wmic)(?:\.exe)?(?=$|[\s;&|)])")
 
 
 class ChatClaude:
@@ -631,7 +649,8 @@ class ChatClaude:
                # abrir.py só abre site, pesquisa ou programa da lista: pode rodar sem perguntar
                "--allowedTools", ajudantes("WebSearch,WebFetch,Bash(python abrir.py:*),Bash(python musica.py:*),"
                                       "mcp__claudinho__abrir_programa,mcp__claudinho__ver_tela,"
-                                      "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos"),
+                                      "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos,"
+                                      "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas"),
                                       # atalho_confirmado cai no popup
                # só as ferramentas que o chat usa: a definição das outras pesava ~7 mil tokens por mensagem
                "--tools", "Bash,Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]
@@ -706,7 +725,11 @@ class ChatClaude:
         if req.get("subtype") == "can_use_tool":
             entrada = req.get("input", {})
             comando = (entrada.get("command") or "").strip() if req.get("tool_name") in ("Bash", "PowerShell") else ""
-            if comando and AJUDANTE.fullmatch(comando):
+            if comando and PERIGOSO.search(comando):
+                decisao = {"behavior": "deny", "message": (
+                    "Recusado sem perguntar: o Claudinho nunca fecha programa, apaga arquivo/pasta, desliga o PC nem "
+                    "mexe no registro. Não tente de outro jeito: diga a ele o que você viu e pergunte o que fazer.")}
+            elif comando and AJUDANTE.fullmatch(comando):
                 decisao = {"behavior": "allow", "updatedInput": entrada}
             elif comando and ABRIR_NA_MAO.match(comando):
                 decisao = {"behavior": "deny", "message": ajudantes(
@@ -1070,6 +1093,10 @@ def iniciar_servidor(eventos):
                     if j["exe"] and j["exe"] not in vistos:
                         vistos.add(j["exe"])
                         lista.append({"exe": j["exe"], "titulo": j["titulo"][:80]})
+                self.responder(200, json.dumps(lista, ensure_ascii=False).encode("utf-8"))
+            elif self.path == "/api/programas" and self.token_ok():  # tudo o que está instalado (painel → Programas)
+                lista = [{"nome": i["nome"], "exe": i["exe"]}
+                         for i in sorted(programas.indexar(), key=lambda i: i["nome"].lower())]
                 self.responder(200, json.dumps(lista, ensure_ascii=False).encode("utf-8"))
             elif self.path == "/api/conversa" and self.token_ok() and APP:
                 corpo = {"mensagens": APP.mem.historico(200), "pensando": APP.ocupado}
@@ -2528,6 +2555,8 @@ class Claudinho:
             valor = max(10, min(100, int(valor)))
         elif chave == "atalhos_programas":
             valor = teclas.validar_lista(valor)
+        elif chave == "programas_bloqueados":
+            valor = sorted({str(n).strip()[:120] for n in (valor if isinstance(valor, list) else []) if str(n).strip()})[:500]
         elif chave == "voz_apelidos":
             valor = [str(a).strip()[:30] for a in (valor if isinstance(valor, list) else []) if str(a).strip()][:8]
             valor = valor or list(CONFIG_PADRAO["voz_apelidos"])
@@ -2825,6 +2854,21 @@ class Claudinho:
     def falas_recentes(self, minutos=15):
         agora = time.time()
         return [(agora - quando, texto) for quando, texto in self.falas_mostradas if agora - quando < minutos * 60]
+
+    def conversa_recente(self, minutos=15, n=8):
+        """O que vocês conversaram no chat há pouco, pro Júnior não comentar como se não soubesse (ele roda à parte)."""
+        limite = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - minutos * 60))
+        try:
+            msgs = [m for m in self.mem.historico(n) if (m.get("criado_em") or "") >= limite]
+        except Exception:
+            return ""
+        if not msgs:
+            return ""
+        linhas = "\n".join(f"- {'ele' if m['quem'] == 'eu' else 'você (chat)'}: "
+                           f"{re.sub(r'\s+', ' ', m['texto'])[:300]}" for m in msgs)
+        return ("\nCONVERSA DE AGORA NO CHAT (você e ele, últimos minutos; a observação tem que combinar com isso: "
+                "continue o assunto se a tela for sobre ele, não repita o que o chat já disse nem contradiga sem "
+                "motivo):\n" + linhas)
 
     def contexto_das_falas(self):
         """Bloco que vai junto da sua mensagem: o que ele disse nos balões nos últimos minutos."""
@@ -3557,7 +3601,7 @@ class Claudinho:
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                     if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto(self.cfg["mestre"])
         if junior:   # só o que está visível: a dica tem que dar pra conferir na imagem
-            contexto += SO_O_QUE_ESTA_NA_TELA.replace("a piada", "a observação")
+            contexto += SO_O_QUE_ESTA_NA_TELA.replace("a piada", "a observação") + self.conversa_recente()
         elif maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
             contexto += SO_O_QUE_ESTA_NA_TELA
         else:

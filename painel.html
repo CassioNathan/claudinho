@@ -323,10 +323,11 @@
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Personalidade</div><div class="desc">Muda as piadas, o banco de frases e o jeito
-          dele falar no chat. O Ultron 🤖 é uma IA vilã teatral que também zoa sem dó o que você faz na tela (o antigo "modo maldoso"),
+          dele falar no chat. O Claudinho 🐟 tem o jeito do Darwin (O Incrível Mundo de Gumball): doce, ingênuo e
+          empolgado (combina com o pacote Peixinho no Visual). O Ultron 🤖 é uma IA vilã teatral que também zoa sem dó o que você faz na tela (o antigo "modo maldoso"),
           mas no chat continua ajudando. (Combina com o pacote Ultron no Visual.)</div></div>
         <div class="segmentos" data-cfg="personalidade">
-          <button data-v="claudinho">Claudinho</button><button data-v="ultron">Ultron 🤖</button>
+          <button data-v="claudinho">Claudinho 🐟</button><button data-v="ultron">Ultron 🤖</button>
         </div>
       </div>
       <div class="linha">
@@ -725,14 +726,15 @@ function desenhar(canvas, v, t, olhando = -1, piscando = false, escala = null) {
     const a = v[e] && cat.aderecos.find(a => a.id === v[e]);
     if (a) pixelsDoAdereco(a, t, olhando).forEach(([c, l, cor]) => px(c, l, cor));
   }
-  sprite.pernas.forEach(c => { px(c, 6, corpo); px(c, 7, corpo); });
+  const pe = v.pes && cat.aderecos.find(a => a.id === v.pes);  // tênis/botinha: o pezinho de cada perna
+  sprite.pernas.forEach(c => { px(c, 6, corpo); px(c, 7, (pe && pe.sapato) || corpo); });
 }
 
 // ---------- montar a tela ----------
 function nomeDaSkin(v) {
   const pac = cat.pacotes.find(p => Object.entries(p.aderecos).every(([e, id]) => (v[e] || null) === id) && (!p.cor || p.cor === v.cor));
   if (pac) return pac.nome.replace(/[^\p{L}\p{N} ]/gu, "").trim().toLowerCase();
-  const usados = ["cabeca", "olhos", "rosto", "pescoco", "bracos"].filter(e => v[e]).length;
+  const usados = ["cabeca", "olhos", "rosto", "pescoco", "bracos", "pes"].filter(e => v[e]).length;
   const cor = (cat.cores.find(c => c.id === v.cor) || {}).nome || "";
   return usados ? `${cor.toLowerCase()} + ${usados} adereço${usados > 1 ? "s" : ""}` : cor.toLowerCase();
 }

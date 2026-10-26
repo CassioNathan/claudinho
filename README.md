@@ -38,8 +38,10 @@ terminam e solta piadas sobre o que está na tela.
   volta a ouvir sozinho e encerra depois de um tempo sem você falar. Com fone dá pra interrompê-lo falando por cima.
   Ele fala qualquer resposta do chat (o 🔊 do balão liga e desliga; na digitada só o começo é falado) e dá pra escolher a voz. A voz (~60 MB) fica em `~/.claudinho/vozes`
   (`python -m piper.download_voices pt_BR-faber-medium --download-dir ~/.claudinho/vozes`).
-- **Skins:** uma cor (10, incluindo arco-íris) e um adereço por espaço (cabeça, olhos, rosto, pescoço, braços),
-  28 adereços e 9 pacotes prontos (emo, CEO, natal, cowboy, pirata, anjinho, diabinho, gamer, rei).
+- **Skins:** uma cor (12, incluindo arco-íris e peixinho) e um adereço por espaço (cabeça, olhos, rosto, pescoço,
+  braços, pés), 34 adereços e 11 pacotes prontos (emo, CEO, natal, cowboy, pirata, anjinho, diabinho, gamer, Ultron,
+  rei e o **Peixinho 🐟**: laranja de peixinho dourado, olhões, boquinha, nadadeiras e tênis, inspirado no Darwin de
+  O Incrível Mundo de Gumball). Calçado (pés) pinta o pezinho de cada perna, que sobe e desce andando.
   Adereço com "frente" (franja, aba do boné, tapa-olho…) vira pro lado em que ele está olhando.
   Tudo em `skins.py`; adereço novo é só uma lista de pixels.
 - **Esquetes (à toa):** de vez em quando, parado, ele apronta: "Tive uma ideia!", saca o notebook,
@@ -62,7 +64,9 @@ terminam e solta piadas sobre o que está na tela.
   aba do YouTube. O fundo da extensão pergunta ao Claudinho (127.0.0.1) a cada segundo, com uma chave própria
   (`~/.claudinho/ext_token`); só navega dentro de music.youtube.com e www.youtube.com. Sem extensão ou sem aba
   aberta, abre aba nova como antes. O navegador exige o modo do desenvolvedor ligado pra extensão carregada de pasta.
-- **Personalidade 🤖:** no painel, "Claudinho" ou "Ultron" (IA vilã teatral, frases próprias): muda o tom das piadas
+- **Personalidade 🐟🤖:** no painel, "Claudinho" (o padrão: o jeito do Darwin, de O Incrível Mundo de Gumball, doce,
+  ingênuo, empolgado e orgulhoso de um jeito inocente; `JEITO` e `QUEM` no `claudinho.pyw`) ou "Ultron" (IA vilã
+  teatral, frases próprias): muda o tom das piadas
   do Haiku, o banco de frases e o jeito de falar no chat (que continua ajudando de verdade; vai nas instruções fixas
   do chat, sem custo por mensagem). Combina com a cor Metal de olhos vermelhos / pacote Ultron.
 - **Autoconfiança 😎:** ele sabe como está (cor, adereços, emo, venda) e onde aparece no print. De vez em quando a

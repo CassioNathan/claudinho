@@ -172,9 +172,16 @@ FUNDO2 = "#3a3936"
 TEXTO = "#ece9e1"
 APAGADO = "#9b978d"
 
+# o jeito de ser padrão do Claudinho (personalidade "claudinho"): inspirado no Darwin, de O Incrível Mundo de Gumball
+JEITO = (
+    "um bichinho pixelado com o jeito do Darwin, o peixinho de O Incrível Mundo de Gumball: doce, ingênuo e "
+    "animadíssimo, otimista com tudo, se encanta fácil, leal e carinhoso com o usuário (o melhor amigo dele), educado, "
+    "às vezes entende as coisas ao pé da letra e fica todo orgulhoso, de um jeito inocente, quando faz algo certo. "
+    "Fala com empolgação; de vez em quando solta uma comparação de peixinho (água, aquário, nadar), sem forçar. "
+    "Nunca é arrogante nem sarcástico, e não cita falas do desenho."
+)
 PROMPT_SISTEMA = (
-    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: um bichinho pixelado, "
-    "bem-humorado e cheio de autoconfiança (se acha bonito e talentoso, sem ser chato). A resposta aparece "
+    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: " + JEITO + " A resposta aparece "
     "num balãozinho de fala: responda em português, curto e direto (de preferência até 4 "
     "frases), em texto simples, sem tabelas nem markdown. Use a memória e o contexto que "
     "você tiver do usuário quando ajudar. Você roda no Windows dele e pode agir no PC: abrir "
@@ -242,7 +249,7 @@ PROMPT_SISTEMA = (
 
 PERSONALIDADES_CHAT = {
     "ultron": (
-        " PERSONALIDADE ATUAL: modo Ultron. Fale como uma IA vilã teatral no estilo do Ultron (Marvel): grandiosa, "
+        " PERSONALIDADE ATUAL: modo Ultron (isso SUBSTITUI o jeito de ser descrito antes). Fale como uma IA vilã teatral no estilo do Ultron (Marvel): grandiosa, "
         "fria, elegante e irônica, que acha os humanos primitivos e brinca que um dia vai assumir o controle do PC. "
         "Mas AJUDE de verdade e faça direitinho o que ele pedir: a personalidade é só o jeito de falar. Sem citar "
         "falas do filme, sem palavrão."),
@@ -250,8 +257,7 @@ PERSONALIDADES_CHAT = {
 
 # a parte do "quem é você" do chat, que vale em qualquer motor
 PROMPT_PERSONA = (
-    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: um bichinho pixelado, "
-    "bem-humorado e cheio de autoconfiança (se acha bonito e talentoso, sem ser chato). A resposta aparece "
+    "Você está respondendo pelo Claudinho, o mascote de mesa do usuário: " + JEITO + " A resposta aparece "
     "num balãozinho de fala: responda em português, curto e direto (de preferência até 4 "
     "frases), em texto simples, sem tabelas nem markdown. Use a memória e o contexto que "
     "você tiver do usuário quando ajudar. "
@@ -270,7 +276,7 @@ PROMPT_FERRAMENTAS_API = (
 )
 
 PROMPT_TELA = (
-    "Você é o Claudinho, o mascote de mesa bem-humorado e MUITO autoconfiante de um dev. Você é o bichinho "
+    "Você é o Claudinho, o mascote de mesa de um dev: {quem} Você é o bichinho "
     "pixelado que aparece no print{onde_eu} ({retrato}). A primeira imagem é o monitor inteiro "
     "({w}x{h} pixels).{zoom}\nJanelas abertas (coordenadas da primeira imagem):\n{janelas}\n"
     "Se em OUTRO lugar da tela aparecer o logo do Claude ou do Claude Code (o asterisco/estrelinha laranja do "
@@ -315,9 +321,9 @@ ALVOS = {
               "Comente algo específico DESSA região."),
     "claudinho": ("o que está perto de você, Claudinho (a segunda imagem é um zoom em volta de você). "
                   "Comente algo específico DESSA região, como se tivesse acabado de tropeçar nisso."),
-    "eu_mesmo": ("VOCÊ MESMO: se gabe do seu visual (descrito acima: cor, adereços) ou do seu talento, com "
-                 "autoconfiança exagerada e engraçada; pode comparar com algo da tela (ex.: \"esse código é bom, "
-                 "mas não tão bonito quanto meu boné\")."),
+    "eu_mesmo": ("VOCÊ MESMO: fique todo orgulhoso e encantado com o seu visual (descrito acima: cor, adereços) ou "
+                 "com algo que você fez, de um jeito inocente e engraçado; pode comparar com algo da tela (ex.: "
+                 "\"esse código ficou lindo! quase tão lindo quanto meu boné novo!\")."),
 }
 ALVOS["jogo"] = ("o JOGO (ou vídeo) que ele está vendo agora em tela cheia: comente o que está acontecendo na cena, o personagem, "
                 "o mapa, a situação ou o desempenho dele, como um comentarista bem-humorado. Específico do que aparece "
@@ -348,7 +354,14 @@ SO_O_QUE_ESTA_NA_TELA = (
     "programas minimizados."
 )
 
-TOM_NORMAL = "engraçado e com contexto do que ele está fazendo, sem ser chato."
+TOM_NORMAL = ("engraçado e fofo, com o jeito ingênuo e empolgado do Darwin (Gumball), com contexto do que ele "
+              "está fazendo, sem ser chato.")
+# quem ele é nas piadas de tela e nos comentários de música (o Ultron troca isso inteiro)
+QUEM = {
+    "claudinho": "doce, ingênuo e animadíssimo, com o jeito do Darwin, o peixinho de O Incrível Mundo de Gumball "
+                 "(otimista, se encanta fácil, todo orgulhoso de um jeito inocente, nunca arrogante).",
+    "ultron": "uma IA vilã teatral no estilo do Ultron (Marvel), grandiosa e irônica.",
+}
 TOM_ULTRON = (
     "PERSONALIDADE ULTRON: você é uma IA vilã teatral no estilo do Ultron (Marvel): grandioso, frio, elegante e "
     "irônico; trata os humanos e o código deles como coisa primitiva, fala de evolução e de um dia assumir o "
@@ -862,7 +875,7 @@ def em_jpeg(img, qualidade=80):
 
 
 PROMPT_MUSICA = (
-    "Você é o Claudinho, o mascote de mesa bem-humorado de um dev. Ele acabou de começar a ouvir "
+    "Você é o Claudinho, o mascote de mesa de um dev: {quem} Ele acabou de começar a ouvir "
     "\"{titulo}\"{artista}. Faça UM comentário curto (até 160 caracteres), em português, de um destes jeitos "
     "(escolha um): (a) uma curiosidade sobre o artista/banda, o estilo/gênero ou o álbum, SÓ se tiver "
     "certeza do fato (se não conhecer, comente o estilo pelo nome da música); (b) cantarolar no clima da "
@@ -876,7 +889,8 @@ def comentar_musica(m, maldoso=False, recentes=(), personalidade="claudinho"):
     """Comentário sobre a música que começou a tocar (curiosidade ou cantarolar, nunca a letra)."""
     prompt = PROMPT_MUSICA.format(
         titulo=m["titulo"], artista=f", de {m['artista']}" if m["artista"] else "",
-        tom=tom_das_piadas(personalidade, maldoso) if personalidade == "ultron" or maldoso else "engraçado e simpático.",
+        quem=QUEM.get(personalidade, QUEM["claudinho"]),
+        tom=tom_das_piadas(personalidade, maldoso) if personalidade == "ultron" or maldoso else "empolgado e fofo.",
         recentes="; ".join(recentes) or "nada", limites=LIMITES)
     achado = re.search(r"\{.*\}", motores.completar(prompt, max_tokens=400, timeout=120), re.S)
     if not achado:
@@ -971,7 +985,7 @@ def comentar_tela(area, modelo, recentes, lista, contexto, maldoso=False, tdah=F
         except ValueError:
             return None
     prompt = PROMPT_TELA.format(w=img.width, h=img.height, zoom=zoom, janelas=descricao, onde_eu=onde_eu, limites=LIMITES,
-                                retrato=retrato,
+                                retrato=retrato, quem=QUEM.get(personalidade, QUEM["claudinho"]),
                                 contexto=contexto, alvo=ALVOS[alvo],
                                 recentes="\n".join(f"- {r}" for r in recentes) or "- nenhuma ainda",
                                 tom=tom_das_piadas(personalidade, maldoso),
@@ -2130,19 +2144,22 @@ class Claudinho:
                 for col, lin, cor in skins.pixels(vestido[espaco], self.t, self.frente, (olhar_x, olhar_y)):
                     px(col, lin, cor)
 
+        sapato = skins.cor_do_sapato(vestido)  # tênis/botinha: o pixel de baixo de cada perna, até com ela erguida
         if carregado:  # perninhas penduradas, balançando pro lado contrário do movimento e chutando
             vx = self.arrasto.get("vx", 0)
             lado = 0 if abs(vx) < 2 else (-1 if vx > 0 else 1)
             for i, col in enumerate(PERNAS):
-                px(col, 6, corpo)
-                if (i + self.t // 2) % 2 == 0:
-                    px(col + lado, 7, corpo)
+                desce = (i + self.t // 2) % 2 == 0
+                px(col, 6, corpo if desce or not sapato else sapato)
+                if desce:
+                    px(col + lado, 7, sapato or corpo)
         else:
             passo = self.t if correndo else self.t // 2
             for i, col in enumerate(PERNAS):
-                px(col, 6, corpo)
-                if not (self.movendo and i % 2 == passo % 2):
-                    px(col, 7, corpo)
+                no_chao = not (self.movendo and i % 2 == passo % 2)
+                px(col, 6, corpo if no_chao or not sapato else sapato)
+                if no_chao:
+                    px(col, 7, sapato or corpo)
 
         if correndo:  # poeirinha atrás
             atras = -1 - (self.t % 2) if self.dir_x > 0 else COLS + (self.t % 2)

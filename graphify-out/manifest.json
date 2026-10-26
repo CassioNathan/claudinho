@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "claudinho.pyw": {
-    "mtime": 1793041889.4883103,
-    "seen": 1793043266.782774,
-    "ast_hash": "351fc2267a9d27c7e07c768c667e46fa",
+    "mtime": 1793047060.110016,
+    "seen": 1793047152.506934,
+    "ast_hash": "4713d8cbdd3b71bdc28140e4cc6a68c9",
     "semantic_hash": "",
     "language": "language=.py"
   },
@@ -85,10 +85,10 @@
     "semantic_hash": "dcd525a14788525809777071c9499687"
   },
   "frases.py": {
-    "mtime": 1792781372.4582791,
-    "seen": 1793016152.483715,
-    "ast_hash": "d1c995ed0d7e95e8c6411cb1210ac212",
-    "semantic_hash": "d1c995ed0d7e95e8c6411cb1210ac212"
+    "mtime": 1793047038.3179245,
+    "seen": 1793047152.5070052,
+    "ast_hash": "9837cc6369446abcfe22dc9981c40554",
+    "semantic_hash": ""
   },
   "hook/claudinho_notificar.py": {
     "mtime": 1792701312.3484187,
@@ -145,10 +145,10 @@
     "semantic_hash": ""
   },
   "skins.py": {
-    "mtime": 1792781381.7803261,
-    "seen": 1793016152.4837525,
-    "ast_hash": "3046bea7f141c02f21131211084494d5",
-    "semantic_hash": "3046bea7f141c02f21131211084494d5"
+    "mtime": 1793046970.0743878,
+    "seen": 1793047152.507053,
+    "ast_hash": "da27c13526cb96faf4d97d9ed912a2f2",
+    "semantic_hash": ""
   },
   "stt.py": {
     "mtime": 1793014170.183402,
@@ -163,9 +163,9 @@
     "semantic_hash": "84b59dc06ba7879736105d0e6eb2dbc2"
   },
   "README.md": {
-    "mtime": 1793041195.8574002,
-    "seen": 1793041200.1353424,
-    "ast_hash": "8c0392b06548086d3a615f35f9c0355c",
+    "mtime": 1793047148.7906785,
+    "seen": 1793047152.5070732,
+    "ast_hash": "34e050a3879af4891664c7fcab4362f7",
     "semantic_hash": ""
   },
   "conversa.html": {
@@ -199,9 +199,9 @@
     "semantic_hash": ""
   },
   "painel.html": {
-    "mtime": 1793038975.8505104,
-    "seen": 1793039173.8751228,
-    "ast_hash": "24cc6a4b66f91714fac9fb28f3f28dfb",
+    "mtime": 1793047068.7928374,
+    "seen": 1793047152.5071032,
+    "ast_hash": "cb9ddfde78cdc5a9729ac61de6db46a5",
     "semantic_hash": ""
   },
   "requirements.txt": {

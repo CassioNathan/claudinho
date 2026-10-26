@@ -283,28 +283,29 @@ def sortear(opcoes, recentes, notas):
 
 
 # autoconfiança: ele se elogia de vez em quando ({item} = um adereço que está usando, {cor} = cor do corpo)
+# orgulho inocente, do jeito do Darwin (Gumball): ele se acha o máximo, mas fofo e empolgado, nunca metido
 AUTOELOGIO = [
-    "Pixel por pixel, perfeição. Não dá pra melhorar o que já nasceu pronto.",
-    "Às vezes eu me pego olhando meu reflexo no monitor. Que mascote, hein.",
-    "Eu sou 11 pixels de largura de puro carisma.",
-    "Se beleza desse XP, eu já tava no nível máximo.",
-    "Modéstia à parte, sou o mascote mais bonito desse PC. Talvez do Brasil.",
-    "Não sou eu que sou bonito, é a resolução que me favorece. Mentira, sou eu mesmo.",
-    "Eu andando pela tela é tipo desfile. Só falta a passarela.",
-    "Tem gente que nasce com talento. Eu nasci com talento E com pixels bem alinhados.",
-    "Meu único defeito é ser perfeito demais. E não ter mãos.",
+    "Olha só, andei a tela inteira sem tropeçar! Tô ficando muito bom nisso!",
+    "Sabia que eu tenho 11 pixels de largura? Eu acho isso incrível!",
+    "Acordei me sentindo o mascote mais feliz do mundo. E acho que eu sou mesmo!",
+    "Eu era pra ser um peixinho de aquário e agora moro no seu PC. Que vida boa!",
+    "Fiz um pulinho perfeito agora! Você viu? Você viu?!",
+    "Às vezes eu me olho no monitor e penso: que bichinho simpático!",
+    "Meus pixels tão todos no lugarzinho hoje! Isso é um ótimo sinal!",
+    "Eu não tenho mãos, mas tenho muito carinho pra dar. Isso conta, né?",
+    "Se tivesse prêmio de melhor amigo de mesa, eu ia querer ganhar. Pra você!",
 ]
 AUTOELOGIO_COR = [
-    "Me falaram que {cor} não combina com nada. Combina comigo.",
-    "Essa cor {cor} não é pra qualquer um. É pra mim.",
+    "Essa cor {cor} me deixou todo animado! Combinou, né?",
+    "Tô {cor} hoje e tô adorando! Você gostou também?",
 ]
 AUTOELOGIO_ITEM = [
-    "Tô de {item} hoje. Sim, eu sei que tô lindo.",
-    "Reparou no meu visual? {Item} e tudo. Impecável.",
-    "{Item}: aprovado pelo mascote mais estiloso do PC (eu).",
-    "Não é todo mundo que segura um {item} com essa classe.",
+    "Olha meu {item}! Tô me sentindo tão elegante!",
+    "Reparou no meu visual? {Item}! Escolhi especialmente pra hoje!",
+    "{Item}: aprovado por mim! E espero que por você também!",
+    "Será que esse {item} me deixa mais bonito? Eu acho que sim!",
 ]
-AUTOELOGIO_EMO = ["Até triste eu fico bonito.", "Minha franja tem mais personalidade que muito commit por aí."]
+AUTOELOGIO_EMO = ["Até triste eu tento ser fofo… mas hoje tá difícil.", "Minha franja tá com sentimentos demais hoje."]
 
 
 # personalidade Ultron: IA vilã teatral (frases próprias, sem citar o filme). {app} = programa, {min} = minutos nele

@@ -6,8 +6,9 @@ desloca tudo junto com o pulinho, então os adereços acompanham qualquer pose s
 O painel (painel.html) desenha a prévia com estes mesmos dados."""
 import colorsys
 
-ESPACOS = ["cabeca", "olhos", "rosto", "pescoco", "bracos"]
-NOMES_ESPACOS = {"cabeca": "Cabeça", "olhos": "Olhos", "rosto": "Rosto", "pescoco": "Pescoço", "bracos": "Braços"}
+ESPACOS = ["cabeca", "olhos", "rosto", "pescoco", "bracos", "pes"]
+NOMES_ESPACOS = {"cabeca": "Cabeça", "olhos": "Olhos", "rosto": "Rosto", "pescoco": "Pescoço", "bracos": "Braços",
+                 "pes": "Pés"}
 
 # cor do corpo e dos olhos (corpo escuro pede olho claro)
 CORES = {
@@ -22,6 +23,7 @@ CORES = {
     "fantasma": {"nome": "Fantasma", "corpo": "#e8e6e1", "olho": "#1f1e1d"},
     "metal": {"nome": "Metal", "corpo": "#7d8590", "olho": "#ff3b30"},  # olho vermelho (combina com o modo Ultron)
     "arco_iris": {"nome": "Arco-íris", "corpo": "#d97757", "olho": "#1f1e1d", "animada": True},
+    "peixinho": {"nome": "Peixinho", "corpo": "#f5932b", "olho": "#1f1e1d"},  # laranja de peixinho dourado
 }
 
 
@@ -87,6 +89,10 @@ ADERECOS = {
     "monoculo": {"nome": "Monóculo", "frente": "direita", "espaco": "olhos", "pixels": [
         (6, 0, "#e8b923"), (7, 0, "#e8b923"), (8, 0, "#e8b923"), (6, 3, "#e8b923"), (7, 3, "#e8b923"),
         (8, 3, "#e8b923"), (9, 1, "#e8b923"), (9, 2, "#e8b923"), (9, 3, "#e8b923"), (9, 4, "#e8b923")]},
+    # olhão de desenho animado: branco em volta e a pupila no meio (anda junto com o olhar, como os óculos)
+    "olhos_grandes": {"nome": "Olhões", "espaco": "olhos", "pixels": [
+        *[(c, l, "#fbfaf6") for c in (2, 3, 4, 6, 7, 8) for l in (0, 1, 2, 3)],
+        (3, 1, "#1f1e1d"), (3, 2, "#1f1e1d"), (7, 1, "#1f1e1d"), (7, 2, "#1f1e1d")]},
     # ---------- rosto ----------
     "bigode": {"nome": "Bigode", "espaco": "rosto", "pixels": [
         *_linha(range(3, 8), 3, "#3b2516"), (2, 4, "#3b2516"), (8, 4, "#3b2516")]},
@@ -97,6 +103,8 @@ ADERECOS = {
         (1, 3, "#b8c2c8"), (9, 3, "#b8c2c8")]},
     "barba": {"nome": "Barba", "espaco": "rosto", "pixels": [
         *_linha(range(1, 10), 4, "#4a2f1d"), *_linha(range(2, 9), 5, "#4a2f1d"), *_linha(range(4, 7), 3, "#4a2f1d")]},
+    "boca_peixe": {"nome": "Boquinha de peixe", "espaco": "rosto", "pixels": [
+        (4, 4, "#e2603a"), (5, 4, "#e2603a"), (6, 4, "#e2603a"), (5, 5, "#c94a2a")]},
     # ---------- pescoço ----------
     "gravata": {"nome": "Gravata", "espaco": "pescoco", "pixels": [
         (5, 4, "#2f3f63"), (5, 5, "#2f3f63"), (4, 5, "#2f3f63"), (6, 5, "#2f3f63"), (5, 6, "#2f3f63")]},
@@ -114,6 +122,13 @@ ADERECOS = {
     "munhequeira": {"nome": "Munhequeira", "espaco": "bracos", "pixels": [(0, 4, "#141414"), (10, 4, "#141414")]},
     "relogio": {"nome": "Relógio", "espaco": "bracos", "pixels": [(10, 4, "#3a3936"), (10, 3, "#7fd6ff")]},
     "pulseira": {"nome": "Pulseiras", "espaco": "bracos", "pixels": [(0, 4, "#e0457b"), (10, 4, "#4f86d9")]},
+    "nadadeiras": {"nome": "Nadadeiras", "espaco": "bracos", "pixels": [
+        (0, 3, "#ffb866"), (0, 4, "#ffb866"), (-1, 4, "#ffb866"), (10, 3, "#ffb866"), (10, 4, "#ffb866"),
+        (11, 4, "#ffb866")]},
+    # ---------- pés (pintam o pezinho de cada perna, que sobe e desce andando) ----------
+    "tenis": {"nome": "Tênis", "espaco": "pes", "sapato": "#f4efe4", "pixels": []},
+    "tenis_verde": {"nome": "Tênis verde", "espaco": "pes", "sapato": "#3fbf6b", "pixels": []},
+    "botinha": {"nome": "Botinha", "espaco": "pes", "sapato": "#6b4226", "pixels": []},
 }
 
 # pacotes prontos: montam vários espaços de uma vez (None = tira o adereço do espaço)
@@ -130,9 +145,20 @@ PACOTES = {
     "ultron": {"nome": "Ultron 🤖", "cor": "metal", "aderecos": {"cabeca": None, "olhos": None, "rosto": None,
                                                                 "pescoco": None, "bracos": None}},
     "rei": {"nome": "Rei 👑", "cor": "dourado", "aderecos": {"cabeca": "coroa", "pescoco": "corrente", "olhos": "monoculo"}},
+    # o peixinho laranja de olhão e tênis (inspirado no Darwin, de O Incrível Mundo de Gumball)
+    "peixinho": {"nome": "Peixinho 🐟", "cor": "peixinho", "aderecos": {
+        "cabeca": None, "olhos": "olhos_grandes", "rosto": "boca_peixe", "pescoco": None, "bracos": "nadadeiras",
+        "pes": "tenis"}},
 }
 
-VISUAL_PADRAO = {"cor": "laranja", "cabeca": None, "olhos": None, "rosto": None, "pescoco": None, "bracos": None}
+VISUAL_PADRAO = {"cor": "laranja", "cabeca": None, "olhos": None, "rosto": None, "pescoco": None, "bracos": None,
+                 "pes": None}
+
+
+def cor_do_sapato(visual):
+    """Cor do pezinho (o pixel de baixo de cada perna) com o calçado escolhido, ou None descalço."""
+    a = ADERECOS.get(visual.get("pes") or "")
+    return a.get("sapato") if a else None
 
 
 def visual_valido(v):
@@ -210,7 +236,8 @@ def catalogo():
         "espacos": [{"id": e, "nome": NOMES_ESPACOS[e]} for e in ESPACOS],
         "cores": [{"id": k, **v} for k, v in CORES.items()],
         "aderecos": [{"id": k, "nome": v["nome"], "espaco": v["espaco"], "pixels": v["pixels"], "frente": v.get("frente"),
-                      "pisca": v.get("pisca"), "rgb": v.get("rgb"), "varredura": v.get("varredura")}
+                      "pisca": v.get("pisca"), "rgb": v.get("rgb"), "varredura": v.get("varredura"),
+                      "sapato": v.get("sapato")}
                      for k, v in ADERECOS.items()],
         "pacotes": [{"id": k, "nome": v["nome"], "aderecos": v["aderecos"], "cor": v.get("cor")}
                     for k, v in PACOTES.items()],

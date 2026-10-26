@@ -34,6 +34,20 @@ def comando_cli(*args):
     return [str(Path(sys.executable).with_name("python.exe")), str(BASE / "cli.py"), *args]
 
 
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
+
+def lancar(alvo, argumentos=None):
+    """Abre programa, site ou arquivo como se você tivesse clicado, FORA do "job" do Claudinho. O chat roda num job
+    que fecha tudo junto com o Claudinho (pra não sobrar processo do chat); o que ele abre pra você herdava o job e
+    fechava junto. Quem abre agora é um ajudante que sai do job antes (o programa fica filho dele, livre)."""
+    try:
+        subprocess.Popen(comando_cli("lancar", str(alvo), *([argumentos] if argumentos else [])),
+                         creationflags=subprocess.CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB, close_fds=True)
+    except OSError:  # job que não deixa sair (Claudinho antigo): abre direto, como antes
+        os.startfile(str(alvo), arguments=argumentos) if argumentos else os.startfile(str(alvo))
+
+
 def comando_texto(*args):
     return " ".join(f'"{Path(p).as_posix()}"' if i == 0 or (i == 1 and not EMPACOTADO) else p
                     for i, p in enumerate(comando_cli(*args)))

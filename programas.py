@@ -232,10 +232,8 @@ def abrir(pedido):
         _abrir.forcar_frente(hwnds[0])
         return f"{item['nome']} já estava aberto: trouxe pra frente"
     antes = _abrir.titulos_agora()
-    if item["atalho"]:
-        os.startfile(item["atalho"])
-    else:
-        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{item['app_id']}"])
+    import sistema  # abre fora do job do Claudinho: o programa não fecha quando ele fecha
+    sistema.lancar(item["atalho"] or f"shell:AppsFolder\\{item['app_id']}")
     exes = _exes(item)
     if exes:
         _abrir.trazer_pra_frente(exes, antes, espera=15.0)

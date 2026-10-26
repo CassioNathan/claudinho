@@ -30,7 +30,6 @@ navegador, logado na sua conta. Com a extensão do Claudinho instalada, usa a ab
 sem ela (ou sem aba aberta), abre uma nova. Pausa o que estiver tocando pra não sair duas músicas.
 """
 import asyncio
-import os
 import sys
 import time
 import webbrowser
@@ -142,7 +141,7 @@ def abrir_aba_nova(url, focar=True):
             return
         import ctypes
         antes = ctypes.windll.user32.GetForegroundWindow()
-        os.startfile(url)
+        sistema.lancar(url)  # fora do job do Claudinho: o navegador não fecha junto com ele
         time.sleep(1.5)  # o navegador costuma pular pra frente ao abrir aba: devolve o foco
         abrir.forcar_frente(antes)
     except Exception:

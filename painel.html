@@ -227,6 +227,7 @@
     <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
     <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
     <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
+    <a data-alvo="rotinas_sec"><span class="ic">🌐</span>Rotinas de sites</a>
     <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
   </nav>
   <div class="cartao-ext">
@@ -573,6 +574,14 @@
       </div>
       <div id="listaProg"></div>
     </div>
+  </section>
+  <section id="rotinas_sec">
+    <h2>🌐 Rotinas de sites</h2>
+    <p class="sub">Ensine o Claudinho a fazer algo num site mostrando o caminho: no navegador, clique no ícone da extensão do
+      Claudinho → <b>Liberar este site</b> → <b>⏺ Gravar rotina</b>, faça os cliques e o que digitar (use <b>📖 Marcar área pra
+      ler</b> pra ele ler uma lista, como o quadro de um kanban) e salve com um nome. Depois é só pedir no chat.
+      Senha nunca é gravada; o chat só repete o que você gravou.</p>
+    <div id="rotinas"></div>
   </section>
   <section id="sistema">
     <h2>🖥️ Sistema</h2>
@@ -1031,10 +1040,84 @@ function montarInstalados(forcar) {
 }
 document.getElementById("buscaProg").oninput = () => montarInstalados();
 
+// ---------- rotinas de sites (gravadas pela extensão) ----------
+function rotinasAgora() { return JSON.parse(JSON.stringify(estado.cfg.rotinas || [])); }
+function descreverPasso(p) {
+  const nome = p.rotulo || (p.alvo || {}).texto || (p.alvo || {}).rotulo || "?";
+  if (p.tipo === "digitar") return `digitar ${p.variavel ? "{" + p.variavel + "}" : `"${p.valor}"`} em "${nome}"`;
+  if (p.tipo === "selecionar") return `escolher ${p.variavel ? "{" + p.variavel + "}" : `"${p.valor}"`} em "${nome}"`;
+  return {clique: `clicar em "${nome}"`, tecla: "apertar Enter", ler: `📖 ler "${nome}"`}[p.tipo] || p.tipo;
+}
+async function salvarRotinas(lista, texto) {
+  await mudar("rotinas", lista);
+  montarRotinas(true);
+  avisar(texto);
+}
+function montarRotinas(forcar) {
+  const caixa = document.getElementById("rotinas");
+  const assinatura = JSON.stringify(estado.cfg.rotinas);
+  if (!forcar && (caixa.dataset.assinatura === assinatura || caixa.contains(document.activeElement))) return;
+  caixa.dataset.assinatura = assinatura;
+  caixa.innerHTML = "";
+  const lista = estado.cfg.rotinas || [];
+  if (!lista.length) {
+    caixa.innerHTML = '<div class="cartao"><span class="desc">Nenhuma rotina ainda: grave a primeira pelo ícone da extensão no navegador.</span></div>';
+    return;
+  }
+  lista.forEach((r, i) => {
+    const cartao = document.createElement("div");
+    cartao.className = "cartao prog";
+    const topo = document.createElement("div");
+    topo.className = "prog-topo";
+    topo.innerHTML = `<b></b><span class="desc"></span>`;
+    topo.querySelector("b").textContent = r.nome;
+    topo.querySelector(".desc").textContent = r.site;
+    const rodar = document.createElement("button");
+    rodar.className = "botao"; rodar.textContent = "▶ Rodar"; rodar.style.marginLeft = "auto";
+    rodar.title = "repete agora no navegador, com os valores gravados";
+    rodar.onclick = () => acao("rotina_rodar:" + r.nome, "rodando no navegador ▶");
+    const tirar = document.createElement("button");
+    tirar.className = "tirar-pasta"; tirar.textContent = "✕"; tirar.title = "apagar a rotina";
+    tirar.onclick = () => { const l = rotinasAgora(); l.splice(i, 1); salvarRotinas(l, "rotina apagada ✓"); };
+    topo.append(rodar, tirar);
+    cartao.appendChild(topo);
+    r.passos.forEach((p, k) => {
+      const linha = document.createElement("div");
+      linha.className = "linha";
+      linha.innerHTML = `<div class="info"><div class="titulo"></div></div>`;
+      linha.querySelector(".titulo").textContent = `${k + 1}. ${descreverPasso(p)}`;
+      if (p.tipo === "digitar" || p.tipo === "selecionar") {  // o valor que muda a cada vez vira um nome
+        const v = document.createElement("input");
+        v.placeholder = "valor fixo (ou nome do que muda)"; v.maxLength = 30; v.value = p.variavel || "";
+        v.title = "Deixe vazio pra usar sempre o que você digitou. Com um nome (ex.: numero_pedido), o chat preenche a cada vez.";
+        v.style.cssText = "max-width:200px;background:#3a3936;color:var(--texto);border:1px solid #55534e;border-radius:6px;padding:5px 8px;font:inherit;font-size:12px";
+        v.onchange = () => { const l = rotinasAgora(); l[i].passos[k].variavel = v.value.trim(); salvarRotinas(l, "salvo ✓"); };
+        linha.appendChild(v);
+      }
+      if (p.tipo === "clique" || p.tipo === "tecla") {  // botão que dispara algo: pede confirmação antes
+        const rot = document.createElement("label");
+        rot.className = "desc"; rot.style.cssText = "display:flex;align-items:center;gap:6px;white-space:nowrap";
+        rot.innerHTML = `<input type="checkbox"> confirmar antes`;
+        const c = rot.querySelector("input");
+        c.checked = !!p.confirmar;
+        c.onchange = () => { const l = rotinasAgora(); l[i].passos[k].confirmar = c.checked; salvarRotinas(l, "salvo ✓"); };
+        linha.appendChild(rot);
+      }
+      const x = document.createElement("button");
+      x.className = "tirar-pasta"; x.textContent = "✕"; x.title = "tirar este passo";
+      x.onclick = () => { const l = rotinasAgora(); l[i].passos.splice(k, 1); salvarRotinas(l, "passo tirado ✓"); };
+      linha.appendChild(x);
+      cartao.appendChild(linha);
+    });
+    caixa.appendChild(cartao);
+  });
+}
+
 function atualizarVivos() {
   montarPastas();
   montarProgramas();
   montarInstalados();
+  montarRotinas();
   document.getElementById("musica").textContent = estado.musica || "nada";
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");

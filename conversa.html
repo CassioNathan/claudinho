@@ -55,6 +55,11 @@
   .digitando .balao { display: flex; gap: 4px; padding: 13px 14px; }
   .digitando i { width: 7px; height: 7px; border-radius: 50%; background: var(--apagado); animation: pulo 1.2s infinite; }
   .digitando i:nth-child(2) { animation-delay: .15s; } .digitando i:nth-child(3) { animation-delay: .3s; }
+  /* ⏹ parar: discreto, a linha toda, só aparece com o mouse em cima do "digitando…" */
+  .parar { display: block; width: 100%; margin-top: 4px; visibility: hidden; background: #3a3936; border: 0;
+           color: var(--apagado); border-radius: 8px; padding: 5px; font: inherit; font-size: 12px; cursor: pointer; }
+  .pensando:hover .parar { visibility: visible; }
+  .parar:hover { background: #4a4945; color: var(--texto); }
   @keyframes pulo { 0%, 60%, 100% { transform: none; opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
   .vazio { text-align: center; color: var(--apagado); margin-top: 30vh; }
   .offline { position: fixed; inset: 0; background: rgba(20,19,18,.88); display: none; place-items: center;
@@ -142,6 +147,10 @@ function dataBonita(s) {
   return (d === hoje ? "hoje" : `${dia}/${mes}`) + " · " + h.slice(0, 5);
 }
 let assinatura = "";
+async function parar() {  // ele se enrolou numa tarefa: para o chat e a rotina no navegador
+  await fetch("/api/acao", {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"},
+                            body: JSON.stringify({acao: "parar"})});
+}
 async function atualizar() {
   try {
     const r = await fetch("/api/conversa", {headers: {"X-Token": TOKEN}});
@@ -160,7 +169,8 @@ async function atualizar() {
       }
       html += bolha(m, ms[i - 1]);
     });
-    if (dados.pensando) html += `<div class="msg dele digitando"><div class="balao"><i></i><i></i><i></i></div></div>`;
+    if (dados.pensando) html += `<div class="pensando"><div class="msg dele digitando"><div class="balao"><i></i><i></i><i></i></div></div>` +
+      `<button class="parar" onclick="parar()">⏹ parar</button></div>`;
     lista.innerHTML = html || `<div class="vazio">Ainda não conversamos.<br>Clica em mim e manda uma!</div>`;
     document.getElementById("sub").textContent = `${ms.length} mensagens`;
     if (noFim || !lista.dataset.ok) { lista.scrollTop = lista.scrollHeight; lista.dataset.ok = 1; }

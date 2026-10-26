@@ -4,7 +4,7 @@
 # Rode pelo empacotar.py (ele gera o ícone antes e faz o zip depois).
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-ocultos = collect_submodules("winrt") + ["pystray._win32", "tela", "teclas", "projetos"]  # importados só na hora (ver_tela da API, MCP)
+ocultos = collect_submodules("winrt") + ["pystray._win32", "tela", "teclas", "projetos", "rotinas"]  # importados só na hora (ver_tela da API, MCP)
 dados = (collect_data_files("customtkinter") + collect_data_files("ytmusicapi")
          + [("painel.html", "."), ("conversa.html", "."), ("extensao", "extensao")])
 fora = ["matplotlib", "numpy", "pandas", "scipy", "IPython", "pytest"]

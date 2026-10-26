@@ -4,7 +4,6 @@ Acha a pasta do projeto pelo nome (aproximado) só dentro das pastas que o chat 
 abre o programa nela e espera a janela do projeto aparecer, pra próxima etapa (rodar, compilar) já achar a janela.
 Não roda comando nem passa outro argumento além da pasta."""
 import json
-import os
 from pathlib import Path
 
 import programas
@@ -104,7 +103,7 @@ def abrir(programa, projeto, espera=120):
     if ja:
         _abrir.forcar_frente(ja["hwnd"])
         return f"{item['nome']} já estava aberto em {pasta.name}: trouxe pra frente (janela '{ja['titulo']}')"
-    os.startfile(item["atalho"], arguments=f'"{pasta}"')
+    sistema.lancar(item["atalho"], f'"{pasta}"')  # fora do job do Claudinho: não fecha junto com ele
     if not exes:
         return f"mandei abrir {item['nome']} em {pasta}; não sei o nome da janela dele pra esperar"
     # espera a janela do projeto aparecer E o programa sossegar (CPU baixa), sem tempo fixo: PC rápido segue logo

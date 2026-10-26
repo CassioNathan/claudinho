@@ -328,6 +328,12 @@ class ChatSimples:
         self.mensagens, self.sid, self.pastas = [], None, []
         self.ultimo_uso, self.modelos_usados = time.time(), []
         self.trava = threading.Lock()
+        self.interrompido = False
+
+    def interromper(self):
+        """Botão ⏹: a pergunta em andamento para na próxima ida e volta (API) ou no próximo pedaço (local)."""
+        if self.trava.locked():
+            self.interrompido = True
 
     # o resto do Claudinho chama estes; aqui não tem processo pra abrir/fechar
     def aquecer(self):
@@ -418,7 +424,10 @@ class ChatAPI(ChatSimples):
                 pedido = _pedido_api(modelo == "sonnet")
                 conversa = self.mensagens + [{"role": "user", "content": conteudo}]
                 ferramentas = FERRAMENTAS + [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+                self.interrompido = False
                 for _ in range(8):  # no máximo 8 idas e voltas de ferramenta
+                    if self.interrompido:
+                        return "✋ Parei.", None, None
                     r = cliente.messages.create(max_tokens=4000, system=self.instrucoes(), tools=ferramentas,
                                                 messages=conversa, **pedido)
                     if r.stop_reason not in ("tool_use", "pause_turn"):
@@ -466,9 +475,12 @@ class ChatOllama(ChatSimples):
                  "messages": [{"role": "system", "content": self.instrucoes()}, *self.mensagens, mensagem]}
         with self.trava:
             try:
+                self.interrompido = False
                 if ao_frase:  # em fluxo: cada frase pronta vai pra fala (voz) enquanto o resto ainda está sendo escrito
                     resposta, pendente = "", ""
                     for pedaco in _ollama_fluxo("/api/chat", dict(corpo, stream=True)):
+                        if self.interrompido:
+                            return "✋ Parei.", None, None
                         novo = pedaco.get("message", {}).get("content", "")
                         resposta += novo
                         frases, pendente = frases_completas(pendente + novo)

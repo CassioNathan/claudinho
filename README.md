@@ -157,9 +157,26 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
   chat não pode mais usar `sleep` (bloqueado): PC rápido segue logo, PC lento espera o que precisar. Achou mais de uma pasta (ex.: "LC Pedir" tem _API e _WEB dentro) ou nenhuma: devolve a
   lista e o chat pergunta. O chat faz tarefas com etapas de uma vez: abrir_projeto → atalhos_conhecidos → atalho →
   ver_tela(janela=…) pra conferir; e não fecha programa pra "consertar".
+- **Rotinas de sites** (extensão + `rotinas.py`): você ensina mostrando. No navegador, ícone da extensão do Claudinho →
+  **Liberar este site** (o navegador pede a permissão só daquele site) → **⏺ Gravar rotina**, faz o caminho (cliques, o
+  que digitar, Enter) e, pra ele ler uma lista, **📖 Marcar área pra ler**: o que está sob o mouse fica destacado com o
+  número de linhas de texto, **↑** pega a área de fora (do título da coluna até o quadro inteiro), **↓** volta, clique
+  escolhe; ou **📄 Ler a página toda**. Na hora de repetir, área que sumiu vira leitura da página toda →
+  dá um nome e salva. No chat: "lê meu PlannerX", "consulta o pedido 5678": `rotinas_conhecidas` e `rodar_rotina`
+  repetem no seu navegador e devolvem o texto lido, que o chat organiza (tarefas por coluna). No painel (Rotinas de
+  sites) dá pra marcar o valor digitado como variável (o chat preenche), marcar passo como "confirmar antes" (popup,
+  pela `rodar_rotina_confirmada`), tirar passo, rodar (▶) e apagar. Senha nunca é gravada; o chat só repete o que você
+  gravou; site não liberado a extensão nem enxerga. Se o site mudar de layout, ela diz em qual passo parou.
 - **Programas** (painel → Programas): tudo o que está instalado (menu Iniciar e Loja), com busca e uma chave por
   programa. Desligado = o Claudinho não abre, não aperta tecla nem olha ele pelo nome (`programas_bloqueados` no
   config). O chat confere o que existe e o nome exato pela `listar_programas` antes de abrir.
+- **O que ele abre é seu**: o chat roda num "job" do Windows que fecha junto com o Claudinho (pra não sobrar processo
+  dele); programa, site e projeto que ele abre pra você saem do job antes (`sistema.lancar` → `claudinho-cli lancar`),
+  então continuam abertos quando o Claudinho fecha ou reinicia.
+- **Fechou o balão, ele cala**: fechar a resposta na mão (clique, ✕ ou clique fora) corta a fala também.
+- **⏹ Parar**: enquanto ele responde ou faz algo, o balão "digitando/fazendo…" tem o botão **⏹ parar** (e a janela de
+  conversa também). Para o chat na hora (Claude Code pelo pedido de interrupção; API e IA local na próxima volta), a
+  rotina no navegador no próximo passo e a fala.
 - **Nada destrutivo no chat**: fechar processo (taskkill, Stop-Process, kill), apagar (rm, del, Remove-Item), desligar o
   PC ou mexer no registro é recusado sem nem abrir o popup (`PERIGOSO` no `claudinho.pyw`).
 - **Atalhos dos programas** (painel → Atalhos): a lista de "o que cada atalho faz" em cada programa, sem programação.

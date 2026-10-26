@@ -135,7 +135,7 @@ def abrir_site(url):
     if partes.scheme not in ("http", "https") or not partes.netloc:
         sys.exit(f"recusado: só abro endereço http(s), não '{url}'")
     antes = titulos_agora()
-    os.startfile(url)
+    sistema.lancar(url)  # fora do job do Claudinho: o navegador não fecha junto com ele
     print(f"abri {url}")
     trazer_pra_frente(navegador_padrao(), antes)
 
@@ -177,13 +177,13 @@ def abrir_programa(nome):
     antes = titulos_agora()
     atalho = achar_atalho(pedacos)
     if atalho:
-        os.startfile(str(atalho))
+        sistema.lancar(atalho)
         print(f"abri {atalho.stem}")
     else:
         app_id = app_da_loja(pedacos)
         if not app_id:
             sys.exit(f"não achei o {nome} instalado")
-        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{app_id}"])
+        sistema.lancar(f"shell:AppsFolder\\{app_id}")
         print(f"abri {nome}")
     # programa pesado (IntelliJ, Docker) demora pra mostrar a janela: espera mais
     trazer_pra_frente(EXES.get(nome, []), antes, espera=15.0)

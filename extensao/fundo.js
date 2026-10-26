@@ -3,7 +3,8 @@
 //   YouTube Music: toca no player da barra lateral do Opera, se ele estiver aberto; senão troca a música na aba que
 //                  já está aberta, sem roubar o foco (sem aba: abre uma em segundo plano)
 //   YouTube: sempre numa aba nova, trazida pra frente
-importScripts("config.js", "consultas.js");  // self.CLAUDINHO = {porta, token} (gerado pelo Claudinho na instalação)
+//   Rotinas: nos sites que você liberou, repete o caminho que você gravou (rotinas.js)
+importScripts("config.js", "consultas.js", "rotinas.js");  // self.CLAUDINHO = {porta, token} (gerado na instalação)
 
 const BASE = `http://127.0.0.1:${self.CLAUDINHO.porta}`;
 const SITES = {ytmusic: "https://music.youtube.com/*", youtube: "https://www.youtube.com/*"};
@@ -50,13 +51,16 @@ async function executar(c) {
   }
 }
 
-// consulta ("o que tem no YouTube?"): a extensão olha e devolve pro Claudinho, sem mexer na tela do usuário
+// consulta ("o que tem no YouTube?"): a extensão olha e devolve pro Claudinho, sem mexer na tela do usuário;
+// rotina: repete o que ele gravou num site liberado e devolve o que leu (essa mexe na tela: foi ele que pediu)
 async function consultar(c) {
   let resultado;
   try {
-    const limite = new Promise((_, falhou) => setTimeout(() => falhou(new Error(
-      "a consulta travou em: " + (self.consultasClaudinho.andamento.etapa || "início"))), 35000));
-    resultado = {ok: true, dados: await Promise.race([self.consultasClaudinho.consultar(c), limite])};
+    const rotina = c.acao === "rotina";
+    const limite = new Promise((_, falhou) => setTimeout(() => falhou(new Error(rotina ? "a rotina passou de 3 minutos" :
+      "a consulta travou em: " + (self.consultasClaudinho.andamento.etapa || "início"))), rotina ? 170000 : 35000));
+    const trabalho = rotina ? self.rotinasClaudinho.rodar(c) : self.consultasClaudinho.consultar(c);
+    resultado = {ok: true, dados: await Promise.race([trabalho, limite])};
   } catch (e) {
     resultado = {ok: false, erro: String((e && e.message) || e)};
   }
@@ -86,7 +90,8 @@ async function ciclo() {
     if (r.ok) {
       const dados = await r.json();
       for (const c of dados.comandos || []) {
-        if (c.acao === "consultar") consultar(c);   // sem await: consulta demora e não pode travar o ciclo
+        if (c.acao === "consultar" || c.acao === "rotina") consultar(c);  // sem await: demora e não pode travar o ciclo
+        else if (c.acao === "cancelar") self.rotinasClaudinho.cancelar();  // ⏹ parar no Claudinho
         else await executar(c);
       }
       // o Claudinho já copiou uma versão nova dos arquivos: recarrega pra usar (atualiza sozinha)
@@ -100,6 +105,11 @@ async function ciclo() {
 }
 
 chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
+  // gravação de rotina (o botão da extensão e o gravador na página)
+  if (msg.tipo && (msg.tipo.startsWith("rotina_") || msg.tipo === "gravador_passo")) {
+    self.rotinasClaudinho.mensagem(msg, remetente).then(responder, e => responder({ok: false, erro: String(e)}));
+    return true;  // resposta assíncrona
+  }
   // a página do YouTube Music avisando que está aí; sem aba = é o player da barra lateral
   if (msg.tipo === "ytmusic" && (!remetente.tab || remetente.tab.id < 0)) {
     player.visto = Date.now();

@@ -18,8 +18,13 @@ destrutivo ele recusa. A voz e a memória ficam no seu PC.
   Usa o Claude Code instalado no PC (Haiku com pensamento leve), com a sua memória e o seu perfil.
 - **Mexe no PC com confirmação:** abre site, pesquisa ou programa da lista sem perguntar (via `abrir.py`);
   qualquer outro comando ou mudança em arquivo pede **Pode / Não** num balão.
+- **Pastas e projetos que ele lê sem perguntar** (painel → Privacidade): adicione uma pasta ou clique em
+  **🧩 Puxar projetos do Claude**, que lista os projetos que você já abriu no Claude (app ou terminal, lidos do
+  `~/.claude.json`) pra você marcar quais liberar. Ler fica livre; mudar arquivo ou rodar comando continua pedindo.
 - **Avisos em fila:** quando um chat do Claude Code termina, ele avisa (projeto, o que foi pedido, resposta).
   Sua pergunta tem prioridade; os avisos esperam e somem sozinhos.
+  O que ele fala nos balões (avisos, dicas do Júnior, resumos) entra na conversa: vai inteiro junto da sua próxima
+  mensagem e, se você responde abrindo o balão de uma fala, o chat sabe que é resposta àquela fala.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modo TDAH 🐿️ (o deboche maldoso 😈 é o jeito do Ultron),
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
 - **Modo Júnior 🧑‍💻:** em vez de piada, ele lê a janela em que você está com o OCR do próprio Windows (local, de graça)
@@ -105,6 +110,8 @@ ligue em **Sistema** "abrir junto com o Windows" e o aviso do Claude Code.
 
 - O chat, as piadas olhando a tela e os resumos usam o [Claude Code](https://claude.com/claude-code)
   (instale, rode `claude` e faça `/login`). Sem ele, o resto funciona: banco de frases, música, esquetes, skins.
+- **Atualizar:** quando sai versão nova ele avisa num balão (olha a última release no GitHub ao abrir e a cada 12 h;
+  dá pra desligar em Sistema). Feche o Claudinho, troque a pasta pela do zip novo e abra: seus dados ficam.
 - Pra desinstalar: desligue as opções em Sistema, feche (botão direito > Sair) e apague a pasta.
   Os dados ficam em `%USERPROFILE%\.claudinho`.
 - Sem assinatura digital, o Windows pode mostrar "O Windows protegeu o computador": "Mais informações" > "Executar assim mesmo".
@@ -130,6 +137,7 @@ A versão fica em `sistema.py` (`VERSAO`).
 | `claudinho.pyw` | o mascote (janela, sprites, balões, chat, piadas, bandeja) |
 | `frases.py` | banco de frases (edite à vontade) |
 | `janelas.py` | lê as janelas abertas no Windows |
+| `atualizacao.py` | olha a última release no GitHub e diz se tem versão nova (só leitura; quem atualiza é você) |
 | `junior.py` | olhos do modo Júnior: OCR do Windows na janela em foco, erro novo e empacado |
 | `abrir.py` | ajudante limitado: só abre site, pesquisa ou programa da lista |
 | `emojis.py` | pacote de reações em pixel art (desenhos, cores, frases e quando aparecem) |

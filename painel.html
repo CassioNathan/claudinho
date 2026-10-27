@@ -531,7 +531,20 @@
     </div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
     <div id="pastas"></div>
-    <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="botao" id="addPasta">+ Adicionar pasta</button>
+      <button class="botao" id="puxarClaude">🧩 Puxar projetos do Claude</button>
+    </div>
+    <div class="cartao" id="projetosClaude" style="margin-top:10px" hidden>
+      <p class="desc" style="margin:12px 0 6px">Os projetos que você já abriu no Claude (app ou terminal). Marque os que
+        o chat pode <b>ler</b> sem perguntar; mudar arquivo ou rodar comando continua pedindo licença.</p>
+      <div id="listaClaude"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin:10px 0 12px">
+        <button class="botao" id="marcarClaude">Marcar todos</button>
+        <button class="botao" id="fecharClaude">Cancelar</button>
+        <button class="botao principal" id="liberarClaude">Liberar marcados</button>
+      </div>
+    </div>
   </section>
 
   <section id="memoria">
@@ -630,7 +643,13 @@
         <div class="motor-detalhe" id="detalheMotor"></div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Versão</div><div class="desc" id="descDados">—</div></div>
+        <div class="info"><div class="titulo">Avisar quando sair versão nova 🎉</div><div class="desc">Olha a última versão
+          no GitHub (só leitura, uma vez ao abrir e a cada 12 h) e avisa num balão. Não baixa nem instala nada sozinho.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="avisar_versao"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Versão</div><div class="desc" id="descDados">—</div>
+          <div class="desc" id="versaoNova" hidden></div></div>
         <span class="valor" id="versao">—</span>
       </div>
     </div>
@@ -887,8 +906,40 @@ function montarResto() {
   carregarJanelas();
   carregarInstalados();
   document.getElementById("addPasta").onclick = () => acao("pasta_adicionar", "escolha a pasta na janela que abriu 📂");
+  document.getElementById("puxarClaude").onclick = puxarProjetosClaude;
+  document.getElementById("fecharClaude").onclick = () => document.getElementById("projetosClaude").hidden = true;
+  document.getElementById("marcarClaude").onclick = () => {
+    for (const c of document.querySelectorAll("#listaClaude input:not(:disabled)")) c.checked = true;
+  };
+  document.getElementById("liberarClaude").onclick = async () => {
+    const marcadas = [...document.querySelectorAll("#listaClaude input:checked:not(:disabled)")].map(c => c.value);
+    if (!marcadas.length) { avisar("marque pelo menos um"); return; }
+    await acao("pastas_do_claude:" + marcadas.join("\n"), `liberei ${marcadas.length} ✓`);
+    document.getElementById("projetosClaude").hidden = true;
+  };
   for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
   atualizarVivos();
+}
+async function puxarProjetosClaude() {
+  const caixa = document.getElementById("listaClaude");
+  let lista;
+  try { lista = await api("/api/projetos_claude"); } catch (e) { avisar("não consegui ler os projetos do Claude"); return; }
+  caixa.innerHTML = lista.length ? "" : '<span class="desc">Nenhum projeto aberto no Claude ainda.</span>';
+  for (const p of lista) {
+    const linha = document.createElement("label");
+    linha.className = "linha";
+    linha.style.cursor = p.liberada ? "default" : "pointer";
+    linha.innerHTML = `<div class="info"><div class="titulo"></div><div class="desc"></div></div>
+      <input type="checkbox" style="width:18px;height:18px;accent-color:var(--laranja)">`;
+    linha.querySelector(".titulo").textContent = p.nome;
+    linha.querySelector(".desc").textContent = p.pasta + (p.liberada ? "  ·  já liberada" : "");
+    const caixinha = linha.querySelector("input");
+    caixinha.value = p.pasta;
+    caixinha.checked = p.liberada;
+    caixinha.disabled = p.liberada;
+    caixa.appendChild(linha);
+  }
+  document.getElementById("projetosClaude").hidden = false;
 }
 function montarPastas() {
   const caixa = document.getElementById("pastas");
@@ -1218,6 +1269,12 @@ function montarSistema() {
     el.onchange = () => acao(`${el.dataset.sistema}:${el.checked ? 1 : 0}`, el.checked ? "ligado ✓" : "desligado ✓");
   }
   document.getElementById("versao").textContent = "v" + sis.versao;
+  const nova = document.getElementById("versaoNova");
+  nova.hidden = !sis.nova;
+  if (sis.nova) {
+    nova.innerHTML = `🎉 Saiu a <b>v${sis.nova.versao}</b>: <a href="${sis.nova.url}" target="_blank" rel="noopener">ver e baixar</a>` +
+      " (feche o Claudinho, troque a pasta pela nova e abra; seus dados ficam).";
+  }
   document.getElementById("descDados").textContent = "Seus dados ficam em " + sis.dados;
 }
 const NOMES_ESTADO_VOZ = {parado: "Desligado.", ouvindo_apelido: "Ouvindo: é só me chamar. 👂", acordando: "Acordando…",

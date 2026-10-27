@@ -60,6 +60,8 @@ import teclas
 import programas
 import rotinas
 import junior
+import atualizacao
+import projetos
 from motores import env_limpo
 
 PORTA = 47821
@@ -109,6 +111,7 @@ CONFIG_PADRAO = {
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
+    "avisar_versao": True,               # olha a última release no GitHub e avisa quando sair versão nova
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
     "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
     "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
@@ -128,7 +131,7 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
-                 "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "emojis", "borda", "borda_forca",
+                 "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "emojis", "borda", "borda_forca",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
                  "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
@@ -1183,6 +1186,11 @@ def iniciar_servidor(eventos):
                 lista = [{"nome": i["nome"], "exe": i["exe"]}
                          for i in sorted(programas.indexar(), key=lambda i: i["nome"].lower())]
                 self.responder(200, json.dumps(lista, ensure_ascii=False).encode("utf-8"))
+            elif self.path == "/api/projetos_claude" and self.token_ok() and APP:  # painel → Privacidade
+                liberadas = APP.cfg["pastas_leitura"]
+                lista = [{"pasta": str(p), "nome": p.name, "liberada": projetos.dentro(p, liberadas)}
+                         for p in projetos.do_claude()]
+                self.responder(200, json.dumps(lista, ensure_ascii=False).encode("utf-8"))
             elif self.path == "/api/conversa" and self.token_ok() and APP:
                 corpo = {"mensagens": APP.mem.historico(200), "pensando": APP.ocupado}
                 self.responder(200, json.dumps(corpo, ensure_ascii=False).encode("utf-8"))
@@ -1683,6 +1691,8 @@ class Claudinho:
         self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
         self.lendo_notificacoes = False
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
+        self.falas_pro_chat = deque(maxlen=8)   # (quando, texto) falado nos balões desde a sua última mensagem
+        self.respondendo_a = None   # a fala do balão em que você abriu a conversa: a sua mensagem é resposta a ela
         self.chat = self.criar_chat()
         threading.Thread(target=self.chat.aquecer, daemon=True).start()
         self.fala = fala.Fala(lambda: self.cfg)   # a voz dele (Piper): só fala nas conversas por voz
@@ -1710,6 +1720,8 @@ class Claudinho:
         self.frente = -1  # lado pra onde está virado (franja, aba do boné… seguem)
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
+        self.versao_nova = None   # release mais nova que esta no GitHub ({"versao", "url", "titulo"})
+        threading.Thread(target=self.acompanhar_versao, daemon=True).start()
         self.junior_prox = 0   # o Júnior acabou de falar: espera um pouco antes da próxima dica
         self.vigia = junior.Vigia(self.junior_pode, lambda ev: self.eventos.put(("junior", ev)))
         self.S = escala()
@@ -2381,6 +2393,32 @@ class Claudinho:
         except Exception:
             pass
 
+    def acompanhar_versao(self):
+        """Um minuto depois de abrir e depois a cada 12 h: tem versão nova no GitHub? (Só olha; quem atualiza é você.)"""
+        time.sleep(60)
+        while True:
+            if self.cfg["avisar_versao"]:
+                self.versao_nova = atualizacao.nova()
+                if self.versao_nova:
+                    self.eventos.put(("versao_nova", self.versao_nova))
+            time.sleep(12 * 3600)
+
+    def avisar_versao(self, nova):
+        """Balão de versão nova, a não ser que você tenha mandado "depois" pra essa mesma versão há pouco."""
+        adiada = self.mem.meta("versao_adiada", {})
+        if adiada.get("versao") == nova["versao"] and time.time() < adiada.get("ate", 0):
+            return
+        self.enfileirar({"tipo": "comentario", "duracao": 30, "atualizacao": nova,
+                         "texto": f"Saiu o Claudinho {nova['versao']}! 🎉 Quer ver o que tem de novo e baixar? "
+                                  "É só trocar a minha pasta pela nova: suas coisas ficam."})
+
+    def versao_resposta(self, nova, baixar):
+        """baixar abre a página da release; depois (ou baixar) não lembra dessa versão por 3 dias."""
+        self.fechar_balao()
+        self.mem.guardar_meta("versao_adiada", {"versao": nova["versao"], "ate": time.time() + 3 * 86400})
+        if baixar:
+            webbrowser.open(nova["url"])
+
     def acompanhar_musica(self):
         anterior = None
         while True:
@@ -2558,6 +2596,12 @@ class Claudinho:
             webbrowser.open("https://ollama.com/download")
         elif acao == "pasta_adicionar":
             self.adicionar_pasta()
+        elif acao.startswith("pastas_do_claude:"):  # você marcou no painel quais projetos do Claude liberar
+            do_claude = {str(p).lower(): str(p) for p in projetos.do_claude()}   # só entra o que veio do Claude
+            novas = [do_claude[x.lower()] for x in acao.split(":", 1)[1].split("\n") if x.lower() in do_claude]
+            novas = [x for x in novas if not projetos.dentro(x, self.cfg["pastas_leitura"])]
+            if novas:
+                self.mudar_pastas(self.cfg["pastas_leitura"] + novas)
         elif acao.startswith("pasta_remover:"):
             self.mudar_pastas([x for x in self.cfg["pastas_leitura"] if x != acao.split(":", 1)[1]])
         elif acao.startswith("rotina_rodar:"):  # botão ▶ do painel
@@ -2752,7 +2796,8 @@ class Claudinho:
                     "erro": self.voz.nuvem_erro},
             "fala": {"vozes": fala.catalogo(), "baixando": self.fala.baixando, "erro": self.fala.erro_download},
             "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
-                        "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO},
+                        "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO,
+                        "nova": self.versao_nova},
             "extensao": {"conectada": extensao_conectada(), "abas": EXT["abas"], "pasta": str(DADOS / "extensao")},
         }
 
@@ -2911,6 +2956,12 @@ class Claudinho:
                                duracao=fala["duracao"],
                                botoes=[("limpar", lambda: self.limpar_notificacoes(fala["ids"]), True),
                                        ("deixa", self.fechar_balao, False)])
+        elif fala.get("atualizacao"):  # versão nova no GitHub
+            nova = fala["atualizacao"]
+            self.balao = Balao(self, fala["tipo"], fala["texto"], titulo=f"🎉 versão {nova['versao']}",
+                               duracao=fala["duracao"],
+                               botoes=[("baixar", lambda: self.versao_resposta(nova, True), True),
+                                       ("depois", lambda: self.versao_resposta(nova, False), False)])
         elif (fala.get("piada") or {}).get("origem") == "junior":  # dica do Júnior: dá pra seguir com ela
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
                                botoes=[("explica", lambda: self.junior_acao(fala, "explica"), True),
@@ -2942,14 +2993,20 @@ class Claudinho:
 
     # ---------- continuidade: o chat sabe o que ele falou nos balões ----------
     def lembrar_fala(self, fala):
-        """Anota o que ele acabou de falar num balão (piada, comentário, aviso) pra conversa continuar dali."""
+        """Anota o que ele acabou de falar num balão (piada, comentário, aviso) pra conversa continuar dali: vai junto da
+        sua próxima mensagem pro chat e, se não for piada à toa, entra no histórico da conversa."""
         if fala["tipo"] == "aviso":
             d = fala["dados"]
-            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {formatar.limpar(d.get('resposta') or '')[:300]}"
+            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {formatar.limpar(d.get('resposta') or '')[:1500]}"
         else:
             texto = fala.get("texto", "")
-        if texto:
-            self.falas_mostradas.append((time.time(), texto))
+        if not texto:
+            return
+        self.falas_mostradas.append((time.time(), texto))
+        self.falas_pro_chat.append((time.time(), texto))
+        origem = (fala.get("piada") or {}).get("origem")
+        if fala["tipo"] in ("aviso", "notificacoes") or origem == "junior" or fala.get("atualizacao"):
+            self.mem.registrar_mensagem("claudinho", texto.replace("[aviso] ", "✓ ", 1))
 
     def falas_recentes(self, minutos=15):
         agora = time.time()
@@ -2985,13 +3042,24 @@ class Claudinho:
                 "motivo):\n" + linhas)
 
     def contexto_das_falas(self):
-        """Bloco que vai junto da sua mensagem: o que ele disse nos balões nos últimos minutos."""
-        recentes = self.falas_recentes()
-        if not recentes:
-            return ""
-        linhas = "\n".join(f"- há {max(1, round(seg / 60))} min: \"{texto}\"" for seg, texto in recentes)
-        return ("\n\n(Contexto automático: o que você, Claudinho, falou nos balões nos últimos minutos. "
-                "Se a mensagem dele for uma resposta a isso, continue a conversa a partir daí:\n" + linhas + ")")
+        """Bloco que vai junto da sua mensagem: tudo o que ele disse nos balões desde a sua última mensagem (inteiro)
+        e, se você abriu a conversa num balão, qual fala você está respondendo. Depois de mandar, esvazia."""
+        agora = time.time()
+        falas = [(agora - quando, texto) for quando, texto in self.falas_pro_chat if agora - quando < 3 * 3600]
+        alvo, self.respondendo_a = self.respondendo_a, None
+        alvo = alvo[1] if alvo and agora - alvo[0] < 600 else None   # abriu e desistiu há tempo: não vale
+        self.falas_pro_chat.clear()
+        bloco = ""
+        if falas:
+            linhas = "\n".join(f"- há {max(1, round(seg / 60))} min: \"{texto}\"" for seg, texto in falas)
+            bloco += ("\n\n(O que você, Claudinho, falou nos balões desde a última mensagem dele, em ordem. Isso faz parte "
+                      "da conversa: \"isso\", \"reinicia\", \"roda de novo\" podem estar falando de algo daqui, não só do "
+                      "assunto anterior do chat:\n" + linhas + ")")
+        if alvo:
+            bloco += ("\n\n(ELE ESTÁ RESPONDENDO A ESTA FALA SUA, que estava aberta no balão quando ele escreveu: \"" + alvo +
+                      "\". Entenda a mensagem dele a partir dela. Se ainda ficar ambíguo do que ele está falando, "
+                      "pergunte antes de agir.)")
+        return bloco
 
     # ---------- confirmação antes de agir no PC ----------
     def pedir_permissao(self, ferramenta, entrada):
@@ -3156,6 +3224,7 @@ class Claudinho:
             threading.Thread(target=self.chat.aquecer, daemon=True).start()
             # acabou de falar algo num balão (até 3 min)? a conversa abre nisso, pra você responder a ele
             recente = self.falas_recentes(minutos=3)
+            self.respondendo_a = (time.time(), recente[-1][1]) if recente else None
             self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
 
     def abrir_conversa(self, texto, por_clique=False):
@@ -4317,6 +4386,8 @@ class Claudinho:
                 if self.conversa_voz:  # a voz espera isso pra falar/ouvir a próxima
                     self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
                     self.voz.resposta_chegou()
+            elif ev[0] == "versao_nova":
+                self.avisar_versao(ev[1])
             elif ev[0] == "junior":   # o vigia viu um erro novo (ou o mesmo há tempo demais) na janela em foco
                 if self.junior_pode():
                     self.olhar_junior(ev[1])

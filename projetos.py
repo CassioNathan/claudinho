@@ -1,9 +1,10 @@
 """Abrir um programa (IntelliJ, VS Code…) já num projeto: "abre o IntelliJ no LC Pedir".
 
-Acha a pasta do projeto pelo nome (aproximado) só dentro das pastas que o chat lê sem perguntar (painel → Atalhos),
+Acha a pasta do projeto pelo nome (aproximado) só dentro das pastas que o chat lê sem perguntar (painel → Privacidade),
 abre o programa nela e espera a janela do projeto aparecer, pra próxima etapa (rodar, compilar) já achar a janela.
 Não roda comando nem passa outro argumento além da pasta."""
 import json
+import os
 from pathlib import Path
 
 import programas
@@ -21,6 +22,31 @@ def pastas_liberadas():
     except (OSError, ValueError):
         cfg = {}
     return [Path(p) for p in cfg.get("pastas_leitura") or [] if Path(p).is_dir()]
+
+
+def do_claude():
+    """Os projetos que o Claude Code (no terminal ou no app Claude) já abriu: as chaves de "projects" do ~/.claude.json.
+    Sem as pastas temporárias do app e sem repetir a mesma pasta escrita de outro jeito (D:/x e D:\\x)."""
+    try:
+        dados = json.loads((Path.home() / ".claude.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    vistas, lista = set(), []
+    for bruto in dados.get("projects") or {}:
+        pasta = Path(os.path.normpath(bruto))
+        chave = str(pasta).lower()
+        if (chave in vistas or pasta == Path.home() or "scratch-workspaces" in chave
+                or "\\appdata\\local\\temp" in chave or not pasta.is_dir()):
+            continue
+        vistas.add(chave)
+        lista.append(pasta)
+    return sorted(lista, key=lambda p: str(p).lower())
+
+
+def dentro(pasta, raizes):
+    """A pasta é uma das raízes ou fica dentro de alguma (sem diferenciar maiúscula, como o Windows)."""
+    alvo = str(Path(pasta)).lower().rstrip("\\")
+    return any(alvo == r or alvo.startswith(r + "\\") for r in (str(Path(x)).lower().rstrip("\\") for x in raizes))
 
 
 def eh_projeto(pasta):

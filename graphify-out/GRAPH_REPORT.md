@@ -1,17 +1,17 @@
-# Graph Report - claudinho  (2026-10-26)
+# Graph Report - claudinho  (2026-10-27)
 
 ## Corpus Check
-- 39 files · ~78,234 words
+- 39 files · ~77,529 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 3 file(s) not represented in the graph (top: (none) 2, .spec 1)
 
 ## Summary
-- 1112 nodes · 2266 edges · 63 communities (34 shown, 29 thin omitted)
+- 1109 nodes · 2257 edges · 60 communities (37 shown, 23 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 74 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1c5f1a88`
+- Built from commit: `6be887dd`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,16 +19,16 @@
 - Fala
 - musica.py · notificacoes.py
 - carregar() polling /api/estado
-- frases.py · esquetes.py
+- teclas.py
 - Balao
 - .processar_eventos
 - memoria.py · Memoria
 - programas.py
 - .estado_painel
-- .talvez_comentar
-- .comentar_do_banco
+- abrir.py
+- .olhar_tela
 - claudinho_mcp.py
-- formatar.py
+- json
 - rodar_tarefa(projeto, instrucao)
 - claudinho.pyw · comentários
 - claudinho.pyw · ChatClaude
@@ -42,23 +42,21 @@
 - ChatSimples
 - time
 - .comentar
-- tela_cheia
+- .tick
 - claudinho.pyw · servidor
 - manifest.json
 - fundo.js
 - .desenhar
-- comentar_tela
-- .perguntar
-- _criar_job
+- completar
+- Claudinho (mascote de mesa)
+- --permission-prompt-tool stdio → responder_controle → pedir_permissao
+- .parecida
 - motores.py
-- conversa.html
-- plano-ver-tela.md
+- ver_tela(alvo) ferramenta MCP
 - subprocess
 - voz.py
 - .transcrever_detalhado
-- artista_de_rock
 - escrever_perfil
-- chave_da_extensao
 - normalizar
 - ._ouvir_turno
 - claudinho.pyw · Gravador
@@ -70,7 +68,6 @@
 - iniciar_atalho
 - README.md · painel
 - .acao_menu
-- virada_ultron
 - plano-ver-tela.md · atalhos
 - plano-ver-tela.md · resumir
 - painel.html · modo jogo
@@ -78,7 +75,7 @@
 - README.md · chat rápido
 
 ## God Nodes (most connected - your core abstractions)
-1. `Claudinho` - 135 edges
+1. `Claudinho` - 133 edges
 2. `Memoria` - 30 edges
 3. `Voz` - 30 edges
 4. `Balao` - 25 edges
@@ -96,8 +93,8 @@
   docs/plano-contexto-de-projeto.md → painel.html
 - `ver_tela(alvo) ferramenta MCP` --conceptually_related_to--> `Faixa nos olhos (vendado)`  [INFERRED]
   docs/plano-ver-tela.md → README.md
-- `carregar_config()` --calls--> `configurar()`  [EXTRACTED]
-  claudinho.pyw → motores.py
+- `trazer()` --calls--> `forcar_frente()`  [EXTRACTED]
+  claudinho.pyw → abrir.py
 - `carregar_config()` --calls--> `visual_valido()`  [EXTRACTED]
   claudinho.pyw → skins.py
 
@@ -109,47 +106,55 @@
 - **Ferramentas do servidor MCP do Claudinho** — claudinho_mcp, readme_mcp_do_claudinho, docs_plano_mcp_ferramentas_livres, docs_plano_mcp_ferramentas_com_confirmacao, docs_plano_ver_tela_ver_tela, docs_plano_orquestrador_rodar_tarefa [INFERRED 0.85]
 - **Júnior vê, confere no código e despacha correção pro Claude Code** — painel_modo_junior, docs_plano_ver_tela_ver_tela, docs_plano_orquestrador_medir_cor, docs_plano_contexto_de_projeto_conferir_no_codigo, docs_plano_orquestrador_rodar_tarefa, docs_plano_orquestrador_projetos_liberados [INFERRED 0.85]
 
-## Communities (63 total, 29 thin omitted)
+## Communities (60 total, 23 thin omitted)
 
 ### Community 0 - "Fala"
-Cohesion: 0.06
-Nodes (17): catalogo(), dividir_em_frases(), efeito_anime(), efeito_ultron(), eh_edge(), eh_kokoro(), Fala, trabalhar() (+9 more)
+Cohesion: 0.07
+Nodes (13): catalogo(), dividir_em_frases(), efeito_ultron(), eh_edge(), eh_kokoro(), Fala, trabalhar(), trabalhar() (+5 more)
 
 ### Community 1 - "musica.py · notificacoes.py"
-Cohesion: 0.06
-Nodes (31): trabalho(), trabalho(), resumir_notificacoes(), abrir_aba_nova(), assistir(), buscar(), consultar(), consultar_ext() (+23 more)
+Cohesion: 0.07
+Nodes (30): trabalho(), abrir_aba_nova(), assistir(), buscar(), consultar(), consultar_ext(), controlar(), _controlar() (+22 more)
 
 ### Community 2 - "carregar() polling /api/estado"
 Cohesion: 0.06
-Nodes (49): Token X-Token (__TOKEN__), FastMCP("claudinho") transporte stdio, Júnior revisor visual, medir_cor, acao() /api/acao, animar(), api() fetch com X-Token, /api/estado endpoint (+41 more)
+Nodes (48): FastMCP("claudinho") transporte stdio, Júnior revisor visual, medir_cor, acao() /api/acao, animar(), api() fetch com X-Token, /api/estado endpoint, atualizarVivos() (+40 more)
 
-### Community 3 - "frases.py · esquetes.py"
-Cohesion: 0.09
-Nodes (16): escolher(), fala(), final(), resultado_da_ideia(), sortear(), autoelogio(), categoria(), dados_do_dia() (+8 more)
+### Community 3 - "teclas.py"
+Cohesion: 0.14
+Nodes (13): achar_janela(), apertar(), _apertar(), catalogo(), _config(), entender(), esperar(), faixa() (+5 more)
 
 ### Community 4 - "Balao"
 Cohesion: 0.08
-Nodes (5): Balao, em_jpeg(), icone_enviar(), icone_mic(), paginar()
+Nodes (4): Balao, icone_enviar(), icone_mic(), paginar()
 
 ### Community 7 - "programas.py"
-Cohesion: 0.07
-Nodes (29): main(), texto_de(), ultimos(), _ler(), abrir(), achar(), _alvos_dos_atalhos(), _apps_iniciar() (+21 more)
+Cohesion: 0.08
+Nodes (24): abrir(), achar(), _alvos_dos_atalhos(), _apps_iniciar(), bloqueados(), esta_bloqueado(), exe_bloqueado(), _exes() (+16 more)
 
 ### Community 8 - ".estado_painel"
-Cohesion: 0.19
-Nodes (7): extensao_conectada(), configurar(), disponivel(), ollama_status(), _tem_modelo(), abre_com_windows(), claude_instalado()
+Cohesion: 0.27
+Nodes (6): extensao_conectada(), disponivel(), ollama_status(), _tem_modelo(), abre_com_windows(), claude_instalado()
+
+### Community 9 - "abrir.py"
+Cohesion: 0.20
+Nodes (10): abrir_programa(), abrir_site(), achar_atalho(), app_da_loja(), forcar_frente(), liberados(), main(), navegador_padrao() (+2 more)
 
 ### Community 11 - "claudinho_mcp.py"
-Cohesion: 0.05
-Nodes (38): trabalho(), abrir_programa(), abrir_projeto(), atalho(), atalho_confirmado(), atalhos_conhecidos(), esperar_janela(), listar_programas() (+30 more)
+Cohesion: 0.12
+Nodes (10): abrir_programa(), abrir_projeto(), atalho(), atalho_confirmado(), atalhos_conhecidos(), esperar_janela(), listar_programas(), rodar_rotina() (+2 more)
+
+### Community 12 - "json"
+Cohesion: 0.06
+Nodes (27): testar(), trabalho(), _celulas(), _tabela(), main(), texto_de(), ultimos(), _ler() (+19 more)
 
 ### Community 13 - "rodar_tarefa(projeto, instrucao)"
-Cohesion: 0.09
-Nodes (17): Plano: contexto de projeto (sessões do Claude Code) pro Júnior, AJUDANTE / ABRIR_NA_MAO (regex sobre comandos Bash), Gancho ao_usar_ferramenta, ChatClaude (processo do chat, flags), Ferramentas com confirmação (fechar_programa, copiar, rodar_script, criar_arquivo), --permission-prompt-tool stdio → responder_controle → pedir_permissao, Plano: MCP exclusivo do Claudinho, Windows-MCP (genérico, não usar) (+9 more)
+Cohesion: 0.25
+Nodes (6): Gancho ao_usar_ferramenta, projetos_liberados (config nome → pasta), rodar_tarefa(projeto, instrucao), Sessão headless claude -p stream-json (--resume), Avisos em fila (chat do Claude Code terminou), Hook Stop claudinho_notificar
 
 ### Community 14 - "claudinho.pyw · comentários"
-Cohesion: 0.10
-Nodes (10): caminho_do_navegador(), carregar_config(), escala(), gravar_json(), ler_json(), _LimitesBasicos, mestre_do_perfil_antigo(), MONITORINFO (+2 more)
+Cohesion: 0.09
+Nodes (13): caminho_do_navegador(), carregar_config(), chave_da_extensao(), _criar_job(), escala(), gravar_json(), ler_json(), _LimitesBasicos (+5 more)
 
 ### Community 17 - "consultas.js"
 Cohesion: 0.20
@@ -163,17 +168,21 @@ Nodes (12): Emo no rock, Música (controles de mídia do Windows), Skins (cores,
 Cohesion: 0.26
 Nodes (11): anotar(), carregada(), comecar(), descrever(), fazerPasso(), gravacao(), guardar(), mensagem() (+3 more)
 
-### Community 22 - "sistema.py"
-Cohesion: 0.19
-Nodes (11): testar(), aviso_ligado(), comando_cli(), comando_texto(), _dpapi(), _e_nosso(), guardar_segredo(), lancar() (+3 more)
+### Community 21 - ".__init__"
+Cohesion: 0.12
+Nodes (4): trazer(), cursor(), monitor(), listar()
 
-### Community 23 - "ChatSimples"
-Cohesion: 0.14
-Nodes (3): ChatAPI, ChatNenhum, ChatSimples
+### Community 22 - "sistema.py"
+Cohesion: 0.21
+Nodes (10): aviso_ligado(), comando_cli(), comando_texto(), _dpapi(), _e_nosso(), guardar_segredo(), lancar(), ler_segredo() (+2 more)
 
 ### Community 24 - "time"
-Cohesion: 0.07
-Nodes (34): abrir_programa(), abrir_site(), achar_atalho(), app_da_loja(), forcar_frente(), liberados(), main(), navegador_padrao() (+26 more)
+Cohesion: 0.05
+Nodes (36): ver_tela(), Claudecímetro (projeto antigo), Gasto de tokens da sessão, Registro de sessões ~/.claude/sessions/<pid>.json, Módulo sessoes.py (listar, em_foco, uso), Transcript ~/.claude/projects/<pasta>/<sessionId>.jsonl (message.usage), Ferramentas livres (abrir_site, pesquisar, abrir_programa, musica, volume, focar_janela, lembrete, modo_foco), Servidor HTTP local porta 47821 (/aviso, /lembrete, /foco) (+28 more)
+
+### Community 25 - ".comentar"
+Cohesion: 0.14
+Nodes (4): fora_da_barra(), limitar(), fala(), final()
 
 ### Community 27 - "claudinho.pyw · servidor"
 Cohesion: 0.25
@@ -187,29 +196,29 @@ Nodes (17): action, default_icon, default_popup, default_title, background, serv
 Cohesion: 0.33
 Nodes (10): abasDe(), ciclo(), consultar(), escolher(), executar(), PERMITIDO, player, playerVivo() (+2 more)
 
-### Community 31 - "comentar_tela"
-Cohesion: 0.33
-Nodes (3): comentar_musica(), comentar_tela(), tom_das_piadas()
+### Community 31 - "completar"
+Cohesion: 0.13
+Nodes (9): trabalho(), comentar_musica(), comentar_tela(), em_jpeg(), resumir_notificacoes(), sem_ia(), tom_das_piadas(), completar() (+1 more)
 
-### Community 32 - ".perguntar"
-Cohesion: 0.22
-Nodes (6): chave_api(), _cliente(), _completar_api(), _pedido_api(), rodar_ajudante(), _texto_da_resposta()
+### Community 32 - "Claudinho (mascote de mesa)"
+Cohesion: 0.32
+Nodes (7): Plano: contexto de projeto (sessões do Claude Code) pro Júnior, AJUDANTE / ABRIR_NA_MAO (regex sobre comandos Bash), Plano: MCP exclusivo do Claudinho, Plano: Claudinho orquestrador + Júnior revisor visual, Plano: olha o que está na tela e me responde, Claudinho (mascote de mesa), MCP do Claudinho (abrir_programa)
+
+### Community 33 - "--permission-prompt-tool stdio → responder_controle → pedir_permissao"
+Cohesion: 0.29
+Nodes (4): ChatClaude (processo do chat, flags), Ferramentas com confirmação (fechar_programa, copiar, rodar_script, criar_arquivo), --permission-prompt-tool stdio → responder_controle → pedir_permissao, Windows-MCP (genérico, não usar)
 
 ### Community 35 - "motores.py"
-Cohesion: 0.11
-Nodes (13): baixar_modelo(), ChatOllama, completar(), _completar_claude_code(), _completar_ollama(), env_limpo(), frases_completas(), _imagens_ollama() (+5 more)
+Cohesion: 0.09
+Nodes (19): baixar_modelo(), ChatAPI, ChatOllama, chave_api(), _cliente(), _completar_api(), _completar_claude_code(), _completar_ollama() (+11 more)
 
-### Community 36 - "conversa.html"
-Cohesion: 0.25
-Nodes (6): /api/conversa endpoint, atualizar() polling /api/conversa, bolha(), Janela de conversa (conversa.html), markdown() conversor, print_anexado
-
-### Community 37 - "plano-ver-tela.md"
-Cohesion: 0.25
-Nodes (7): PROMPT_SISTEMA, ImageGrab + em_jpeg (~1280 px, JPEG 80), FERRAMENTAS (motores.py) com tool_result de imagem, ver_tela(alvo) ferramenta MCP, Faixa nos olhos (vendado), Personalidade (Claudinho / Ultron), Piadas sobre a tela
+### Community 36 - "ver_tela(alvo) ferramenta MCP"
+Cohesion: 0.12
+Nodes (14): /api/conversa endpoint, atualizar() polling /api/conversa, bolha(), Janela de conversa (conversa.html), markdown() conversor, Token X-Token (__TOKEN__), PROMPT_SISTEMA, ImageGrab + em_jpeg (~1280 px, JPEG 80) (+6 more)
 
 ### Community 38 - "subprocess"
-Cohesion: 0.21
-Nodes (7): icone(), main(), main(), passo(), rodar_claude(), _vram_livre_mb(), abrir_com_windows()
+Cohesion: 0.22
+Nodes (6): icone(), main(), main(), passo(), _vram_livre_mb(), abrir_com_windows()
 
 ### Community 39 - "voz.py"
 Cohesion: 0.14
@@ -220,7 +229,7 @@ Cohesion: 0.20
 Nodes (3): limpar_ruido(), preparar(), repetitivo()
 
 ### Community 42 - "escrever_perfil"
-Cohesion: 0.25
+Cohesion: 0.33
 Nodes (3): escrever_perfil(), perfil_curto(), texto_do_mestre()
 
 ### Community 44 - "normalizar"
@@ -249,23 +258,23 @@ Nodes (3): Painel (painel.html), ~/.claudinho/config.json, Painel de configuraç
 
 ## Knowledge Gaps
 - **25 isolated node(s):** `Ferramentas com confirmação (fechar_programa, copiar, rodar_script, criar_arquivo)`, `Windows-MCP (genérico, não usar)`, `/api/estado endpoint`, `Modal de instalação da extensão`, `Pastas que o chat lê sem perguntar` (+20 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 396 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 395 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **23 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Claudinho` connect `Claudinho` to `.tick`, `Balao`, `.processar_eventos`, `.estado_painel`, `.talvez_comentar`, `.comentar_do_banco`, `claudinho_mcp.py`, `escrever_perfil`, `claudinho.pyw · comentários`, `entrada`, `.__init__`, `.desenhar`, `ChatSimples`, `.acao_menu`, `tela_cheia`, `claudinho.pyw · servidor`, `.comentar`?**
-  _High betweenness centrality (0.272) - this node is a cross-community bridge._
+- **Why does `Claudinho` connect `Claudinho` to `.parecida`, `Balao`, `.processar_eventos`, `.criar_chat`, `.estado_painel`, `.olhar_tela`, `json`, `claudinho.pyw · comentários`, `entrada`, `.__init__`, `.desenhar`, `.acao_menu`, `.tick`, `claudinho.pyw · servidor`, `.comentar`, `completar`?**
+  _High betweenness centrality (0.258) - this node is a cross-community bridge._
 - **What connects `Ferramentas com confirmação (fechar_programa, copiar, rodar_script, criar_arquivo)`, `Windows-MCP (genérico, não usar)`, `/api/estado endpoint` to the rest of the system?**
   _25 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Fala` be split into smaller, more focused modules?**
-  _Cohesion score 0.05727644652250146 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07439613526570048 - nodes in this community are weakly interconnected._
 - **Why does `Voz` connect `Voz` to `voz.py`, `.transcrever_detalhado`, `normalizar`, `._ouvir_turno`, `.__init__`, `._conversar`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+  _High betweenness centrality (0.050) - this node is a cross-community bridge._
 - **Should `musica.py · notificacoes.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.06428988895382817 - nodes in this community are weakly interconnected._
-- **Why does `Memoria` connect `memoria.py · Memoria` to `.__init__`, `programas.py`?**
-  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+  _Cohesion score 0.06766917293233082 - nodes in this community are weakly interconnected._
+- **Why does `Balao` connect `Balao` to `.processar_eventos`, `claudinho.pyw · comentários`?**
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **Should `carregar() polling /api/estado` be split into smaller, more focused modules?**
-  _Cohesion score 0.05660377358490566 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.058069381598793365 - nodes in this community are weakly interconnected._

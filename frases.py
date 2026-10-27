@@ -305,7 +305,6 @@ AUTOELOGIO_ITEM = [
     "{Item}: aprovado por mim! E espero que por você também!",
     "Será que esse {item} me deixa mais bonito? Eu acho que sim!",
 ]
-AUTOELOGIO_EMO = ["Até triste eu tento ser fofo… mas hoje tá difícil.", "Minha franja tá com sentimentos demais hoje."]
 
 
 # personalidade Ultron: IA vilã teatral (frases próprias, sem citar o filme). {app} = programa, {min} = minutos nele
@@ -344,9 +343,9 @@ def ultron(janela, minutos, recentes=()):
     return modelo, modelo.format(app=app, min=int(minutos))
 
 
-def autoelogio(itens, cor, emo=False, recentes=()):
+def autoelogio(itens, cor, recentes=()):
     """Uma frase dele se achando, usando o que está vestindo. Devolve (modelo, texto)."""
-    opcoes = AUTOELOGIO + AUTOELOGIO_COR + (AUTOELOGIO_ITEM if itens else []) + (AUTOELOGIO_EMO if emo else [])
+    opcoes = AUTOELOGIO + AUTOELOGIO_COR + (AUTOELOGIO_ITEM if itens else [])
     modelo = sortear(opcoes, recentes, {})
     item = random.choice(itens) if itens else ""
     return modelo, modelo.format(cor=cor, item=item, Item=item[:1].upper() + item[1:])

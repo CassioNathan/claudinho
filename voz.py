@@ -609,29 +609,25 @@ class Voz:
             self.ao_estado("fim")
             return
         espera, primeira = ESPERA_INICIAL, True
-        interrupcao, falou_resposta, uma_so = None, False, False
+        falou_resposta, uma_so = False, False
         # conversa por voz começando (e você não já veio com a pergunta): ele cumprimenta, pra você saber que abriu
         oi = self.saudacao() if (not inicio and self.fala and cfg.get("voz_fala", True)
                                  and cfg.get("voz_saudacao", True)) else None
         if oi:
             self.fala.falar(oi)
-            interrupcao = self._esperar_fala()   # microfone fechado enquanto ele fala; o fim da fala já é o sinal
+            self._esperar_fala()   # microfone fechado enquanto ele fala; o fim da fala já é o sinal
             falou_resposta = True
         while self.rodando and self.conversa_viva():
             if not (primeira and inicio):  # "Claudinho, que horas são?" numa frase só: já tem pergunta
                 self.ao_estado("ouvindo")
-                if interrupcao:     # você falou por cima dele: já está no meio da frase, sem sinal nem espera
-                    texto = self._ouvir_turno(espera, inicial=interrupcao)
-                else:
-                    if not falou_resposta:  # depois da voz dele não precisa do sinal: o fim da fala já avisa
-                        self._sinal("pronto")
-                    time.sleep(0.15 if falou_resposta else 0.45)  # o próprio tuk-tuk não pode entrar no que ele escuta
-                    self._limpar_fila()
-                    texto = self._ouvir_turno(espera)
+                if not falou_resposta:  # depois da voz dele não precisa do sinal: o fim da fala já avisa
+                    self._sinal("pronto")
+                time.sleep(0.15 if falou_resposta else 0.45)  # o próprio tuk-tuk não pode entrar no que ele escuta
+                self._limpar_fila()
+                texto = self._ouvir_turno(espera)
             else:
                 texto = inicio
                 self.ao_texto(texto)
-            interrupcao = None
             if texto is INCERTO:    # não entendi: pede pra repetir sem gastar o turno
                 self.ao_estado("nao_entendi")
                 self._sinal("nao_entendi")
@@ -651,42 +647,26 @@ class Voz:
             # a resposta pode estar sendo falada (em fluxo, desde a primeira frase): espera acabar, ou você interromper
             falou_resposta = bool(self.fala and self.config().get("voz_fala", True) and self.fala.ocupada)
             if falou_resposta:
-                interrupcao = self._esperar_fala()
+                self._esperar_fala()
             if not self.config().get("voz_continua", False):   # uma pergunta por chamada: respondeu, acabou
                 uma_so = True
                 break
         self._encerrar(primeira, som=not uma_so)
 
     def _esperar_fala(self):
-        """Enquanto ele fala o microfone não vai pro Whisper (senão ele se ouve). Com "poder interromper" ligado (use
-        fone!), voz forte e contínua por cima corta a fala e devolve esses blocos como o começo da sua frase."""
+        """Enquanto ele fala o microfone não vai pro Whisper (senão ele se ouve): o que chega é jogado fora."""
         self.ao_estado("falando")
         self.estado = "falando"
         self._limpar_fila()
-        interromper = bool(self.config().get("voz_interromper")) and bool(self.config().get("voz_continua"))
-        janela = np.zeros(0, dtype="float32")
-        seguidos, blocos = 0, []
         while self.rodando and self.fala.ocupada:
             if not self.conversa_viva():     # fechou o chat no meio: para de falar
                 self.fala.parar()
-                return None
+                return
             try:
-                bloco = self.fila.get(timeout=0.2)
+                self.fila.get(timeout=0.2)
             except queue.Empty:
                 continue
-            if not interromper:
-                continue
-            janela = np.concatenate([janela, bloco])[-TAXA:]
-            if self._prob_voz(janela) > 0.75:
-                seguidos += 1
-                blocos.append(bloco)
-                if seguidos >= 3:            # ~0,4 s de voz seguida: interrompeu
-                    self.fala.parar()
-                    return blocos
-            else:
-                seguidos, blocos = 0, []
         self._limpar_fila()
-        return None
 
     def _encerrar(self, sem_resposta, som=True):
         """Fim da conversa por voz: volta a escutar só o apelido."""
@@ -700,7 +680,7 @@ class Voz:
         self._limpar_fila()
         self.estado = "ouvindo_apelido"
 
-    def _ouvir_turno(self, espera, inicial=None):
+    def _ouvir_turno(self, espera):
         """Escuta uma fala. Devolve o texto, INCERTO (não entendi) ou None (não falou nada dentro de `espera` s, ou
         mandou cancelar).
 
@@ -717,8 +697,6 @@ class Voz:
         feito_ate = 0                       # até que bloco já mandei transcrever
         pico_turno = 0.0                    # o pico mais alto de um bloco COM voz: ruído de fundo não passa do piso
         tr = {"rodando": False, "ativo": True, "resultado": None, "aberta": False}   # a thread do texto parcial
-        if inicial:  # você interrompeu a fala dele: esses blocos já são o começo da sua frase
-            buffer, falou, ultimo_voz = list(inicial), True, len(inicial)
 
         def transcrever_em_paralelo(audio, n, beam):
             try:

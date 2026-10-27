@@ -82,7 +82,6 @@ CONFIG_PADRAO = {
     "borda": True,                       # contorno fininho em volta dele (cabelo preto não some no fundo escuro)
     "borda_forca": 28,                   # 10 a 100: quão visível é o contorno (menor = mais discreto, tipo semitransparente)
     "emojis": True,                      # reações em pixel art que sobem do lado dele de vez em quando
-    "emo_rock": True,                    # tocou rock: vira emo um tempinho (franja, munhequeira, headbang)
     "visual": dict(skins.VISUAL_PADRAO),  # skin: cor do corpo + um adereço por espaço (escolhe no painel)
     "personalidade": "claudinho",        # "claudinho" ou "ultron" (piadas, banco de frases e chat)
     "motor": "claude_code",              # quem pensa: claude_code, api (chave da Anthropic), ollama (local), nenhum
@@ -95,14 +94,12 @@ CONFIG_PADRAO = {
     "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
-    "voz_estilo": "normal",              # "normal" ou "anime" (garotinha de anime: tom agudo e brilhante)
     "voz_limpar": True,                  # ganho automático (na faixa) + filtro de ruído no microfone
     "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
     "voz_travar_nivel": True,            # depois da chamada, só conta voz tão alta quanto ela (TV e gente ao fundo não)
     "voz_volume": 80,                    # 0 a 100
-    "voz_tom": 0,                        # voz da Microsoft: quanto mais agudo (em Hz, 0 a 40); as outras vozes ignoram
+    "voz_tom": 0,                        # quanto mais agudo (0 a 40), em qualquer voz
     "voz_continua": True,                # por turnos: depois de responder ele abre pra você falar de novo (sem chamar outra vez)
-    "voz_interromper": False,            # conversa "natural" (EXPERIMENTAL): falar por cima corta a fala dele; só com fone
     "voz_microfone": "",                 # parte do nome do microfone ("" = o padrão do Windows)
     "voz_sons": True,                    # tuk-tuk quando pode falar, tuk-tuk grave quando para de ouvir
     "voz_modelo_apelido": "base",        # Whisper que escuta o apelido (leve, na CPU)
@@ -131,8 +128,8 @@ ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "emojis", "borda", "borda_forca",
-                 "emo_rock", "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
-                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_estilo", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_interromper", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
+                 "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -515,6 +512,10 @@ def carregar_config():
         salvo["mestre"] = mestre_do_perfil_antigo()
     if salvo.pop("modo_maldoso", False):  # o modo maldoso virou parte do Ultron (vilão teatral que zoa sem dó)
         salvo["personalidade"] = "ultron"
+    if salvo.pop("voz_estilo", "normal") == "anime" and not salvo.get("voz_tom"):  # o estilo anime virou o tom da voz
+        salvo["voz_tom"] = 40
+    for velha in ("emo_rock", "voz_interromper"):  # saíram do painel
+        salvo.pop(velha, None)
     if salvo.get("voz_apelidos") == ["Claudinho"]:  # só o nome acordava em qualquer comentário: agora é frase de chamada
         salvo.pop("voz_apelidos")
     cfg = dict(CONFIG_PADRAO, **salvo)
@@ -910,17 +911,6 @@ PROMPT_NOTIFICACOES = (
     "Pode fechar com uma piadinha curta se couber. Responda só o resumo.")
 
 
-def artista_de_rock(artista, titulo=""):
-    """O Haiku diz se o artista é rock (punk, metal, emo, grunge, alternativo…). Uma chamada curta, só texto."""
-    prompt = (f"O artista musical \"{artista}\" (música: \"{titulo}\") é de rock ou de um subgênero de rock "
-              "(punk, metal, emo, grunge, hard rock, alternativo, post-hardcore…)? Responda só sim ou não.")
-    return motores.completar(prompt, max_tokens=20, timeout=60).strip().lower().startswith("sim")
-
-
-EMO = ["Ninguém me entende… 🖤", "Essa música fala de mim.", "Não é uma fase, mãe.",
-       "Meu código também tem traumas.", "Eu sinto tudo em Lá menor.",
-       "Essa é pra quem já levou um merge conflict no coração.", "Hoje eu só compilo em preto.",
-       "Deixa eu sofrer em paz, tá tocando a minha música.", "Minha franja tem mais personalidade que meu commit."]
 # pra onde ele olha em cada esquete: (fase, t) -> (olhar_x, olhar_y)
 OLHAR_ESQUETE = {
     "build_quebrou": lambda f, t: (0, 1),
@@ -1671,7 +1661,6 @@ class Claudinho:
         # escolhida no painel ("Esquete agora"); CLAUDINHO_ESQUETE=inseto (por ex.) testa uma logo de cara
         self.esquete_forcada = os.environ.get("CLAUDINHO_ESQUETE")
         self.frente = -1  # lado pra onde está virado (franja, aba do boné… seguem)
-        self.emo_ate, self.emo_musica = 0, None  # rock tocando: modo emo até essa hora
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
         self.S = escala()
@@ -1960,11 +1949,6 @@ class Claudinho:
             pulo = 0
         esq = self.esquete["nome"] if self.esquete and not carregado else None
         fase = (time.time() - self.esquete["inicio"]) / esquetes.ESQUETES[esq]["duracao"] if esq else 0
-        m = self.musica
-        emo = (time.time() < self.emo_ate and m and m["tocando"]
-               and (m["titulo"], m["artista"]) == self.emo_musica and not carregado)
-        if emo and not self.movendo and not esq and pulo == 0:  # headbang: abaixa a cabeça no ritmo
-            pulo = -1 if (self.t // 2) % 4 == 0 else 0
         metal = virada_ultron(fase, self.t) if esq == "ultron" else 0.0  # 0 = ele mesmo, 1 = metal
         if metal == 1.0:
             pulo = 1 if (self.t // 8) % 2 else 0  # flutuando, ameaçador
@@ -2130,8 +2114,7 @@ class Claudinho:
                     px(col, l1, olho)
                 px(col, l2, olho)
 
-        # skin: adereços em camadas; tocando rock, o pacote emo vai por cima do que estiver escolhido
-        vestido = dict(visual, **skins.PACOTES["emo"]["aderecos"]) if emo else visual
+        vestido = visual  # skin: adereços em camadas
         sem = set()
         if self.cfg["vendado"]:
             sem.add("olhos")  # a venda ganha dos óculos
@@ -2349,20 +2332,6 @@ class Claudinho:
         except Exception:
             pass
 
-    def e_rock(self, m):
-        """A música é rock? Guarda a resposta por artista no banco: o Haiku só é chamado pra artista novo."""
-        if not self.cfg["emo_rock"] or not m.get("artista") or not tem_ia():
-            return False
-        generos = self.mem.meta("artistas_rock", {})
-        artista = m["artista"].strip().lower()
-        if artista not in generos:
-            try:
-                generos[artista] = artista_de_rock(m["artista"], m["titulo"])
-            except Exception:
-                return False  # sem resposta: não guarda, tenta de novo na próxima
-            self.mem.guardar_meta("artistas_rock", generos)
-        return generos[artista]
-
     def acompanhar_musica(self):
         anterior = None
         while True:
@@ -2370,7 +2339,6 @@ class Claudinho:
             m = self.musica
             chave = m and (m["titulo"], m["artista"])
             if m and m["tocando"] and anterior is not None and chave != anterior:
-                m["rock"] = self.e_rock(m)
                 self.eventos.put(("musica_nova", m))  # começou outra música
             if m:
                 anterior = chave
@@ -2584,9 +2552,7 @@ class Claudinho:
             self.fala.baixar(acao.split(":", 1)[1])
         elif acao == "voz_testar":  # botão "Ouvir a voz" do painel
             self.fala.parar()
-            self.fala.falar("Oi oi! Eu sou o Claudinho! Vamos conversar? Eu falo assim, olha só!"
-                            if self.cfg["voz_estilo"] == "anime" and self.cfg["personalidade"] != "ultron" else
-                            "Oi! Eu sou o Claudinho. Quando a gente conversar por voz, eu respondo assim."
+            self.fala.falar("Oi! Eu sou o Claudinho. Quando a gente conversar por voz, eu respondo assim."
                             if self.cfg["personalidade"] != "ultron" else
                             "Saudações, humano. Esta é a voz que vai substituir a sua, um dia. Brincadeira. Talvez.")
         elif acao == "teste":
@@ -2646,8 +2612,6 @@ class Claudinho:
             valor = max(0, min(40, int(valor)))
         elif chave == "voz_reconhecimento":
             valor = valor if valor in stt.PROVEDORES else "local"
-        elif chave == "voz_estilo":
-            valor = valor if valor in fala.ESTILOS else "normal"
         elif chave == "voz_voz":
             valor = valor if valor in fala.VOZES and fala.instalada(valor) else self.cfg["voz_voz"]
         elif chave == "voz_encerrar":
@@ -2704,8 +2668,6 @@ class Claudinho:
             self.prox_comentario = time.time() + random.uniform(*valor) * 60
         elif chave == "ver_musica" and not valor:
             self.musica = None
-        elif chave == "emo_rock" and not valor:
-            self.emo_ate = 0
         elif chave == "esquetes" and not valor:
             self.largar_esquete()
         elif chave == "emojis" and valor:
@@ -3675,13 +3637,9 @@ class Claudinho:
             self.fechar_balao()
         self.olhar_tela()
 
-    def emo_agora(self):
-        m = self.musica
-        return bool(time.time() < self.emo_ate and m and m["tocando"] and (m["titulo"], m["artista"]) == self.emo_musica)
-
     def retrato(self):
-        """Como ele está agora (cor, adereços, emo, venda), numa frase: é assim que ele "se enxerga"."""
-        return skins.autorretrato(self.cfg["visual"], self.emo_agora(), self.cfg["vendado"])
+        """Como ele está agora (cor, adereços, venda), numa frase: é assim que ele "se enxerga"."""
+        return skins.autorretrato(self.cfg["visual"], self.cfg["vendado"])
 
     def sortear_alvo(self, area_total):
         """Do que a piada vai falar: o que ele faz, o que está perto do mouse ou perto do Claudinho.
@@ -3752,7 +3710,7 @@ class Claudinho:
         elif random.random() < 0.12:  # autoconfiança: de vez em quando ele se elogia
             modelo, texto = frases.autoelogio(skins.itens_vestidos(self.cfg["visual"]),
                                               skins.CORES[self.cfg["visual"]["cor"]]["nome"].lower(),
-                                              self.emo_agora(), self.mem.modelos_recentes(40))
+                                              self.mem.modelos_recentes(40))
         else:
             modelo, texto = frases.escolher(janela, minutos, self.mem.modelos_recentes(40), self.modo_maldoso,
                                             self.avisos_de_hoje(), self.cfg["modo_tdah"], self.notas_do_banco(),
@@ -4190,13 +4148,7 @@ class Claudinho:
                                         f"apertando {entrada.get('teclas', '')}" if "__atalho" in nome else
                                         "fazendo a rotina no site" if "rodar_rotina" in nome else True)
             elif ev[0] == "musica_nova":
-                if ev[1].get("rock") and self.cfg["emo_rock"]:  # rock: vira emo um tempinho e solta um desabafo
-                    self.emo_ate = time.time() + 45
-                    self.emo_musica = (ev[1]["titulo"], ev[1]["artista"])
-                    if not (self.balao or self.entrada):
-                        self.comentar(random.choice(EMO), duracao=6)
-                else:
-                    self.talvez_comentar_musica(ev[1])
+                self.talvez_comentar_musica(ev[1])
             elif ev[0] == "comentario_musica":
                 self.comentando = False
                 if ev[1] and not self.parecida(ev[1]):

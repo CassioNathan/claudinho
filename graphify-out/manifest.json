@@ -6,9 +6,9 @@
     "semantic_hash": ""
   },
   "claudinho.pyw": {
-    "mtime": 1793047060.110016,
-    "seen": 1793047152.506934,
-    "ast_hash": "4713d8cbdd3b71bdc28140e4cc6a68c9",
+    "mtime": 1793109572.9659073,
+    "seen": 1793109717.3954701,
+    "ast_hash": "3d24a17415ebeebdb3856e0c4e7e555f",
     "semantic_hash": "",
     "language": "language=.py"
   },
@@ -73,10 +73,10 @@
     "semantic_hash": "339cd0e43ff0a5a368de5085cfea28ce"
   },
   "fala.py": {
-    "mtime": 1793014170.177501,
-    "seen": 1793016152.4837081,
-    "ast_hash": "d761df7ac8efbae78aefa66189385f7d",
-    "semantic_hash": "d761df7ac8efbae78aefa66189385f7d"
+    "mtime": 1793109573.2382312,
+    "seen": 1793109717.3955562,
+    "ast_hash": "ad40418f66c93489c9aab30ba4cd10f4",
+    "semantic_hash": ""
   },
   "formatar.py": {
     "mtime": 1792777565.1215014,
@@ -85,9 +85,9 @@
     "semantic_hash": "dcd525a14788525809777071c9499687"
   },
   "frases.py": {
-    "mtime": 1793047038.3179245,
-    "seen": 1793047152.5070052,
-    "ast_hash": "9837cc6369446abcfe22dc9981c40554",
+    "mtime": 1793109573.0666404,
+    "seen": 1793109717.3955677,
+    "ast_hash": "13f921e1f80c4a58ee0815bd6cfcc9f5",
     "semantic_hash": ""
   },
   "hook/claudinho_notificar.py": {
@@ -145,9 +145,9 @@
     "semantic_hash": ""
   },
   "skins.py": {
-    "mtime": 1793046970.0743878,
-    "seen": 1793047152.507053,
-    "ast_hash": "da27c13526cb96faf4d97d9ed912a2f2",
+    "mtime": 1793109572.9968376,
+    "seen": 1793109717.3956318,
+    "ast_hash": "0b95c52d7c16cce4178209a06513b710",
     "semantic_hash": ""
   },
   "stt.py": {
@@ -157,15 +157,15 @@
     "semantic_hash": "453b3cdce36e3dd141a3b02dbdfadc01"
   },
   "voz.py": {
-    "mtime": 1793014170.183402,
-    "seen": 1793016152.4837596,
-    "ast_hash": "84b59dc06ba7879736105d0e6eb2dbc2",
-    "semantic_hash": "84b59dc06ba7879736105d0e6eb2dbc2"
+    "mtime": 1793109589.5143416,
+    "seen": 1793109717.3956547,
+    "ast_hash": "fc99ce1d62d19db5be39898e1cd542af",
+    "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793047148.7906785,
-    "seen": 1793047152.5070732,
-    "ast_hash": "34e050a3879af4891664c7fcab4362f7",
+    "mtime": 1793109618.6585429,
+    "seen": 1793109717.3956606,
+    "ast_hash": "222a251274e72047e7ca171ce5e45329",
     "semantic_hash": ""
   },
   "conversa.html": {
@@ -199,9 +199,9 @@
     "semantic_hash": ""
   },
   "painel.html": {
-    "mtime": 1793047068.7928374,
-    "seen": 1793047152.5071032,
-    "ast_hash": "cb9ddfde78cdc5a9729ac61de6db46a5",
+    "mtime": 1793109694.967663,
+    "seen": 1793109717.3957024,
+    "ast_hash": "1a762149702bf9c7a13c46db07f5aa62",
     "semantic_hash": ""
   },
   "requirements.txt": {

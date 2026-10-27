@@ -30,9 +30,7 @@ VOZES = {  # id do Piper → nome que aparece no painel
     "edge:pt-BR-AntonioNeural": "Antônio (Microsoft, online)",
 }
 VOZ_PADRAO = "pt_BR-faber-medium"
-ESTILOS = {"normal": "Normal", "anime": "Garotinha de anime 🌸"}   # as vozes do Piper em português são todas masculinas
-ANIME_FATOR_KOKORO = 1.25   # a Dora já é feminina: só um toquinho de tom (≈ +4 semitons) pro jeito de anime
-ANIME_FATOR = 1.6      # quanto o tom sobe (≈ +8 semitons): o Faber vai de ~150-180 Hz pra ~245 Hz, tom de voz de menina
+TOM_MAXIMO = 1.6   # o tom no máximo (40) sobe ≈ +8 semitons: o Faber vai de ~150-180 Hz pra ~245 Hz
 PASTA = Path.home() / ".claudinho" / "vozes"
 KOKORO_PASTA = PASTA / "kokoro"
 _KOKORO_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
@@ -107,10 +105,14 @@ def so_o_comeco(texto, limite):
     return " ".join(saida)
 
 
-def efeito_anime(audio, fator=ANIME_FATOR):
-    """Garotinha de anime: a fala é sintetizada mais devagar (length_scale = ANIME_FATOR) e tocada mais rápido, então
-    o tom sobe e o ritmo volta ao normal (o timbre fica mais agudo e "pequeno", de brinquedo). Um realce leve nos agudos
-    deixa a voz mais brilhante e animada."""
+def fator_do_tom(tom):
+    """O tom do painel (0 a 40) vira o quanto a voz local sobe: 0 = como ela é, 40 = TOM_MAXIMO."""
+    return 1.0 + max(0, min(40, int(tom or 0))) / 40 * (TOM_MAXIMO - 1.0)
+
+
+def subir_tom(audio, fator):
+    """A fala é sintetizada mais devagar (length_scale = fator) e tocada mais rápido, então o tom sobe e o ritmo volta
+    ao normal (o timbre fica mais agudo e "pequeno"). Um realce leve nos agudos deixa a voz mais brilhante."""
     n = int(len(audio) / fator)
     if n < 2:
         return audio
@@ -313,23 +315,23 @@ class Fala:
                     time.sleep(0.05)
                 if not self.voz_nome or versao != self.versao:
                     continue
-                ultron = self.config().get("personalidade") == "ultron"   # o vilão manda mais que o estilo da voz
-                anime = not ultron and self.config().get("voz_estilo") == "anime" and not eh_edge(self.voz_nome)
+                ultron = self.config().get("personalidade") == "ultron"   # o vilão manda mais que o tom da voz
+                fator = 1.0 if ultron else fator_do_tom(self.config().get("voz_tom"))   # a Microsoft sobe o tom lá
+                agudo = fator > 1.0
                 if eh_edge(self.voz_nome):
                     audio, taxa = self._sintetizar_edge(frase, self.voz_nome.split(":", 1)[1])
                     if audio is None:
                         continue
                 elif eh_kokoro(self.voz_nome):
-                    fator = ANIME_FATOR_KOKORO if anime else 1.0   # fala mais devagar e depois sobe o tom: o ritmo volta
                     audio, taxa = self.kokoro.create(frase, voice=self.voz_nome.split(":", 1)[1], speed=1.0 / fator,
                                                      lang="pt-br")
                     audio = audio.astype("float32")
-                    if anime:
-                        audio = efeito_anime(audio, fator)
+                    if agudo:   # fala mais devagar e depois sobe o tom: o ritmo volta
+                        audio = subir_tom(audio, fator)
                 else:
-                    if anime:
+                    if agudo:
                         from piper import SynthesisConfig
-                        ajuste = SynthesisConfig(length_scale=ANIME_FATOR, noise_scale=0.75, noise_w_scale=0.9)
+                        ajuste = SynthesisConfig(length_scale=fator)
                         pedacos = [c.audio_float_array for c in self.voz.synthesize(frase, ajuste)]
                     else:
                         pedacos = [c.audio_float_array for c in self.voz.synthesize(frase)]
@@ -337,8 +339,8 @@ class Fala:
                         continue
                     audio = np.concatenate(pedacos).astype("float32")
                     taxa = self.voz.config.sample_rate
-                    if anime:
-                        audio = efeito_anime(audio)
+                    if agudo:
+                        audio = subir_tom(audio, fator)
                 if versao != self.versao:
                     continue
                 volume = max(0, min(100, int(self.config().get("voz_volume", 80)))) / 100

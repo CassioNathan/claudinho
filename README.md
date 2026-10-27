@@ -35,7 +35,7 @@ terminam e solta piadas sobre o que está na tela.
   ações e atalhos. A API dele só aceita pedidos com o token embutido na página.
 - **Voz 🎤🔊:** chame por uma frase ("Ei Claudinho", configurável, só texto) e o chat abre ouvindo, com uma faixa de áudio ao vivo. Tudo local:
   Whisper (faster-whisper) escuta e o Piper fala. A conversa é contínua: ele responde falando (já na primeira frase),
-  volta a ouvir sozinho e encerra depois de um tempo sem você falar. Com fone dá pra interrompê-lo falando por cima.
+  volta a ouvir sozinho e encerra depois de um tempo sem você falar. Um controle de tom deixa qualquer voz mais aguda.
   Ele fala qualquer resposta do chat (o 🔊 do balão liga e desliga; na digitada só o começo é falado) e dá pra escolher a voz. A voz (~60 MB) fica em `~/.claudinho/vozes`
   (`python -m piper.download_voices pt_BR-faber-medium --download-dir ~/.claudinho/vozes`).
 - **Skins:** uma cor (12, incluindo arco-íris e peixinho) e um adereço por espaço (cabeça, olhos, rosto, pescoço,
@@ -69,7 +69,7 @@ terminam e solta piadas sobre o que está na tela.
   teatral, frases próprias): muda o tom das piadas
   do Haiku, o banco de frases e o jeito de falar no chat (que continua ajudando de verdade; vai nas instruções fixas
   do chat, sem custo por mensagem). Combina com a cor Metal de olhos vermelhos / pacote Ultron.
-- **Autoconfiança 😎:** ele sabe como está (cor, adereços, emo, venda) e onde aparece no print. De vez em quando a
+- **Autoconfiança 😎:** ele sabe como está (cor, adereços, venda) e onde aparece no print. De vez em quando a
   piada é ele se gabando (no Haiku e no banco de frases), comenta quando você troca a roupa dele, e se aparecer o
   logo do Claude/Claude Code na tela ele reage ("esse sou eu", "meu irmão gêmeo", "isso é um espelho?").
 - **Motor de IA 🧠** (painel → Sistema): quem pensa no chat, nas piadas olhando a tela e nos resumos —
@@ -83,8 +83,6 @@ terminam e solta piadas sobre o que está na tela.
 - **Prioridade das falas:** aviso, coisa que você pediu e erro nunca são atropelados (nem enquanto você lê);
   piada sai da frente pra eles; mensagem de estado (vendei, modo ligado…) é descartável e é trocada na hora. Liga/desliga no menu; "Esquete agora 🎭" roda uma na hora.
   Pra testar uma específica: `CLAUDINHO_ESQUETE=inseto` antes de abrir.
-- **Emo no rock 🖤:** começou uma música de rock, ele vira emo uns 45 s (franja, mecha rosa,
-  munhequeira, headbang) e solta um desabafo. Quem decide se é rock é o Haiku, uma vez por artista (fica guardado).
 - **Conversa:** no balão dá pra anexar um print (aparece uma miniatura dele) da janela que você está usando e abrir
   "ver conversa" com o histórico inteiro. Notificação ou outro programa pulando na frente não fecha
   a conversa; só clicar fora.

@@ -215,7 +215,7 @@ def itens_vestidos(visual):
     return [ADERECOS[visual[e]]["nome"].lower() for e in ESPACOS if visual.get(e) in ADERECOS]
 
 
-def autorretrato(visual, emo=False, vendado=False):
+def autorretrato(visual, vendado=False):
     """Como ele está agora, numa frase (vai pro Haiku e pro chat: é assim que ele "se enxerga")."""
     cor = CORES.get(visual.get("cor"), CORES["laranja"])
     partes = [f"corpinho pixelado cor {cor['nome'].lower()}" if visual.get("cor") != "laranja"
@@ -223,8 +223,6 @@ def autorretrato(visual, emo=False, vendado=False):
     itens = itens_vestidos(visual)
     if itens:
         partes.append("usando " + ", ".join(itens))
-    if emo:
-        partes.append("no modo emo (tá tocando rock: franja e munhequeira)")
     if vendado:
         partes.append("com uma faixa nos olhos")
     return ", ".join(partes)

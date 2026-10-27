@@ -46,7 +46,18 @@
   }
   nav a:hover { background: #2c2b28; color: var(--texto); }
   nav a.ativo { background: rgba(217, 119, 87, .14); color: var(--laranja2); }
-  nav a .ic { width: 20px; text-align: center; }
+  nav a .ic, .aba .ic { width: 20px; text-align: center; }
+  /* abas: só a aberta mostra as suas seções (na lateral e no conteúdo) */
+  .aba {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; margin-top: 2px;
+    color: var(--texto); font-weight: 600; cursor: pointer; transition: .15s; user-select: none;
+  }
+  .aba:hover { background: #2c2b28; }
+  .aba.ativa { background: rgba(217, 119, 87, .14); color: var(--laranja2); }
+  .sub-nav { display: none; margin: 2px 0 6px 18px; padding-left: 8px; border-left: 1px solid #34332f; }
+  .aba.ativa + .sub-nav { display: block; }
+  .sub-nav a { padding: 6px 10px; font-size: 13px; }
+  .sub-nav a.ativo { background: none; }
   .rodape-lateral { margin-top: auto; padding: 12px; color: var(--apagado); font-size: 12px; }
   .rodape-lateral .musica { color: var(--texto); display: block; margin-top: 4px; white-space: nowrap;
                             overflow: hidden; text-overflow: ellipsis; }
@@ -104,8 +115,9 @@
 
   /* ---------- visual ---------- */
   .visual { display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: start; }
+  .coluna-palco { position: sticky; top: 0; }
   .palco {
-    position: sticky; top: 0; background: radial-gradient(120% 90% at 50% 0%, #3a2e28 0%, #2a2927 60%);
+    background: radial-gradient(120% 90% at 50% 0%, #3a2e28 0%, #2a2927 60%);
     border: 1px solid #3b3833; border-radius: 18px; padding: 22px 18px 18px; text-align: center;
   }
   .palco canvas { image-rendering: pixelated; display: block; margin: 6px auto 0; }
@@ -216,19 +228,32 @@
     <div><h1>Claudinho</h1><small>configurações</small></div>
   </div>
   <nav id="nav">
-    <a data-alvo="mestre"><span class="ic">👑</span>Meu Mestre</a>
-    <a data-alvo="visual"><span class="ic">🎨</span>Visual</a>
-    <a data-alvo="movimento"><span class="ic">🚶</span>Movimento</a>
-    <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
-    <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
-    <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
-    <a data-alvo="voz"><span class="ic">🎤</span>Voz</a>
-    <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
-    <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
-    <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
-    <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
-    <a data-alvo="rotinas_sec"><span class="ic">🌐</span>Rotinas de sites</a>
-    <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
+    <div class="aba" data-aba="jeito"><span class="ic">🐟</span>Jeito dele</div>
+    <div class="sub-nav">
+      <a data-alvo="mestre"><span class="ic">👑</span>Meu Mestre</a>
+      <a data-alvo="visual"><span class="ic">🎨</span>Visual</a>
+      <a data-alvo="movimento"><span class="ic">🚶</span>Movimento</a>
+      <a data-alvo="voz"><span class="ic">🎤</span>Voz</a>
+    </div>
+    <div class="aba" data-aba="diversao"><span class="ic">🎉</span>Diversão</div>
+    <div class="sub-nav">
+      <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
+      <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
+      <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
+    </div>
+    <div class="aba" data-aba="faz"><span class="ic">🛠️</span>Faz por mim</div>
+    <div class="sub-nav">
+      <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
+      <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
+      <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
+      <a data-alvo="rotinas_sec"><span class="ic">🌐</span>Rotinas de sites</a>
+    </div>
+    <div class="aba" data-aba="sistema"><span class="ic">🔒</span>Privacidade e sistema</div>
+    <div class="sub-nav">
+      <a data-alvo="privacidade"><span class="ic">🙈</span>Privacidade</a>
+      <a data-alvo="memoria"><span class="ic">🧠</span>Memória</a>
+      <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
+    </div>
   </nav>
   <div class="cartao-ext">
     <div class="topo-ext">🧩 <b>Extensão do navegador</b></div>
@@ -259,6 +284,7 @@
     <h2>🎨 Visual</h2>
     <p class="sub">Uma cor e um adereço por espaço. Combina do jeito que quiser — ele já usa na hora.</p>
     <div class="visual">
+      <div class="coluna-palco">
       <div class="palco">
         <div class="nome-skin" id="nomeSkin">clássico</div>
         <canvas id="previa" width="272" height="160"></canvas>
@@ -268,6 +294,17 @@
           <button class="botao" id="sortear">🎲 Sortear</button>
           <button class="botao" id="limparVisual">Tirar tudo</button>
         </div>
+      </div>
+      <div class="cartao" style="margin-top:14px">
+        <div class="linha">
+          <div class="info"><div class="titulo">Bordinha branca ⚪</div><div class="desc">Contorno de 1 px que destaca ele do fundo escuro.</div></div>
+          <label class="chave"><input type="checkbox" data-cfg="borda"><span></span></label>
+        </div>
+        <div class="linha" style="flex-wrap:wrap;row-gap:8px">
+          <div class="info" style="flex-basis:100%"><div class="titulo">Força da bordinha</div><div class="desc">Menos = mais discreto, quase transparente.</div></div>
+          <input type="range" min="10" max="100" step="5" id="bordaForca" style="flex:1"><span class="valor" id="bordaForcaValor"></span>
+        </div>
+      </div>
       </div>
       <div>
         <div class="grupo"><h3>Cor</h3><div class="cores" id="cores"></div></div>
@@ -371,28 +408,8 @@
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Fica emo quando toca rock 🖤</div><div class="desc">Veste o pacote emo por cima da skin por uns 45 s e solta um desabafo.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="emo_rock"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Bordinha branca ⚪</div><div class="desc">Um contorno de 1 px que faz ele se destacar do fundo (ajuda com cabelo preto, por exemplo).</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="borda"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Força da bordinha</div><div class="desc">Menos = mais discreto, quase transparente.</div></div>
-        <input type="range" min="10" max="100" step="5" id="bordaForca"><span class="valor" id="bordaForcaValor"></span>
-      </div>
-      <div class="linha">
         <div class="info"><div class="titulo">Reações com emojis ✨</div><div class="desc">Emojis de pixel que sobem do lado dele.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emojis"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Faixa nos olhos 🙈</div><div class="desc">Não tira nenhum print da tela, só banco de frases.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="vendado"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Olhar a tela quando eu pedir 👀</div><div class="desc">"Olha a tela e me responde": ele tira o print sozinho e manda pra IA (só quando você pede, com aviso no balão).</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="ver_tela"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
@@ -470,12 +487,7 @@
         <select id="vozVoz" style="max-width:240px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Estilo da voz</div><div class="desc">As vozes em português são masculinas; "Garotinha de anime 🌸" sobe
-          o tom e deixa a voz mais aguda e brilhante. (Na personalidade Ultron a voz metálica manda.)</div></div>
-        <div class="segmentos" data-cfg="voz_estilo"><button data-v="normal">Normal</button><button data-v="anime">Anime 🌸</button></div>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Tom da voz 🎚️</div><div class="desc">Deixa a voz da Microsoft (Thalita, Francisca, Antônio) mais aguda. Não muda as outras vozes.</div></div>
+        <div class="info"><div class="titulo">Tom da voz 🎚️</div><div class="desc">Deixa a voz mais aguda, seja qual for. No máximo vira voz de desenho animado. (Na personalidade Ultron a voz metálica manda.)</div></div>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" min="0" max="40" step="5" id="vozTom"><span class="valor" id="vozTomValor"></span>
         </div>
@@ -492,10 +504,6 @@
         <label class="chave"><input type="checkbox" data-cfg="voz_continua"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Conversa natural 🎧 (experimental)</div><div class="desc">Falar por cima corta a fala dele, como numa conversa de verdade. Só com fone: no alto-falante o microfone pega a voz dele e ele se interromperia sozinho.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_interromper"><span></span></label>
-      </div>
-      <div class="linha">
         <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Quando a conversa por voz abre, ele fala um oi curtinho
           (com o seu nome, se estiver preenchido em "Meu Mestre") pra você saber que ele já está ouvindo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_saudacao"><span></span></label>
@@ -506,6 +514,24 @@
       </div>
       <p class="sub" style="margin:10px 0 0">Com um jogo em tela cheia ele para de escutar sozinho. Diga "cancela" depois de me chamar pra desistir.</p>
     </div>
+  </section>
+
+  <section id="privacidade">
+    <h2>🔒 Privacidade</h2>
+    <p class="sub">O que ele pode ver e ler no seu PC.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Faixa nos olhos 🙈</div><div class="desc">Não tira nenhum print da tela, só banco de frases.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="vendado"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Olhar a tela quando eu pedir 👀</div><div class="desc">"Olha a tela e me responde": ele tira o print sozinho e manda pra IA (só quando você pede, com aviso no balão).</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="ver_tela"><span></span></label>
+      </div>
+    </div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
+    <div id="pastas"></div>
+    <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
   </section>
 
   <section id="memoria">
@@ -561,9 +587,6 @@
         <button class="botao" id="addProg">+ Adicionar programa</button>
       </div>
     </div>
-    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Pastas que o chat lê sem perguntar</h3>
-    <div id="pastas"></div>
-    <button class="botao" id="addPasta" style="margin-top:8px">+ Adicionar pasta</button>
   </section>
   <section id="programas_sec">
     <h2>🧩 Programas</h2>
@@ -1264,8 +1287,9 @@ function montarVoz() {
   vol.oninput = () => vv.textContent = `${vol.value}%`;
   vol.onchange = () => mudar("voz_volume", +vol.value);
   const tom = document.getElementById("vozTom"), tv = document.getElementById("vozTomValor");
-  tom.value = estado.cfg.voz_tom || 0; tv.textContent = `+${tom.value} Hz`;
-  tom.oninput = () => tv.textContent = `+${tom.value} Hz`;
+  const tomTexto = () => tv.textContent = +tom.value ? `+${tom.value}` : "normal";
+  tom.value = estado.cfg.voz_tom || 0; tomTexto();
+  tom.oninput = tomTexto;
   tom.onchange = () => mudar("voz_tom", +tom.value);
   document.getElementById("vozTestar").onclick = () => acao("voz_testar", "falando… 🔊");
   montarVozes();
@@ -1286,7 +1310,7 @@ function montarMestre() {
 }
 document.getElementById("comecar").onclick = () => {
   document.getElementById("bemvindo").hidden = true;
-  document.getElementById("mestre").scrollIntoView();
+  abrirAba("jeito", "mestre");
   document.getElementById("mestreNome").focus();
 };
 document.getElementById("instalarExt").onclick = () => {
@@ -1315,15 +1339,34 @@ document.getElementById("sortear").onclick = () => {
 document.getElementById("limparVisual").onclick = () =>
   salvarVisual({cor: visual.cor, cabeca: null, olhos: null, rosto: null, pescoco: null, bracos: null});
 
-// navegação: rola até a seção e marca onde você está
+// navegação: cada aba mostra só as suas seções; o link rola até a seção e marca onde você está
 const principal = document.getElementById("principal");
-for (const a of document.querySelectorAll("nav a"))
-  a.onclick = () => document.getElementById(a.dataset.alvo).scrollIntoView();
-principal.addEventListener("scroll", () => {
-  let atual = "mestre";
-  for (const s of document.querySelectorAll("section")) if (s.offsetTop - principal.scrollTop < 140) atual = s.id;
+const secoesDa = aba => [...document.querySelector(`.aba[data-aba="${aba}"]`).nextElementSibling.querySelectorAll("a")]
+  .map(a => a.dataset.alvo);
+function marcarSecao() {
+  let atual = null;
+  for (const s of document.querySelectorAll("main section"))
+    if (!s.hidden && (!atual || s.offsetTop - principal.scrollTop < 140)) atual = s.id;
   for (const a of document.querySelectorAll("nav a")) a.classList.toggle("ativo", a.dataset.alvo === atual);
-});
+}
+function abrirAba(aba, alvo) {
+  const secoes = secoesDa(aba);
+  for (const a of document.querySelectorAll(".aba")) a.classList.toggle("ativa", a.dataset.aba === aba);
+  for (const s of document.querySelectorAll("main section")) s.hidden = !secoes.includes(s.id);
+  principal.scrollTo({top: 0, behavior: "instant"});
+  if (alvo && alvo !== secoes[0]) document.getElementById(alvo).scrollIntoView({behavior: "instant"});
+  marcarSecao();
+  try { localStorage.setItem("claudinho_aba", aba); } catch {}
+}
+const abaDe = id => document.querySelector(`nav a[data-alvo="${id}"]`).closest(".sub-nav").previousElementSibling.dataset.aba;
+for (const aba of document.querySelectorAll(".aba")) aba.onclick = () => abrirAba(aba.dataset.aba);
+for (const a of document.querySelectorAll("nav a"))
+  a.onclick = () => {
+    if (document.querySelector(".aba.ativa")?.dataset.aba === abaDe(a.dataset.alvo))
+      document.getElementById(a.dataset.alvo).scrollIntoView();
+    else abrirAba(abaDe(a.dataset.alvo), a.dataset.alvo);
+  };
+principal.addEventListener("scroll", marcarSecao);
 
 // ---------- animação: piscar, olhar pros lados, pulinho ----------
 let t = 0;
@@ -1352,7 +1395,9 @@ async function carregar(primeira) {
       cat = estado.skins; sprite = estado.sprite; visual = estado.cfg.visual;
       montarVisual(); montarResto(); montarMestre(); montarSistema(); animar();
       if (location.search.includes("bemvindo")) document.getElementById("bemvindo").hidden = false;
-      document.querySelector("nav a").classList.add("ativo");
+      let aba = "jeito";
+      try { aba = localStorage.getItem("claudinho_aba") || aba; } catch {}
+      abrirAba(document.querySelector(`.aba[data-aba="${aba}"]`) ? aba : "jeito");
     } else {
       // mudou lá no Claudinho (atalho da faixa, por exemplo): só atualiza os interruptores e o que está vivo
       for (const el of document.querySelectorAll("input[data-cfg]")) el.checked = !!estado.cfg[el.dataset.cfg];

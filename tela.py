@@ -30,7 +30,7 @@ def bloqueio():
     if cfg.get("vendado"):
         return "estou com a faixa nos olhos (vendado): não posso olhar a tela. Ele tira no Win+Shift+Y."
     if not cfg.get("ver_tela", True):
-        return "olhar a tela está desligado no painel (Música e extras → \"Olhar a tela quando eu pedir\")."
+        return "olhar a tela está desligado no painel (Privacidade e sistema → \"Olhar a tela quando eu pedir\")."
     return None
 
 

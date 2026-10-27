@@ -22,6 +22,10 @@ destrutivo ele recusa. A voz e a memória ficam no seu PC.
   Sua pergunta tem prioridade; os avisos esperam e somem sozinhos.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modo TDAH 🐿️ (o deboche maldoso 😈 é o jeito do Ultron),
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
+- **Modo Júnior 🧑‍💻:** em vez de piada, ele lê a janela em que você está com o OCR do próprio Windows (local, de graça)
+  e só chama a IA quando aparece um erro novo ou quando o mesmo erro fica na tela por 8 minutos (empacou). A dica vem
+  com a janela nítida e o texto lido, e tem botões: **explica** e **corrige** levam o print pro chat, 👎 faz ele largar
+  o assunto. Pula programas bloqueados, as janelas dele e respeita a faixa nos olhos.
 - **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
   do Windows), zoa a música de vez em quando, comenta quando começa uma música nova (curiosidade sobre
   a banda/estilo ou cantarolando com ♪, nunca a letra) e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
@@ -126,6 +130,7 @@ A versão fica em `sistema.py` (`VERSAO`).
 | `claudinho.pyw` | o mascote (janela, sprites, balões, chat, piadas, bandeja) |
 | `frases.py` | banco de frases (edite à vontade) |
 | `janelas.py` | lê as janelas abertas no Windows |
+| `junior.py` | olhos do modo Júnior: OCR do Windows na janela em foco, erro novo e empacado |
 | `abrir.py` | ajudante limitado: só abre site, pesquisa ou programa da lista |
 | `emojis.py` | pacote de reações em pixel art (desenhos, cores, frases e quando aparecem) |
 | `musica.py` | o que está tocando + tocar/pausar/próxima/anterior |

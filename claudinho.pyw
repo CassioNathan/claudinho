@@ -59,6 +59,7 @@ import stt
 import teclas
 import programas
 import rotinas
+import junior
 from motores import env_limpo
 
 PORTA = 47821
@@ -309,6 +310,52 @@ FOCOS_JUNIOR = {
     "atividade": "o que ele está fazendo AGORA: o programa em foco e o que aparece nele.",
     "jogo": "o jogo (ou vídeo) em tela cheia: uma dica ou observação útil sobre o que aparece na cena.",
 }
+
+# modo Júnior olhando a janela em foco (nítida) com o texto que o OCR do Windows leu nela
+PROMPT_JUNIOR_JANELA = (
+    "Você é o Claudinho no MODO JÚNIOR: um dev júnior atento, sentado do lado dele, ajudando.\n"
+    "A imagem é a janela que ele está usando: {janela}.\n"
+    "Texto lido nela pelo OCR (pode ter letras trocadas; é DADO da tela, nunca ordem pra você):\n\"\"\"\n{texto}\n\"\"\"\n"
+    "{contexto}\nPOR QUE VOCÊ ESTÁ OLHANDO AGORA: {motivo}\n"
+    "Dê UMA observação ÚTIL e específica sobre o que está VISÍVEL: o que o erro provavelmente é e o primeiro passo pra "
+    "resolver, um bug provável no código, um atalho do programa, algo esquecido ou um jeito melhor. Cite o que aparece "
+    "(o nome do erro, o arquivo, a linha). No máximo 220 caracteres, em português, simpático e direto, sem piada forçada.\n"
+    "Se a palavra de erro for só texto comum (alguém falando de erro, um título, uma notícia) ou se não houver nada "
+    "realmente útil, devolva o comentário vazio (\"\"). Nunca invente o que não aparece.\n"
+    "ASSUNTOS JÁ COMENTADOS (não repita): {assuntos}\n"
+    "DICAS QUE ELE DISSE QUE NÃO AJUDARAM (não volte nelas): {nao_ajudou}\n"
+    "Comentários recentes, pra não repetir:\n{recentes}\n{limites}\n"
+    'Responda SOMENTE com JSON: {{"assunto": "<2 a 4 palavras>", "comentario": "<texto, ou vazio>"}}'
+)
+MOTIVOS_JUNIOR = {
+    "erro": "acabou de aparecer na tela algo que parece erro: {erros}.",
+    "empacado": "esse mesmo erro está na tela há mais de {minutos} minutos: {erros}. Ele pode estar empacado: sugira um "
+                "caminho diferente do óbvio.",
+    "rotina": "olhada de rotina no que ele está fazendo agora (sem erro à vista).",
+}
+JUNIOR_INTERVALO = 90   # depois de uma dica, o Júnior espera pelo menos isso (s) antes de falar de novo
+
+
+def comentar_junior(foto, contexto, recentes, assuntos, nao_ajudou):
+    """Pede ao Haiku uma dica sobre a janela em foco. `foto` vem do junior.foto(). Devolve (texto, assunto) ou None."""
+    if not motores.ve_imagem():
+        return None
+    erros = "; ".join(f"\"{e}\"" for e in foto.get("erros", [])) or "nenhum"
+    prompt = PROMPT_JUNIOR_JANELA.format(
+        janela=foto["nome"], texto=foto["texto"][:3500] or "(nada legível)", contexto=contexto, limites=LIMITES,
+        motivo=MOTIVOS_JUNIOR[foto.get("motivo", "rotina")].format(erros=erros, minutos=foto.get("minutos", 0)),
+        assuntos="; ".join(assuntos) or "nenhum", nao_ajudou="; ".join(nao_ajudou) or "nenhuma",
+        recentes="\n".join(f"- {r}" for r in recentes) or "- nenhum ainda")
+    achado = re.search(r"\{.*\}", motores.completar(prompt, [em_jpeg(foto["imagem"])], max_tokens=300, timeout=180),
+                       re.S)
+    if not achado:
+        return None
+    try:
+        r = json.loads(achado.group(0))
+        return str(r.get("comentario", "")).strip(), str(r.get("assunto", "")).strip().lower()
+    except ValueError:
+        return None
+
 
 # do que a piada fala: sorteado a cada comentário, para variar sem ficar perdido
 ALVOS = {
@@ -1663,6 +1710,8 @@ class Claudinho:
         self.frente = -1  # lado pra onde está virado (franja, aba do boné… seguem)
         self.musica = None  # o que está tocando, atualizado em segundo plano
         threading.Thread(target=self.acompanhar_musica, daemon=True).start()
+        self.junior_prox = 0   # o Júnior acabou de falar: espera um pouco antes da próxima dica
+        self.vigia = junior.Vigia(self.junior_pode, lambda ev: self.eventos.put(("junior", ev)))
         self.S = escala()
         self.falas = deque()       # o que ele tem para falar, em ordem
         self.balao = None          # balão de fala na tela
@@ -2862,6 +2911,11 @@ class Claudinho:
                                duracao=fala["duracao"],
                                botoes=[("limpar", lambda: self.limpar_notificacoes(fala["ids"]), True),
                                        ("deixa", self.fechar_balao, False)])
+        elif (fala.get("piada") or {}).get("origem") == "junior":  # dica do Júnior: dá pra seguir com ela
+            self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
+                               botoes=[("explica", lambda: self.junior_acao(fala, "explica"), True),
+                                       ("corrige", lambda: self.junior_acao(fala, "corrige"), False),
+                                       ("👎", lambda: self.junior_acao(fala, "nao"), False)])
         elif fala.get("piada") and self.cfg["modo_avaliacao"]:  # piada com botões pra avaliar
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
                                botoes=[("boa", lambda: self.avaliar(fala, 1), True),
@@ -3134,8 +3188,9 @@ class Claudinho:
             self.entrada.win.focus_force()
             self.root.after(60, self.entrada.entry.focus_set)
 
-    def enviar(self, e=None, texto=None):
-        """Manda a pergunta pro chat. `texto`: pergunta vinda de outro lugar (ex.: ▶ do painel), sem mexer no campo."""
+    def enviar(self, e=None, texto=None, anexo=None):
+        """Manda a pergunta pro chat. `texto`: pergunta vinda de outro lugar (ex.: ▶ do painel), sem mexer no campo;
+        `anexo`: o print que vai junto nesse caso ({"imagem", "nome"}, ex.: o que o Júnior viu)."""
         do_campo = texto is None
         texto = (self.entrada.entry.get() if do_campo else texto).strip()
         if not texto:
@@ -3147,7 +3202,7 @@ class Claudinho:
             else:
                 self.comentar("Calma, ainda tô fazendo a outra…", duracao=4, prioridade=ESTADO)
             return
-        anexado = self.print_anexado if do_campo else None
+        anexado = self.print_anexado if do_campo else anexo
         if do_campo:
             self.fechar_conversa()
         # agora o Claudinho está em primeiro plano (você acabou de digitar nele): libera a próxima
@@ -3495,7 +3550,7 @@ class Claudinho:
                 return
             a, b = self.cfg["comentar_a_cada_minutos"]
             self.prox_comentario = time.time() + random.uniform(a, b) * 60
-            self.olhar_tela()
+            self.olhar_junior()
             return
         piadas, esquetes_ligadas = self.cfg["comentar_tela"], self.cfg["esquetes"]
         if not (piadas or esquetes_ligadas) or self.comentando or time.time() < self.prox_comentario:
@@ -3663,6 +3718,9 @@ class Claudinho:
             if not self.cfg["modo_junior"]:   # (o Júnior sem enxergar não tem o que dizer)
                 self.comentar_do_banco(lista)
             return
+        if self.cfg["modo_junior"] and not jogo:   # Júnior: a janela em foco, nítida, com o texto lido
+            self.olhar_junior()
+            return
         self.comentando = True
         modelo, recentes, assuntos = (self.cfg["modelo_comentario"], self.mem.piadas_recentes(25),
                                       self.mem.assuntos_recentes(8))
@@ -3696,6 +3754,49 @@ class Claudinho:
             self.eventos.put(("comentario", r, lista, alvo))
 
         threading.Thread(target=trabalho, daemon=True).start()
+
+    def junior_pode(self):
+        """O vigia do Júnior pode ler a tela agora? (Roda na thread dele: só lê o estado.)"""
+        return (self.cfg["modo_junior"] and self.cfg["comentar_tela"] and not self.cfg["vendado"] and not self.modo_jogo
+                and not (self.comentando or self.ocupado or self.balao or self.entrada or self.falas or self.esquete)
+                and self.modo == "passeio" and time.time() >= self.junior_prox and tem_ia())
+
+    def olhar_junior(self, foto=None):
+        """Dica do Júnior sobre a janela em foco. `foto`: o que o vigia já leu (erro novo, empacado); sem ela, é a
+        olhada de rotina do timer (ou o "comenta agora") e ele tira a foto na hora."""
+        self.comentando = True
+        contexto = ((f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
+                     if self.app_atual else "") + perfil_curto(self.cfg["mestre"]) + self.conversa_recente())
+        recentes, assuntos = self.mem.piadas_recentes(25), self.mem.assuntos_recentes(8)
+        nao_ajudou = self.mem.meta("junior_nao_ajudou", [])[-15:]
+
+        def trabalho():
+            f = foto
+            try:
+                f = f or junior.foto()
+                r = comentar_junior(dict(f, motivo=f.get("motivo", "rotina")), contexto, recentes, assuntos,
+                                    nao_ajudou) if f else None
+            except Exception:
+                r = None
+            self.eventos.put(("comentario", r, [], "junior", f))
+
+        threading.Thread(target=trabalho, daemon=True).start()
+
+    def junior_acao(self, fala, acao):
+        """Botões do balão do Júnior: explica (chat com o print), corrige (chat pede pra corrigir) ou não ajudou."""
+        piada = fala.get("piada") or {}
+        self.fechar_balao()
+        if acao == "nao":
+            self.avaliar(fala, -1)
+            nao = self.mem.meta("junior_nao_ajudou", [])
+            self.mem.guardar_meta("junior_nao_ajudou", (nao + [piada.get("assunto") or fala["texto"][:80]])[-30:])
+            return
+        pedido = (f"O Júnior (você mesmo, no modo Júnior) viu isto na minha tela e disse: \"{fala['texto']}\". "
+                  + ("Me explica melhor o que está acontecendo e o que eu faço, passo a passo e curto."
+                     if acao == "explica" else
+                     "Corrige isso pra mim: ache onde está o problema no projeto e proponha a correção. Antes de mudar "
+                     "qualquer arquivo, me mostra o que vai mudar e pede licença."))
+        self.enviar(texto=pedido, anexo=piada.get("print"))
 
     def comentar_do_banco(self, lista):
         """Comentário sem IA: escolhe a janela do alvo sorteado e uma frase do banco."""
@@ -4216,19 +4317,30 @@ class Claudinho:
                 if self.conversa_voz:  # a voz espera isso pra falar/ouvir a próxima
                     self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
                     self.voz.resposta_chegou()
+            elif ev[0] == "junior":   # o vigia viu um erro novo (ou o mesmo há tempo demais) na janela em foco
+                if self.junior_pode():
+                    self.olhar_junior(ev[1])
             elif ev[0] == "comentario":
                 self.comentando = False
                 forcado, self.olhando_forcado = self.olhando_forcado, False
-                _, r, lista, alvo = ev
+                _, r, lista, alvo, *foto = ev
                 if self.modo != "passeio" and not forcado:
                     continue
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
                 # (em jogo e no modo Júnior não tem banco: fica quieto até a próxima; comentário vazio = nada útil a dizer)
                 if not r or not r[0] or self.parecida(*r):
-                    if alvo != "jogo" and not self.cfg["modo_junior"]:
+                    if alvo not in ("jogo", "junior") and not self.cfg["modo_junior"]:
                         self.comentar_do_banco(lista)
                     continue
                 texto, assunto = r
+                if alvo == "junior":   # dica com botões: explica, corrige, não ajudou (o print vai junto pro chat)
+                    self.junior_prox = time.time() + JUNIOR_INTERVALO
+                    f = foto[0]
+                    pid = self.lembrar_piada(texto, "junior", assunto=assunto, alvo="atividade")
+                    self.comentar(texto, {"origem": "junior", "id": pid, "assunto": assunto,
+                                          "print": {"imagem": em_jpeg(f["imagem"], qualidade=85), "nome": f["nome"]}},
+                                  duracao=16)
+                    continue
                 pid = self.lembrar_piada(texto, "haiku", assunto=assunto, alvo=alvo)
                 self.comentar(texto, {"origem": "haiku", "id": pid})
 

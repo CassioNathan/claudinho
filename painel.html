@@ -179,6 +179,20 @@
   .modal h3 { color: var(--texto); margin: 0 0 8px; font-size: 17px; }
   .modal b { color: var(--texto); }
   .modal ol { margin: 8px 0; padding-left: 20px; } .modal li { margin: 6px 0; }
+  /* passo a passo do primeiro acesso */
+  .modal.tour { width: min(640px, 92vw); max-height: 88vh; overflow-y: auto; }
+  .tour-pontos { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tour-pontos i { flex: 1; height: 4px; border-radius: 4px; background: #3d3c38; }
+  .tour-pontos i.feito { background: var(--laranja); }
+  .tour-botoes { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+  .tour-poderes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 12px 0 4px; }
+  .tour-poderes div { background: #232220; border: 1px solid #3a3935; border-radius: 12px; padding: 10px 12px; font-size: 12.5px; }
+  .tour-poderes b { display: block; margin-bottom: 3px; font-size: 13.5px; }
+  .tour-opcoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .tour-opcoes button { flex: 1 1 150px; text-align: left; padding: 10px 12px; height: auto; white-space: normal; line-height: 1.35; }
+  .tour-opcoes button small { display: block; color: var(--apagado); font-weight: 400; margin-top: 2px; }
+  .tour-opcoes button.ativo { border-color: var(--laranja); background: rgba(217, 119, 87, .14); }
+  .modal .tour-lista { max-height: 200px; overflow-y: auto; }
   .caminho { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
   .caminho code { background: #1a1918; border-radius: 8px; padding: 7px 10px; color: var(--texto); font: 12.5px Consolas, monospace;
                   flex: 1; overflow-x: auto; white-space: nowrap; }
@@ -643,6 +657,11 @@
         <div class="motor-detalhe" id="detalheMotor"></div>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Passo a passo inicial 👋</div><div class="desc">O tour do primeiro acesso: quem é
+          você, visual, jeito de comentar, voz, privacidade.</div></div>
+        <button class="botao" id="reverTour">Rever</button>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Avisar quando sair versão nova 🎉</div><div class="desc">Olha a última versão
           no GitHub (só leitura, uma vez ao abrir e a cada 12 h) e avisa num balão. Não baixa nem instala nada sozinho.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="avisar_versao"><span></span></label>
@@ -657,28 +676,15 @@
 </main>
 
 <div class="fundo-modal" id="bemvindo" hidden>
-  <div class="modal">
-    <h3>👋 Oi! Eu sou o Claudinho</h3>
-    <p>Sou um mascotinho que mora na sua tela: ando por aí, faço piada do que você está fazendo, apronto umas esquetes,
-       toco música e converso com você (com o Claude Code instalado).</p>
-    <b>Pra começar:</b>
-    <ol>
-      <li>Em <b>👑 Meu Mestre</b>, me conta quem você é (sem nome eu não te chamo por nome nenhum).</li>
-      <li>Em <b>🎨 Visual</b>, me veste do jeito que quiser.</li>
-      <li>Se quiser, ligue aqui:</li>
-    </ol>
-    <div class="cartao" style="margin:8px 0 14px">
-      <div class="linha">
-        <div class="info"><div class="titulo">Abrir junto com o Windows</div></div>
-        <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div></div>
-        <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
-      </div>
+  <div class="modal tour">
+    <div class="tour-pontos" id="tourPontos"></div>
+    <div id="tourCorpo"></div>
+    <div class="tour-botoes">
+      <button class="botao" id="tourPular">Pular o passo a passo</button>
+      <span style="flex:1"></span>
+      <button class="botao" id="tourVoltar">Voltar</button>
+      <button class="botao principal" id="tourSeguir">Próximo</button>
     </div>
-    <p>Clicar em mim abre a conversa; botão direito abre o menu. Este painel fica em <b>Configurações e skins ⚙️</b>.</p>
-    <div style="text-align:right"><button class="botao principal" id="comecar">Bora!</button></div>
   </div>
 </div>
 
@@ -1365,11 +1371,196 @@ function montarMestre() {
   sobre.oninput = contar; contar();
   document.getElementById("salvarMestre").onclick = () => mudar("mestre", {nome: nome.value.trim(), sobre: sobre.value.trim()});
 }
-document.getElementById("comecar").onclick = () => {
+// ---------- passo a passo do primeiro acesso (e "rever" em Sistema) ----------
+let tourPasso = 0;
+const chave = (cfg, titulo, desc = "") => `<div class="linha"><div class="info"><div class="titulo">${titulo}</div>` +
+  (desc ? `<div class="desc">${desc}</div>` : "") + `</div><label class="chave"><input type="checkbox" data-tour="${cfg}"><span></span></label></div>`;
+function ligarChaves(corpo) {
+  for (const el of corpo.querySelectorAll("input[data-tour]")) {
+    el.checked = !!estado.cfg[el.dataset.tour];
+    el.onchange = () => mudar(el.dataset.tour, el.checked);
+  }
+  for (const el of corpo.querySelectorAll("input[data-tour-sistema]")) {
+    el.checked = !!estado.sistema[el.dataset.tourSistema];
+    el.onchange = () => acao(`${el.dataset.tourSistema}:${el.checked ? 1 : 0}`, el.checked ? "ligado ✓" : "desligado ✓");
+  }
+}
+function opcoes(corpo, lista, atual, escolher) {   // botões grandes de escolher um (jeito de comentar, personalidade)
+  const caixa = document.createElement("div");
+  caixa.className = "tour-opcoes";
+  for (const o of lista) {
+    const b = document.createElement("button");
+    b.className = "botao" + (o.id === atual() ? " ativo" : "");
+    b.innerHTML = `${o.nome}<small>${o.desc}</small>`;
+    b.onclick = () => { escolher(o.id); for (const x of caixa.children) x.classList.toggle("ativo", x === b); };
+    caixa.appendChild(b);
+  }
+  corpo.appendChild(caixa);
+}
+const PASSOS = [
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>👋 Oi! Eu sou o Claudinho</h3>
+      <p>Um mascotinho que mora na sua tela e é ajudante do Claude. Em 2 minutinhos a gente se conhece. Olha o que eu sei fazer:</p>
+      <div class="tour-poderes">
+        <div><b>💬 Conversar</b>Clica em mim e pergunta. Ou chama "Ei Claudinho" no microfone, e eu respondo falando.</div>
+        <div><b>✓ Avisar o Claude Code</b>Quando um chat seu termina, eu aviso com um resuminho de uma linha.</div>
+        <div><b>🛠️ Fazer por você</b>Abro programas e projetos, aperto atalhos que você me ensina e repito rotinas em sites.</div>
+        <div><b>🧑‍💻 Júnior</b>Fico de olho na sua tela e aviso quando aparece um erro, com "explica" e "corrige".</div>
+        <div><b>😂 Diversão</b>Piadas do que você está fazendo, esquetes à toa, música e um monte de roupinha.</div>
+        <div><b>🔒 Você manda</b>O que mexe no PC eu pergunto antes. Com a faixa nos olhos eu não olho nada.</div>
+      </div>`;
+  }},
+  {montar: corpo => {
+    const m = estado.cfg.mestre || {nome: "", sobre: ""};
+    corpo.innerHTML = `<h3>👑 Quem é você?</h3>
+      <p>Pra eu te chamar pelo nome e acertar nas conversas e nas piadas. Tudo fica só no seu PC.</p>
+      <label class="rotulo">Seu nome</label><input id="tourNome" class="campo" maxlength="60" placeholder="como eu devo te chamar">
+      <label class="rotulo" style="margin-top:10px">Sobre você <span class="desc">(opcional)</span></label>
+      <textarea id="tourSobre" class="campo" rows="4" maxlength="4000" placeholder="ex.: sou dev Java na empresa X, gosto de respostas curtas e de café"></textarea>`;
+    corpo.querySelector("#tourNome").value = m.nome;
+    corpo.querySelector("#tourSobre").value = m.sobre;
+    setTimeout(() => corpo.querySelector("#tourNome").focus(), 50);
+  }, sair: corpo => {
+    const nome = corpo.querySelector("#tourNome").value.trim(), sobre = corpo.querySelector("#tourSobre").value.trim();
+    const m = estado.cfg.mestre || {};
+    if (nome !== (m.nome || "") || sobre !== (m.sobre || "")) mudar("mestre", {nome, sobre});
+  }},
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>🎨 Meu visual</h3><p>Escolhe um pacote pronto (dá pra montar peça por peça depois, em <b>Visual</b>).</p>
+      <div class="pacotes" id="tourPacotes"></div><div class="cores" id="tourCores" style="margin-top:12px"></div>`;
+    const pac = corpo.querySelector("#tourPacotes"), cores = corpo.querySelector("#tourCores");
+    for (const p of cat.pacotes) {
+      const b = document.createElement("button");
+      b.className = "pacote"; b.textContent = p.nome;
+      b.onclick = () => salvarVisual({...visual, ...p.aderecos, ...(p.cor ? {cor: p.cor} : {})});
+      pac.appendChild(b);
+    }
+    for (const c of cat.cores) {
+      const b = document.createElement("button");
+      b.className = "cor" + (c.animada ? " arco" : "");
+      if (!c.animada) b.style.background = c.corpo;
+      b.title = c.nome;
+      b.onclick = () => salvarVisual({...visual, cor: c.id});
+      cores.appendChild(b);
+    }
+  }},
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>🗣️ Como eu fico enquanto você trabalha?</h3><p>Dá pra trocar quando quiser.</p>`;
+    const jeito = () => !estado.cfg.comentar_tela ? "quieto" : estado.cfg.modo_junior ? "junior" : "piadas";
+    opcoes(corpo, [
+      {id: "piadas", nome: "😂 Piadas", desc: "comento o que está na tela de vez em quando"},
+      {id: "junior", nome: "🧑‍💻 Júnior", desc: "sem piada: só falo quando aparece erro, com dica útil"},
+      {id: "quieto", nome: "🤫 Quietinho", desc: "só falo quando você me chama ou chega aviso"},
+    ], jeito, id => { mudar("comentar_tela", id !== "quieto"); mudar("modo_junior", id === "junior"); });
+    corpo.insertAdjacentHTML("beforeend", "<p style='margin-top:14px'>E o meu jeito de ser:</p>");
+    opcoes(corpo, [
+      {id: "claudinho", nome: "🐟 Claudinho", desc: "animado, inocente e sempre querendo ajudar"},
+      {id: "ultron", nome: "🤖 Ultron", desc: "vilão teatral que zoa sem dó (de brincadeira)"},
+    ], () => estado.cfg.personalidade, id => mudar("personalidade", id));
+  }},
+  {montar: corpo => {
+    const m = estado.motor, pronto = m.pronto && m.pronto[0];
+    corpo.innerHTML = `<h3>🧠 Quem pensa por mim</h3>` + (pronto
+      ? `<p>✓ Tudo certo: estou usando <b>${{claude_code: "o Claude Code", api: "a chave da API da Anthropic", ollama: "a IA local (Ollama)", nenhum: "nenhuma IA"}[m.atual] || m.atual}</b>.</p>`
+      : `<p>Pra conversar, ler a tela e resumir eu uso o <b>Claude Code</b>. ${m.claude ? "Ele está instalado, mas falta o login" : "Ele ainda não está instalado neste PC"}:</p>
+         <ol><li>${m.claude ? "Abra um terminal" : 'Instale o Claude Code (claude.com/claude-code) e abra um terminal'}</li>
+         <li>Rode <code>claude</code> e digite <code>/login</code></li><li>Depois é só me perguntar algo</li></ol>
+         <p class="desc">Sem ele eu funciono do mesmo jeito com frases prontas, música, esquetes e roupinhas. Também dá pra usar uma chave da
+         API ou uma IA local em <b>Sistema → Motor de IA</b>.</p>`);
+  }},
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>🎤 Voz</h3><p>Me chama por voz ("Ei Claudinho") e eu respondo falando. O reconhecimento roda no seu PC: o áudio não sai daqui.
+      Na primeira vez eu baixo o que preciso.</p><div class="cartao">` +
+      chave("voz", "Ouvir o microfone", "fico esperando você me chamar") +
+      chave("voz_fala", "Responder falando 🔊", "leio as respostas em voz alta") + `</div>
+      <p class="desc">Voz, tom e o resto ficam em <b>Jeito dele → Voz</b>.</p>`;
+    ligarChaves(corpo);
+  }},
+  {montar: async corpo => {
+    corpo.innerHTML = `<h3>🔒 O que eu posso ver e ler</h3><div class="cartao">` +
+      chave("ver_tela", "Olhar a tela quando você pedir 👀", '"olha a tela e me responde": eu tiro o print e mando pra IA') +
+      `</div><p style="margin-top:12px"><b>Projetos que eu leio sem perguntar</b> (mudar arquivo ou rodar comando eu sempre pergunto).
+      Esses são os que você já abriu no Claude:</p><div class="cartao tour-lista" id="tourProjetos"><span class="desc">procurando…</span></div>
+      <div style="text-align:right;margin-top:8px"><button class="botao" id="tourLiberar">Liberar marcados</button></div>`;
+    ligarChaves(corpo);
+    const caixa = corpo.querySelector("#tourProjetos");
+    let lista = [];
+    try { lista = await api("/api/projetos_claude"); } catch (e) { lista = []; }
+    caixa.innerHTML = lista.length ? "" : '<span class="desc">Nenhum projeto aberto no Claude ainda. Dá pra liberar pastas depois em Privacidade.</span>';
+    for (const p of lista) {
+      const linha = document.createElement("label");
+      linha.className = "linha";
+      linha.innerHTML = `<div class="info"><div class="titulo"></div><div class="desc"></div></div>
+        <input type="checkbox" style="width:18px;height:18px;accent-color:var(--laranja)">`;
+      linha.querySelector(".titulo").textContent = p.nome;
+      linha.querySelector(".desc").textContent = p.pasta + (p.liberada ? "  ·  já liberada" : "");
+      const c = linha.querySelector("input");
+      c.value = p.pasta; c.checked = p.liberada; c.disabled = p.liberada;
+      caixa.appendChild(linha);
+    }
+    corpo.querySelector("#tourLiberar").onclick = async () => {
+      const marcadas = [...caixa.querySelectorAll("input:checked:not(:disabled)")].map(c => c.value);
+      if (!marcadas.length) { avisar("marque pelo menos um"); return; }
+      await acao("pastas_do_claude:" + marcadas.join("\n"), `liberei ${marcadas.length} ✓`);
+      for (const c of caixa.querySelectorAll("input:checked")) c.disabled = true;
+    };
+  }},
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>🖥️ Neste PC</h3><div class="cartao">
+      <div class="linha"><div class="info"><div class="titulo">Abrir junto com o Windows</div></div>
+        <label class="chave"><input type="checkbox" data-tour-sistema="inicio"><span></span></label></div>
+      <div class="linha"><div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div></div>
+        <label class="chave"><input type="checkbox" data-tour-sistema="aviso"><span></span></label></div>` +
+      chave("avisar_versao", "Avisar quando sair versão nova 🎉") + `</div>
+      <p style="margin-top:12px"><b>Extensão do navegador</b> (opcional): deixa eu tocar música no YouTube e repetir rotinas em sites.
+      Fica no cartão <b>Extensão do navegador</b>, na lateral do painel.</p>`;
+    ligarChaves(corpo);
+  }},
+  {montar: corpo => {
+    corpo.innerHTML = `<h3>🎉 Prontinho!</h3><p>Uns atalhos pra lembrar:</p>
+      <ul style="margin:8px 0;padding-left:20px;line-height:1.7">
+        <li><b>Clique em mim</b>: abre a conversa. <b>Botão direito</b>: o menu.</li>
+        <li><b>"Ei Claudinho"</b>: me chama por voz (se ligou o microfone).</li>
+        <li><b>Win+Y</b>: comento a tela agora. <b>Win+Shift+Y</b>: coloco ou tiro a faixa nos olhos.</li>
+        <li><b>⏹ parar</b> (passando o mouse no "digitando…"): interrompe o que eu estiver fazendo.</li>
+        <li>Tudo isso aqui fica em <b>Configurações e skins ⚙️</b>, e dá pra rever este passo a passo em <b>Sistema</b>.</li>
+      </ul>`;
+  }},
+];
+function abrirTour(passo = 0) {
+  tourPasso = passo;
+  document.getElementById("bemvindo").hidden = false;
+  mostrarPasso();
+}
+function mostrarPasso() {
+  const corpo = document.getElementById("tourCorpo");
+  document.getElementById("tourPontos").innerHTML = PASSOS.map((_, i) => `<i class="${i <= tourPasso ? "feito" : ""}"></i>`).join("");
+  document.getElementById("tourVoltar").hidden = tourPasso === 0;
+  document.getElementById("tourPular").hidden = tourPasso === PASSOS.length - 1;
+  document.getElementById("tourSeguir").textContent = tourPasso === 0 ? "Bora começar" : tourPasso === PASSOS.length - 1 ? "Bora!" : "Próximo";
+  PASSOS[tourPasso].montar(corpo);
+}
+function fecharTour() {
+  const passo = PASSOS[tourPasso];
+  if (passo.sair) passo.sair(document.getElementById("tourCorpo"));
   document.getElementById("bemvindo").hidden = true;
-  abrirAba("jeito", "mestre");
-  document.getElementById("mestreNome").focus();
+  if (!estado.cfg.tour_feito) mudar("tour_feito", true);
+}
+document.getElementById("tourSeguir").onclick = () => {
+  const passo = PASSOS[tourPasso];
+  if (passo.sair) passo.sair(document.getElementById("tourCorpo"));
+  if (tourPasso === PASSOS.length - 1) { fecharTour(); return; }
+  tourPasso++;
+  mostrarPasso();
 };
+document.getElementById("tourVoltar").onclick = () => {
+  const passo = PASSOS[tourPasso];
+  if (passo.sair) passo.sair(document.getElementById("tourCorpo"));
+  tourPasso--;
+  mostrarPasso();
+};
+document.getElementById("tourPular").onclick = fecharTour;
+document.getElementById("reverTour").onclick = () => abrirTour();
 document.getElementById("instalarExt").onclick = () => {
   acao("instalar_extensao", "preparei a extensão ✓");
   document.getElementById("instrucoes").hidden = false;
@@ -1451,7 +1642,7 @@ async function carregar(primeira) {
     if (primeira) {
       cat = estado.skins; sprite = estado.sprite; visual = estado.cfg.visual;
       montarVisual(); montarResto(); montarMestre(); montarSistema(); animar();
-      if (location.search.includes("bemvindo")) document.getElementById("bemvindo").hidden = false;
+      if (location.search.includes("bemvindo") && !estado.cfg.tour_feito) abrirTour();
       let aba = "jeito";
       try { aba = localStorage.getItem("claudinho_aba") || aba; } catch {}
       abrirAba(document.querySelector(`.aba[data-aba="${aba}"]`) ? aba : "jeito");

@@ -7,8 +7,10 @@
 
 As vozes (~60 MB cada) ficam em ~/.claudinho/vozes; a escolhida carrega em segundo plano (uns 5 s, uma vez só).
 """
+import json
 import queue
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -33,6 +35,9 @@ VOZ_PADRAO = "pt_BR-faber-medium"
 TOM_MAXIMO = 1.6   # o tom no máximo (40) sobe ≈ +8 semitons: o Faber vai de ~150-180 Hz pra ~245 Hz
 PASTA = Path.home() / ".claudinho" / "vozes"
 KOKORO_PASTA = PASTA / "kokoro"
+# "Minha voz": pastas com o áudio de referência de quem usa; quem fala é o Chatterbox, num ambiente à parte (torch + GPU)
+MINHAS = PASTA / "minhas"
+CLONAGEM_PY = PASTA / "clonagem" / ".venv" / "Scripts" / "python.exe"
 _KOKORO_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 KOKORO_ARQUIVOS = ("kokoro-v1.0.onnx", "voices-v1.0.bin")
 FIM_DE_FRASE = re.compile(r"(?<=[.!?…])\s+|\n+")
@@ -47,6 +52,20 @@ def eh_edge(voz):
     return bool(voz) and voz.startswith("edge:")
 
 
+def eh_minha(voz):
+    return bool(voz) and voz.startswith("minha:")
+
+
+def achar_minhas():
+    """Põe no catálogo as vozes próprias que existem em ~/.claudinho/vozes/minhas (uma pasta por voz)."""
+    for v in [v for v in VOZES if eh_minha(v)]:
+        del VOZES[v]
+    if MINHAS.is_dir():
+        for pasta in sorted(MINHAS.iterdir()):
+            if (pasta / "referencia.wav").exists():
+                VOZES[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (Chatterbox, usa a placa de vídeo)"
+
+
 def instalada(voz):
     if eh_edge(voz):   # não baixa nada: só precisa dos pacotes
         try:
@@ -57,15 +76,21 @@ def instalada(voz):
             return False
     if eh_kokoro(voz):
         return all((KOKORO_PASTA / a).exists() for a in KOKORO_ARQUIVOS)
+    if eh_minha(voz):
+        return CLONAGEM_PY.exists() and (MINHAS / voz.split(":", 1)[1] / "referencia.wav").exists()
     return (PASTA / f"{voz}.onnx").exists()
 
 
 def catalogo():
     """As vozes que o painel oferece e quais já estão no PC."""
+    achar_minhas()
     return [{"id": v, "nome": nome, "instalada": instalada(v),
-             "tamanho": ("precisa de internet" if eh_edge(v) else
+             "tamanho": ("precisa de internet" if eh_edge(v) else "sua, no seu PC" if eh_minha(v) else
                          "~350 MB, o modelo vale pras 3 vozes do Kokoro" if eh_kokoro(v) else "~60 MB")}
             for v, nome in VOZES.items()]
+
+
+achar_minhas()
 
 
 def limpar_para_fala(texto):
@@ -152,6 +177,7 @@ class Fala:
         self.pendentes = 0           # frases que ainda não terminaram de tocar (da versão atual)
         self.trava = threading.Lock()
         self._fios = False
+        self.ajudante = None         # o processo do Chatterbox (voz própria), aberto só quando ela é a escolhida
 
     # ---------- preparo ----------
     def nome_escolhido(self):
@@ -176,6 +202,9 @@ class Fala:
             try:
                 if eh_edge(escolhida):
                     self.voz = self.kokoro = None   # a síntese é feita pela internet, na hora de falar
+                elif eh_minha(escolhida):
+                    self.voz = self.kokoro = None   # quem fala é o ajudante do Chatterbox (processo à parte)
+                    self._ajudante()
                 elif eh_kokoro(escolhida):
                     if self.kokoro is None:
                         from kokoro_onnx import Kokoro
@@ -196,7 +225,7 @@ class Fala:
 
     def baixar(self, voz):
         """Baixa uma voz do catálogo (em segundo plano; o painel acompanha por `baixando`)."""
-        if voz not in VOZES or self.baixando or instalada(voz):
+        if voz not in VOZES or eh_minha(voz) or self.baixando or instalada(voz):
             return
         self.baixando, self.erro_download = voz, None
 
@@ -213,6 +242,44 @@ class Fala:
             finally:
                 self.baixando = None
         threading.Thread(target=trabalhar, daemon=True).start()
+
+    def _ajudante(self):
+        """O processo do Chatterbox, aberto se ainda não está (ou se saiu sozinho depois de 5 min parado). Carregar
+        leva uns 10 s e ocupa uns 3 GB da placa de vídeo."""
+        if self.ajudante and self.ajudante.poll() is None:
+            return self.ajudante
+        import sistema
+        self.ajudante = subprocess.Popen(
+            [str(CLONAGEM_PY), str(sistema.BASE / "voz_propria.py")], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
+        self._resposta_ajudante()   # espera o {"pronto": true}
+        return self.ajudante
+
+    def _resposta_ajudante(self):
+        """A próxima linha JSON do ajudante (pula o que as bibliotecas imprimem de enfeite)."""
+        for linha in self.ajudante.stdout:
+            try:
+                return json.loads(linha)
+            except ValueError:
+                continue
+        raise RuntimeError("o ajudante da voz própria fechou")
+
+    def _sintetizar_minha(self, frase, voz):
+        """Uma frase na voz própria: (áudio float32, taxa) ou (None, 0) se o ajudante falhou."""
+        try:
+            ajudante = self._ajudante()
+            ajudante.stdin.write(json.dumps({"texto": frase, "voz": str(MINHAS / voz)}) + "\n")
+            ajudante.stdin.flush()
+            r = self._resposta_ajudante()
+            if not r.get("ok"):
+                raise RuntimeError(r.get("erro"))
+            arquivo = Path(r["arquivo"])
+            audio = np.load(arquivo)
+            arquivo.unlink(missing_ok=True)
+            return audio, r["taxa"]
+        except Exception as e:
+            self.erro = f"a minha voz não respondeu ({e})"
+            return None, 0
 
     def _sintetizar_edge(self, frase, voz):
         """Uma frase pela voz neural da Microsoft: (áudio float32 mono, taxa) ou (None, 0) se a internet falhou."""
@@ -322,6 +389,12 @@ class Fala:
                     audio, taxa = self._sintetizar_edge(frase, self.voz_nome.split(":", 1)[1])
                     if audio is None:
                         continue
+                elif eh_minha(self.voz_nome):
+                    audio, taxa = self._sintetizar_minha(frase, self.voz_nome.split(":", 1)[1])
+                    if audio is None:
+                        continue
+                    if agudo:
+                        audio = subir_tom(audio, fator)
                 elif eh_kokoro(self.voz_nome):
                     audio, taxa = self.kokoro.create(frase, voice=self.voz_nome.split(":", 1)[1], speed=1.0 / fator,
                                                      lang="pt-br")

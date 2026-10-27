@@ -105,11 +105,14 @@ destrutivo ele recusa. A voz e a memória ficam no seu PC.
 ## Instalar (quem só quer usar)
 
 Baixe o `Claudinho-<versão>-windows.zip` em **Releases**, descompacte onde quiser e abra o `Claudinho.exe`.
-Não precisa de Python. Na primeira vez ele abre o painel: conte quem você é em **Meu Mestre** e, se quiser,
-ligue em **Sistema** "abrir junto com o Windows" e o aviso do Claude Code.
+Não precisa de Python. Na primeira vez ele abre o painel com um **passo a passo**: o que ele sabe fazer, quem é você,
+o visual, se ele faz piada, vira Júnior ou fica quietinho, o motor de IA, a voz, o que ele pode ler (dá pra liberar os
+projetos do Claude ali mesmo) e as opções do PC. Dá pra pular e rever depois em **Sistema**.
 
 - O chat, as piadas olhando a tela e os resumos usam o [Claude Code](https://claude.com/claude-code)
   (instale, rode `claude` e faça `/login`). Sem ele, o resto funciona: banco de frases, música, esquetes, skins.
+  Se o login do Claude Code vencer, ele avisa num balão "🔑 preciso de login" com um botão que abre o `claude` num
+  terminal pra você fazer o `/login` de novo.
 - **Atualizar:** quando sai versão nova ele avisa num balão (olha a última release no GitHub ao abrir e a cada 12 h;
   dá pra desligar em Sistema). Feche o Claudinho, troque a pasta pela do zip novo e abra: seus dados ficam.
 - Pra desinstalar: desligue as opções em Sistema, feche (botão direito > Sair) e apague a pasta.
@@ -212,6 +215,8 @@ As coisas em `~/.claudinho` são deste PC e não vão pro Git.
 ## Próximos passos
 
 - [Plano: contexto de projeto (sessões do Claude Code) pro Júnior](docs/plano-contexto-de-projeto.md): saber em qual projeto o usuário está e conferir no código antes de comentar.
+- [Plano: "Minha voz" (Chatterbox direto e Piper treinado)](docs/plano-voz-propria.md): o Claudinho falando com a voz
+  que a pessoa mandar (arquivo, vídeo ou link do YouTube), só pra uso pessoal e local.
 - [Plano: Claudinho orquestrador + Júnior revisor visual](docs/plano-orquestrador.md): manda a tarefa pro Claude Code do projeto e corrige o que o Júnior achou.
 - [Plano: MCP exclusivo do Claudinho](docs/plano-mcp.md): trocar os ajudantes via Bash por um servidor
   MCP com ferramentas próprias (livres e com confirmação).

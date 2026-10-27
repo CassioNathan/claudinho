@@ -7,7 +7,7 @@ from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_sub
 ocultos = collect_submodules("winrt") + ["pystray._win32", "tela", "teclas", "projetos", "rotinas", "programas",
                                          "claudinho_mcp"]  # importados só na hora (ver_tela da API, MCP)
 dados = (collect_data_files("customtkinter") + collect_data_files("ytmusicapi")
-         + [("painel.html", "."), ("conversa.html", "."), ("extensao", "extensao")])
+         + [("painel.html", "."), ("conversa.html", "."), ("extensao", "extensao"), ("voz_propria.py", ".")])
 binarios = []
 # partes que o Claudinho não usa e nem importam sem pacotes extras (treino do Piper, ferramentas do onnxruntime, CLI do mcp)
 SEM = ("mcp.cli", "piper.train", "onnxruntime.quantization", "onnxruntime.tools", "onnxruntime.transformers")

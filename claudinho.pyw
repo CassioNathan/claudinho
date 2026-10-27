@@ -111,7 +111,8 @@ CONFIG_PADRAO = {
     "esquetes": True,                    # parado à toa, de vez em quando apronta: deploy do nada, café, cochilo…
     "modelo_comentario": "haiku",        # modelo barato/rápido para olhar a tela
     "aviso_segundos": 5,
-    "avisar_versao": True,               # olha a última release no GitHub e avisa quando sair versão nova
+    "avisar_versao": True,
+    "tour_feito": False,                 # já passou pelo passo a passo do primeiro acesso (painel)               # olha a última release no GitHub e avisa quando sair versão nova
     "atalho_comentar": "Win+Y",          # atalho global: comenta a tela na hora
     "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
     "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
@@ -131,7 +132,7 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 ESTADO, FALA, IMPORTANTE = 0, 1, 2
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
-                 "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "emojis", "borda", "borda_forca",
+                 "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "emojis", "borda", "borda_forca",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
                  "ollama_modelo", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
@@ -576,6 +577,13 @@ def carregar_config():
     escrever_perfil(cfg["mestre"])
     motores.configurar(cfg["motor"], cfg["ollama_modelo"])
     return cfg
+
+
+# o Claude Code recusou por falta de login (sessão vencida, nunca logou, chave inválida): dá pra resolver com /login
+ERRO_DE_LOGIN = re.compile(r"oauth|failed to authenticate|not logged in|please run /login|/login|invalid api key|"
+                           r"authentication_error|\b401\b|unauthorized", re.I)
+AVISO_LOGIN = ("Meu login no Claude Code venceu, então agora eu não consigo pensar. 😅 Clica em \"fazer login\": "
+               "eu abro o Claude num terminal, você digita /login e entra de novo. Depois é só me perguntar outra vez!")
 
 
 def tem_ia():
@@ -2819,6 +2827,17 @@ class Claudinho:
         self.comentar("Anotado: agora eu leio essas pastas sem te perguntar." if pastas
                       else "Sem pastas liberadas: pra ler arquivo eu sempre te pergunto antes.", duracao=4, prioridade=ESTADO)
 
+    def abrir_login(self):
+        """Abre o Claude Code num terminal novo (fora do Claudinho: não fecha junto) pra você fazer o /login."""
+        self.fechar_balao()
+        if not shutil.which("claude"):
+            self.comentar("Não achei o Claude Code instalado. Instala ele (claude.com/claude-code) e depois faz o login.",
+                          duracao=10, prioridade=IMPORTANTE)
+            return
+        sistema.lancar("cmd.exe", "/k echo Digite /login e entre na sua conta. Depois pode fechar esta janela. && claude")
+        if hasattr(self.chat, "fechar"):
+            self.chat.fechar()   # a próxima pergunta abre o chat de novo, já com o login novo
+
     def abrir_painel(self):
         self.abrir_janela_web("/painel", "Claudinho · Painel", 1040, 760)
 
@@ -2956,6 +2975,9 @@ class Claudinho:
                                duracao=fala["duracao"],
                                botoes=[("limpar", lambda: self.limpar_notificacoes(fala["ids"]), True),
                                        ("deixa", self.fechar_balao, False)])
+        elif fala.get("login"):  # o Claude Code está sem login: botão que abre o terminal pra fazer /login
+            self.balao = Balao(self, fala["tipo"], fala["texto"], titulo="🔑 preciso de login", duracao=fala["duracao"],
+                               botoes=[("fazer login", self.abrir_login, True), ("depois", self.fechar_balao, False)])
         elif fala.get("atualizacao"):  # versão nova no GitHub
             nova = fala["atualizacao"]
             self.balao = Balao(self, fala["tipo"], fala["texto"], titulo=f"🎉 versão {nova['versao']}",
@@ -4380,7 +4402,11 @@ class Claudinho:
                     self.mem.lembrar("chat", f"Você: {self.pergunta_atual[:500]}\nClaudinho: {resposta[:900]}",
                                      conversa=self.mem.conversa_atual())
                 self.fechar_balao()  # tira o "pensando…"
-                self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
+                if erro and self.cfg["motor"] == "claude_code" and ERRO_DE_LOGIN.search(erro):   # login vencido
+                    self.enfileirar({"tipo": "comentario", "texto": AVISO_LOGIN, "duracao": 90, "login": True},
+                                    IMPORTANTE, na_frente=True)
+                else:
+                    self.abrir_conversa(texto)  # resposta já vem com o campo pra continuar
                 if self.cfg["voz_fala"] and not erro and not self.fala_em_fluxo:  # o motor não entrega em fluxo: fala agora
                     self.fala.falar(texto if self.fala_orcamento is None else fala.so_o_comeco(texto, self.fala_orcamento))
                 if self.conversa_voz:  # a voz espera isso pra falar/ouvir a próxima
@@ -4416,8 +4442,8 @@ class Claudinho:
                 self.comentar(texto, {"origem": "haiku", "id": pid})
 
     def boas_vindas(self):
-        self.comentar("Oi! Eu sou o Claudinho. 👋 Abri o painel pra você me conhecer: lá dá pra dizer quem você é, "
-                      "me vestir e escolher se eu abro junto com o Windows.", duracao=15, prioridade=IMPORTANTE)
+        self.comentar("Oi! Eu sou o Claudinho. 👋 Abri um passo a passo rapidinho no painel pra gente se conhecer: "
+                      "quem você é, meu visual, o que eu posso fazer por você.", duracao=15, prioridade=IMPORTANTE)
         self.abrir_janela_web("/painel?bemvindo=1", "Claudinho · Painel", 1040, 760)
 
     def rodar(self):

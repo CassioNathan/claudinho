@@ -85,6 +85,13 @@ com progresso (frases geradas, épocas) e um aviso no balão quando terminar. Em
 
 ### 3. Detalhes
 
+- **Memória (aprendido na marra)**: o ajudante do Chatterbox reserva ~7,7 GB de memória (commit), fora ~3 GB da
+  placa. Num PC de 40 GB com WSL, IntelliJ e MySQL abertos, dois ajudantes sobrando de reinícios do Claudinho
+  encheram o commit do Windows: o Claudinho morreu com MemoryError / "can't start new thread". Agora o ajudante vigia o
+  processo do Claudinho (`--pai`) e sai na hora em que ele fecha, sai depois de 3 min parado, e o `fala.py` só abre o
+  ajudante com 12 GB livres pra reservar (`FOLGA_MINHA_GB`); sem isso ou se a voz falhar, a frase sai no Faber.
+  Mais um motivo pro modo treinado.
+
 - **A fazer**: modo jogo e Ollama dividem a placa: com o Chatterbox direto e jogo/Ollama aberto, a fala deve cair pra
   voz padrão (hoje ela continua tentando o Chatterbox).
 - O ajudante herda o job do Claudinho (fecha junto, que aqui é o certo: não é programa do usuário).

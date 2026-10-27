@@ -354,6 +354,8 @@ MOTIVOS_JUNIOR = {
     "empacado": "esse mesmo erro está na tela há mais de {minutos} minutos: {erros}. Ele pode estar empacado: sugira um "
                 "caminho diferente do óbvio.",
     "rotina": "olhada de rotina no que ele está fazendo agora (sem erro à vista).",
+    "pedido": "ele PEDIU pra você olhar agora (apertou o atalho). Diga a observação mais útil que conseguir sobre o que "
+              "aparece (um erro, um bug provável, um atalho, um jeito melhor); aqui NÃO vale responder vazio.",
 }
 JUNIOR_INTERVALO = 90   # depois de uma dica, o Júnior espera pelo menos isso (s) antes de falar de novo
 
@@ -3889,6 +3891,7 @@ class Claudinho:
         """Dica do Júnior sobre a janela em foco. `foto`: o que o vigia já leu (erro novo, empacado); sem ela, é a
         olhada de rotina do timer (ou o "comenta agora") e ele tira a foto na hora."""
         self.comentando = True
+        pedido = self.olhando_forcado   # Win+Y / "comenta agora": ele sempre responde alguma coisa
         contexto = ((f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                      if self.app_atual else "") + perfil_curto(self.cfg["mestre"]) + self.conversa_recente())
         recentes, assuntos = self.mem.piadas_recentes(25), self.mem.assuntos_recentes(8)
@@ -3898,8 +3901,8 @@ class Claudinho:
             f = foto
             try:
                 f = f or junior.foto()
-                r = comentar_junior(dict(f, motivo=f.get("motivo", "rotina")), contexto, recentes, assuntos,
-                                    nao_ajudou) if f else None
+                motivo = "pedido" if pedido else f.get("motivo", "rotina") if f else "rotina"
+                r = comentar_junior(dict(f, motivo=motivo), contexto, recentes, assuntos, nao_ajudou) if f else None
             except Exception:
                 r = None
             self.eventos.put(("comentario", r, [], "junior", f))
@@ -4459,6 +4462,8 @@ class Claudinho:
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
                 # (em jogo e no modo Júnior não tem banco: fica quieto até a próxima; comentário vazio = nada útil a dizer)
                 if not r or not r[0] or self.parecida(*r):
+                    if alvo == "junior" and forcado:   # você pediu: nunca fica no silêncio
+                        self.comentar("Dei uma olhada e não vi nada de errado por aqui. 👀", duracao=5)
                     if alvo not in ("jogo", "junior") and not self.cfg["modo_junior"]:
                         self.comentar_do_banco(lista)
                     continue

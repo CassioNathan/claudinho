@@ -38,6 +38,22 @@ KOKORO_PASTA = PASTA / "kokoro"
 # "Minha voz": pastas com o áudio de referência de quem usa; quem fala é o Chatterbox, num ambiente à parte (torch + GPU)
 MINHAS = PASTA / "minhas"
 CLONAGEM_PY = PASTA / "clonagem" / ".venv" / "Scripts" / "python.exe"
+FOLGA_MINHA_GB = 12   # o ajudante do Chatterbox reserva ~7-8 GB: sobram ~4 GB pro resto; sem isso, sai na voz padrão
+
+
+def memoria_livre_gb():
+    """Quanto ainda dá pra reservar de memória no Windows (o "commit" que sobra), em GB."""
+    import ctypes
+
+    class Estado(ctypes.Structure):
+        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+    e = Estado(dwLength=ctypes.sizeof(Estado))
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(e))
+    return e.ullAvailPageFile / 1e9
 _KOKORO_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 KOKORO_ARQUIVOS = ("kokoro-v1.0.onnx", "voices-v1.0.bin")
 FIM_DE_FRASE = re.compile(r"(?<=[.!?…])\s+|\n+")
@@ -178,6 +194,7 @@ class Fala:
         self.trava = threading.Lock()
         self._fios = False
         self.ajudante = None         # o processo do Chatterbox (voz própria), aberto só quando ela é a escolhida
+        self.reserva = None          # Faber carregado na hora em que a voz própria não dá (memória, erro)
 
     # ---------- preparo ----------
     def nome_escolhido(self):
@@ -204,7 +221,10 @@ class Fala:
                     self.voz = self.kokoro = None   # a síntese é feita pela internet, na hora de falar
                 elif eh_minha(escolhida):
                     self.voz = self.kokoro = None   # quem fala é o ajudante do Chatterbox (processo à parte)
-                    self._ajudante()
+                    try:
+                        self._ajudante()
+                    except Exception as e:      # sem memória/sem ajudante: as frases saem no Faber até dar
+                        self.erro = str(e)
                 elif eh_kokoro(escolhida):
                     if self.kokoro is None:
                         from kokoro_onnx import Kokoro
@@ -248,9 +268,14 @@ class Fala:
         leva uns 10 s e ocupa uns 3 GB da placa de vídeo."""
         if self.ajudante and self.ajudante.poll() is None:
             return self.ajudante
+        livre = memoria_livre_gb()
+        if livre < FOLGA_MINHA_GB:
+            raise RuntimeError(f"pouca memória livre pra minha voz ({livre:.0f} GB; ela precisa de ~{FOLGA_MINHA_GB} GB)")
+        import os
         import sistema
         self.ajudante = subprocess.Popen(
-            [str(CLONAGEM_PY), str(sistema.BASE / "voz_propria.py")], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [str(CLONAGEM_PY), str(sistema.BASE / "voz_propria.py"), "--pai", str(os.getpid())],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
         self._resposta_ajudante()   # espera o {"pronto": true}
         return self.ajudante
@@ -279,6 +304,19 @@ class Fala:
             return audio, r["taxa"]
         except Exception as e:
             self.erro = f"a minha voz não respondeu ({e})"
+            return None, 0
+
+    def _sintetizar_reserva(self, frase):
+        """A frase no Faber (ou na primeira voz do Piper que tiver), pra quando a voz própria não dá."""
+        try:
+            if self.reserva is None:
+                from piper import PiperVoice
+                voz = next(v for v in VOZES if not (eh_minha(v) or eh_kokoro(v) or eh_edge(v)) and instalada(v))
+                self.reserva = PiperVoice.load(str(PASTA / f"{voz}.onnx"))
+            pedacos = [c.audio_float_array for c in self.reserva.synthesize(frase)]
+            return (np.concatenate(pedacos).astype("float32"), self.reserva.config.sample_rate) if pedacos else (None, 0)
+        except Exception as e:
+            self.erro = f"nem a voz reserva respondeu ({e})"
             return None, 0
 
     def _sintetizar_edge(self, frase, voz):
@@ -391,6 +429,8 @@ class Fala:
                         continue
                 elif eh_minha(self.voz_nome):
                     audio, taxa = self._sintetizar_minha(frase, self.voz_nome.split(":", 1)[1])
+                    if audio is None:   # a voz própria não deu (memória, erro): não fica mudo, fala no Faber
+                        audio, taxa = self._sintetizar_reserva(frase)
                     if audio is None:
                         continue
                     if agudo:

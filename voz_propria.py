@@ -4,8 +4,10 @@ Claudinho, porque precisa do torch e da placa de vídeo. O fala.py abre ele quan
     entra: {"texto": "Oi!", "voz": "C:/.../minhas/cassio"}       sai: {"ok": true, "arquivo": "...npy", "taxa": 24000}
 
 A voz é uma pasta com referencia.wav (o áudio que a pessoa mandou, já limpo). A "impressão" da voz é tirada uma vez e
-fica guardada (conds.pt) pra não clonar de novo a cada vez que liga. Fica parado 5 min sem falar: sai sozinho e solta a
-placa de vídeo (o fala.py abre de novo na próxima frase). Tudo local: nada sai do PC.
+fica guardada (conds.pt) pra não clonar de novo a cada vez que liga. Fica parado 3 min sem falar: sai sozinho e solta a
+placa de vídeo (o fala.py abre de novo na próxima frase). Pesa ~7-8 GB de memória reservada, então sai NA HORA quando o
+Claudinho fecha (vigia o processo dele, `--pai <pid>`): ajudante sobrando de um Claudinho que já fechou enchia a memória
+do Windows. Tudo local: nada sai do PC.
 """
 import json
 import os
@@ -15,14 +17,27 @@ import threading
 import time
 from pathlib import Path
 
-PARADO = 5 * 60
+PARADO = 3 * 60
 ultimo = time.time()
 
 
-def vigiar():
+def vivo(pid):
+    """O processo `pid` ainda está rodando? (Windows: abre e pergunta o código de saída; 259 = ainda rodando.)"""
+    import ctypes
+    k = ctypes.windll.kernel32
+    h = k.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    codigo = ctypes.c_ulong()
+    k.GetExitCodeProcess(h, ctypes.byref(codigo))
+    k.CloseHandle(h)
+    return codigo.value == 259
+
+
+def vigiar(pai):
     while True:
-        time.sleep(15)
-        if time.time() - ultimo > PARADO:
+        time.sleep(3)
+        if time.time() - ultimo > PARADO or (pai and not vivo(pai)):
             os._exit(0)
 
 
@@ -32,7 +47,8 @@ def main():
     import torch
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS, Conditionals
 
-    threading.Thread(target=vigiar, daemon=True).start()
+    pai = int(sys.argv[sys.argv.index("--pai") + 1]) if "--pai" in sys.argv else 0
+    threading.Thread(target=vigiar, args=(pai,), daemon=True).start()
     aparelho = "cuda" if torch.cuda.is_available() else "cpu"
     modelo = ChatterboxMultilingualTTS.from_pretrained(device=aparelho)
     atual = None
@@ -63,3 +79,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    os._exit(0)   # a entrada fechou (o Claudinho saiu): não espera nada, solta a memória já

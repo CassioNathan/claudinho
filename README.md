@@ -18,6 +18,10 @@ destrutivo ele recusa. A voz e a memória ficam no seu PC.
   Usa o Claude Code instalado no PC (Haiku com pensamento leve), com a sua memória e o seu perfil.
 - **Mexe no PC com confirmação:** abre site, pesquisa ou programa da lista sem perguntar (via `abrir.py`);
   qualquer outro comando ou mudança em arquivo pede **Pode / Não** num balão.
+- **Usar o seu navegador (Claude in Chrome)** (painel → Privacidade, desligado por padrão): com a extensão Claude in
+  Chrome instalada no Chrome ou no Edge (no Opera ela conecta, mas não controla as abas), o chat abre e lê páginas quando você pede algo num site
+  sem rotina gravada. Ler e navegar não pergunta; clicar, digitar e preencher pedem **Pode / Não**; senha, pagamento,
+  mensagem e captcha ele nunca faz sozinho.
 - **Pastas e projetos que ele lê sem perguntar** (painel → Privacidade): adicione uma pasta ou clique em
   **🧩 Puxar projetos do Claude**, que lista os projetos que você já abriu no Claude (app ou terminal, lidos do
   `~/.claude.json`) pra você marcar quais liberar. Ler fica livre; mudar arquivo ou rodar comando continua pedindo.

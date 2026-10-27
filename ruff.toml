@@ -1,0 +1,7 @@
+# checagem dos PRs (.github/workflows/validar.yml): só erros de verdade (pyflakes), sem mexer no estilo
+extend-include = ["*.pyw"]
+extend-exclude = ["graphify-out", "build", "dist", "release"]
+line-length = 120
+
+[lint]
+select = ["F"]

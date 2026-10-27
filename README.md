@@ -1,8 +1,14 @@
 # Claudinho
 
-Mascote de mesa em pixel art que vive na tela do Windows, feito em Python. Ele passeia, corre entre
-monitores atrás do mouse, conversa com você usando o Claude Code, avisa quando seus chats do Claude Code
-terminam e solta piadas sobre o que está na tela.
+Mascote de mesa em pixel art que mora na tela do Windows, feito em Python, com o jeitinho do Darwin
+(O Incrível Mundo de Gumball): animado, inocente e sempre querendo ajudar. Ele passeia, corre entre monitores
+atrás do mouse, conversa com você por texto ou voz usando o Claude Code, avisa quando seus chats do Claude Code
+terminam e comenta o que está na tela.
+
+Também dá uma mão no dia a dia: abre programas e projetos (esperando o programa carregar de verdade), aperta
+os atalhos que você ensina no painel e repete rotinas que você grava em sites pela extensão do navegador.
+Tudo que mexe no PC segue regras claras: o que é seguro ele faz, o resto pede **Pode / Não** e o que é
+destrutivo ele recusa. A voz e a memória ficam no seu PC.
 
 ## O que ele faz
 

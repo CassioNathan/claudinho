@@ -5,7 +5,6 @@
 Quem baixa: descompacta onde quiser e abre o Claudinho.exe (não precisa de Python). Pra tirar, é só apagar a pasta
 (e, se quiser, o ~/.claudinho com os dados dele).
 """
-import shutil
 import subprocess
 import sys
 import zipfile

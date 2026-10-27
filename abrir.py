@@ -8,7 +8,6 @@ A lista de programas fica em PROGRAMAS (e pode ser trocada em ~/.claudinho/confi
 chave "programas_liberados").
 """
 import ctypes
-import ctypes.wintypes as wt
 import json
 import os
 import subprocess

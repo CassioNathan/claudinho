@@ -1,0 +1,47 @@
+# Validação de todo PR (e de todo push no main): código que nem compila ou com erro óbvio não entra.
+# Roda com permissão só de leitura, então PR de fork não consegue mexer no repositório por aqui.
+name: Validar
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Python compila
+        run: |
+          for f in *.py *.pyw; do python -m py_compile "$f"; done
+
+      - name: Sem erro óbvio (ruff, regras do pyflakes)
+        run: |
+          pip install -q ruff
+          ruff check . --output-format github
+
+      - name: Extensão do navegador
+        run: |
+          for f in extensao/*.js; do node --check "$f"; done
+          python -c "import json; json.load(open('extensao/manifest.json', encoding='utf-8'))"
+
+      - name: Nenhuma chave no código
+        run: |
+          if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}' -- . ':!graphify-out'; then
+            echo "::error::Parece uma chave de API no código. Tire antes de mandar o PR."
+            exit 1
+          fi

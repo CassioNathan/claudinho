@@ -39,6 +39,11 @@ jobs:
           for f in extensao/*.js; do node --check "$f"; done
           python -c "import json; json.load(open('extensao/manifest.json', encoding='utf-8'))"
 
+      - name: Testes (as partes que não abrem janela)
+        run: |
+          pip install -q pytest numpy
+          python -m pytest -q tests
+
       - name: Nenhuma chave no código
         run: |
           if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}' -- . ':!graphify-out'; then

@@ -23,9 +23,15 @@ import consumo
 import sistema
 
 MOTORES = ("claude_code", "api", "ollama", "nenhum")
-# o `claude --model haiku` cai em versão antiga (haiku 4.5, sonnet 4.6, opus 4.7): o Claudinho pede o ID completo
-MODELOS_CLAUDE = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
-MODELOS_API = MODELOS_CLAUDE
+# A tabela única dos modelos do Claude: o painel mostra nome/descrição, o consumo usa o preço (US$ por milhão de
+# tokens: entrada, saída) e o resto usa o id. O `claude --model haiku` cai em versão antiga (haiku 4.5, sonnet 4.6,
+# opus 4.7): o Claudinho pede o id completo
+MODELOS = {
+    "haiku": {"id": "claude-haiku-5-5", "nome": "Haiku ⚡", "desc": "rápido e econômico", "preco": (0.10, 0.50)},
+    "sonnet": {"id": "claude-sonnet-5-5", "nome": "Sonnet 🧠", "desc": "equilibrado", "preco": (2.00, 10.00)},
+    "opus": {"id": "claude-opus-5-5", "nome": "Opus 🦉", "desc": "o mais esperto, mais lento", "preco": (4.00, 20.00)},
+}
+MODELOS_CLAUDE = {apelido: m["id"] for apelido, m in MODELOS.items()}
 # qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
 TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
                   "resumo": "sonnet", "avisos": "haiku"}
@@ -47,7 +53,8 @@ def configurar(motor, ollama_modelo, modelos=None):
 def modelos_validos(modelos):
     """O "Modelo por ação" do painel, completo e só com modelos que existem."""
     modelos = modelos if isinstance(modelos, dict) else {}
-    return {t: modelos.get(t) if modelos.get(t) in MODELOS_CLAUDE else padrao for t, padrao in TAREFAS_PADRAO.items()}
+    return {t: modelos[t] if isinstance(modelos.get(t), str) and modelos[t] in MODELOS_CLAUDE else padrao
+            for t, padrao in TAREFAS_PADRAO.items()}
 
 
 def modelo_da(tarefa):
@@ -125,8 +132,8 @@ def _cliente():
 def _pedido_api(modelo):
     """Haiku sem pensamento pras coisas rápidas; Sonnet com pensamento leve quando precisa ler direito."""
     if modelo in ("sonnet", "opus"):   # esses não aceitam desligar o pensamento: esforço baixo
-        return {"model": MODELOS_API[modelo], "output_config": {"effort": "low"}}
-    return {"model": MODELOS_API["haiku"], "thinking": {"type": "disabled"}, "output_config": {"effort": "low"}}
+        return {"model": MODELOS_CLAUDE[modelo], "output_config": {"effort": "low"}}
+    return {"model": MODELOS_CLAUDE["haiku"], "thinking": {"type": "disabled"}, "output_config": {"effort": "low"}}
 
 
 def _texto_da_resposta(r):
@@ -373,8 +380,10 @@ class ChatSimples:
         pass  # as instruções são lidas na hora de cada pergunta
 
     def nova_conversa(self):
-        with self.trava:
-            self.mensagens = []
+        def zerar():   # em segundo plano: no meio de uma resposta a trava está com ela e a janela congelaria
+            with self.trava:
+                self.mensagens = []
+        threading.Thread(target=zerar, daemon=True).start()
 
     def _guardar(self, pergunta, resposta):
         self.mensagens += [{"role": "user", "content": pergunta}, {"role": "assistant", "content": resposta}]

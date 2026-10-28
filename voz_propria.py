@@ -19,6 +19,7 @@ from pathlib import Path
 
 PARADO = 3 * 60
 ultimo = time.time()
+gerando = False   # no meio de uma frase o vigia não derruba (frase longa demorando não é "parado")
 
 
 def vivo(pid):
@@ -37,12 +38,12 @@ def vivo(pid):
 def vigiar(pai):
     while True:
         time.sleep(3)
-        if time.time() - ultimo > PARADO or (pai and not vivo(pai)):
+        if (not gerando and time.time() - ultimo > PARADO) or (pai and not vivo(pai)):
             os._exit(0)
 
 
 def main():
-    global ultimo
+    global ultimo, gerando
     import numpy as np
     import torch
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS, Conditionals
@@ -56,7 +57,7 @@ def main():
     saida.mkdir(exist_ok=True)
     print(json.dumps({"pronto": True, "aparelho": aparelho}), flush=True)
     for linha in sys.stdin:
-        ultimo = time.time()
+        ultimo, gerando = time.time(), True
         try:
             pedido = json.loads(linha)
             pasta = Path(pedido["voz"])
@@ -74,7 +75,7 @@ def main():
             print(json.dumps({"ok": True, "arquivo": str(arquivo), "taxa": modelo.sr}), flush=True)
         except Exception as e:
             print(json.dumps({"ok": False, "erro": str(e)}), flush=True)
-        ultimo = time.time()
+        ultimo, gerando = time.time(), False
 
 
 if __name__ == "__main__":

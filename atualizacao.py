@@ -23,10 +23,14 @@ def nova():
     try:
         with urllib.request.urlopen(pedido, timeout=10) as r:
             release = json.load(r)
-    except (OSError, ValueError):
+    except Exception:   # sem rede, conexão cortada no meio (IncompleteRead), corpo que não é JSON…
+        return None
+    if not isinstance(release, dict):
         return None
     versao = str(release.get("tag_name") or "").lstrip("v")
     if release.get("draft") or release.get("prerelease") or numero(versao) <= numero(sistema.VERSAO):
         return None
-    return {"versao": versao, "url": release.get("html_url") or f"https://github.com/{REPO}/releases/latest",
-            "titulo": release.get("name") or f"Claudinho {versao}"}
+    url = str(release.get("html_url") or "")
+    if not url.startswith(f"https://github.com/{REPO}/"):   # o botão "baixar" só abre a página da release
+        url = f"https://github.com/{REPO}/releases/latest"
+    return {"versao": versao, "url": url, "titulo": str(release.get("name") or f"Claudinho {versao}")}

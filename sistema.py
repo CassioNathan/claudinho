@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSAO = "1.3.0"
+VERSAO = "1.3.1"
 EMPACOTADO = bool(getattr(sys, "frozen", False))
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 PASTA_APP = Path(sys.executable).resolve().parent if EMPACOTADO else BASE
@@ -127,8 +127,12 @@ def _e_nosso(comando):
 
 
 def barra_ligada():
+    """A barra de status é a do Claudinho? Pelo comando de agora ou de outra instalação dele (cli/claudinho-cli
+    com "status"), não pelo nome da pasta (quem roda de uma pasta sem "claudinho" no nome ficava sem desligar)."""
     linha = (_ler_settings() or {}).get("statusLine") or {}
-    return "claudinho" in linha.get("command", "") and " status" in linha.get("command", "")
+    comando = linha.get("command", "") if isinstance(linha, dict) else ""
+    return comando == comando_texto("status") or (comando.rstrip().endswith(" status") and (
+        "claudinho-cli" in comando or "cli.py" in comando or "claudinho_status" in comando))
 
 
 def ligar_barra(ligar):
@@ -156,6 +160,16 @@ def ligar_barra(ligar):
 def aviso_ligado():
     dados = _ler_settings() or {}
     return any(_e_nosso(h.get("command", "")) for g in dados.get("hooks", {}).get("Stop", []) for h in g.get("hooks", []))
+
+
+def atualizar_aviso():
+    """Aviso ligado por uma versão antiga (ex.: a cópia em ~/.claude/hooks, que não manda a chave): troca pelo de
+    agora. Não mexe se estiver desligado ou se já for o atual."""
+    dados = _ler_settings() or {}
+    nossos = [h.get("command", "") for g in dados.get("hooks", {}).get("Stop", []) for h in g.get("hooks", [])
+              if _e_nosso(h.get("command", ""))]
+    if nossos and nossos != [comando_texto("aviso")]:
+        ligar_aviso(True)
 
 
 def ligar_aviso(ligar):

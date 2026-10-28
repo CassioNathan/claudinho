@@ -34,11 +34,8 @@ def main():
         import abrir
         abrir.main()
     elif qual == "status":
-        import claudinho_status  # nunca pode quebrar nem travar o Claude Code
-        try:
-            claudinho_status.main()
-        except Exception:
-            pass
+        import claudinho_status  # nunca pode quebrar nem travar o Claude Code (o main dele já se protege)
+        claudinho_status.main()
     elif qual == "mcp":
         import claudinho_mcp
         claudinho_mcp.servidor.run()

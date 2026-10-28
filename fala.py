@@ -8,6 +8,7 @@
 As vozes (~60 MB cada) ficam em ~/.claudinho/vozes; a escolhida carrega em segundo plano (uns 5 s, uma vez só).
 """
 import json
+import os
 import queue
 import re
 import subprocess
@@ -16,6 +17,8 @@ import time
 from pathlib import Path
 
 import numpy as np
+
+import sistema
 
 VOZES = {  # id do Piper → nome que aparece no painel
     "pt_BR-faber-medium": "Faber",
@@ -33,12 +36,15 @@ VOZES = {  # id do Piper → nome que aparece no painel
 }
 VOZ_PADRAO = "pt_BR-faber-medium"
 TOM_MAXIMO = 1.6   # o tom no máximo (40) sobe ≈ +8 semitons: o Faber vai de ~150-180 Hz pra ~245 Hz
-PASTA = Path.home() / ".claudinho" / "vozes"
+PASTA = sistema.DADOS / "vozes"   # respeita o CLAUDINHO_DADOS, como o resto do Claudinho
 KOKORO_PASTA = PASTA / "kokoro"
 # "Minha voz": pastas com o áudio de referência de quem usa; quem fala é o Chatterbox, num ambiente à parte (torch + GPU)
 MINHAS = PASTA / "minhas"
 CLONAGEM_PY = PASTA / "clonagem" / ".venv" / "Scripts" / "python.exe"
 FOLGA_MINHA_GB = 12   # o ajudante do Chatterbox reserva ~7-8 GB: sobram ~4 GB pro resto; sem isso, sai na voz padrão
+LIMITE_ABRIR_MINHA_S = 300   # abrir o ajudante (a 1ª vez baixa o modelo do Chatterbox)
+LIMITE_FRASE_MINHA_S = 120   # uma frase na voz própria; passou disso, ele travou
+ESPERA_APOS_FALHA_S = 120    # depois de falhar, a voz reserva fala por esse tempo antes de tentar de novo
 
 
 def memoria_livre_gb():
@@ -74,20 +80,24 @@ def eh_minha(voz):
 
 def treinada(voz):
     """A versão leve (Piper treinado) de uma voz própria, se existir: minhas/<nome>/voz.onnx."""
+    if not eh_minha(voz):   # Piper, Kokoro, Microsoft: não tem versão treinada (e não tem ":nome" pra separar)
+        return None
     arquivo = MINHAS / voz.split(":", 1)[1] / "voz.onnx"
-    return arquivo if eh_minha(voz) and arquivo.exists() else None
+    return arquivo if arquivo.exists() else None
 
 
 def achar_minhas():
-    """Põe no catálogo as vozes próprias que existem em ~/.claudinho/vozes/minhas (uma pasta por voz)."""
-    for v in [v for v in VOZES if eh_minha(v)]:
-        del VOZES[v]
+    """Põe no catálogo as vozes próprias que existem em ~/.claudinho/vozes/minhas (uma pasta por voz). Monta um
+    catálogo novo e troca de uma vez: a thread da voz e o painel (outra thread) podem estar percorrendo o antigo."""
+    global VOZES
+    novo = {v: nome for v, nome in VOZES.items() if not eh_minha(v)}
     if MINHAS.is_dir():
         for pasta in sorted(MINHAS.iterdir()):
             if (pasta / "voz.onnx").exists():   # treinada: leve, roda no processador como as outras do Piper
-                VOZES[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (treinada, leve)"
+                novo[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (treinada, leve)"
             elif (pasta / "referencia.wav").exists():
-                VOZES[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (Chatterbox, usa a placa de vídeo)"
+                novo[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (Chatterbox, usa a placa de vídeo)"
+    VOZES = novo
 
 
 def instalada(voz):
@@ -204,6 +214,8 @@ class Fala:
         self.trava = threading.Lock()
         self._fios = False
         self.ajudante = None         # o processo do Chatterbox (voz própria), aberto só quando ela é a escolhida
+        self.linhas_ajudante = queue.Queue()   # o que o ajudante escreve (lido por uma thread: dá pra esperar com limite)
+        self.ajudante_falhou_ate = 0.0         # falhou há pouco: não reabre a cada frase (cada tentativa custa segundos)
         self.reserva = None          # Faber carregado na hora em que a voz própria não dá (memória, erro)
 
     # ---------- preparo ----------
@@ -227,6 +239,8 @@ class Fala:
 
         def trabalhar():
             try:
+                if not eh_minha(escolhida) or treinada(escolhida):
+                    self._fechar_ajudante()
                 if eh_edge(escolhida):
                     self.voz = self.kokoro = None   # a síntese é feita pela internet, na hora de falar
                 elif treinada(escolhida):   # voz própria treinada: é um Piper como os outros
@@ -252,6 +266,7 @@ class Fala:
                     list(voz.synthesize("oi"))
                     self.voz, self.kokoro = voz, None    # e o Kokoro, que é pesado
                 self.voz_nome = escolhida
+                self.erro = None   # carregou: o erro da voz anterior não vale mais
             except Exception as e:
                 self.erro = str(e)
             finally:
@@ -279,30 +294,63 @@ class Fala:
         threading.Thread(target=trabalhar, daemon=True).start()
 
     def _ajudante(self):
-        """O processo do Chatterbox, aberto se ainda não está (ou se saiu sozinho depois de 5 min parado). Carregar
-        leva uns 10 s e ocupa uns 3 GB da placa de vídeo."""
+        """O processo do Chatterbox, aberto se ainda não está (ou se saiu sozinho depois de parado; ver PARADO no
+        voz_propria.py). Carregar leva uns 10 s e ocupa uns 3 GB da placa de vídeo (fora a memória reservada,
+        FOLGA_MINHA_GB). Falhou há pouco: nem tenta (a frase sai na voz reserva)."""
         if self.ajudante and self.ajudante.poll() is None:
             return self.ajudante
+        if time.time() < self.ajudante_falhou_ate:
+            raise RuntimeError("a voz própria falhou há pouco; tento de novo daqui a pouco")
         livre = memoria_livre_gb()
         if livre < FOLGA_MINHA_GB:
             raise RuntimeError(f"pouca memória livre pra minha voz ({livre:.0f} GB; ela precisa de ~{FOLGA_MINHA_GB} GB)")
-        import os
-        import sistema
+        self.linhas_ajudante = queue.Queue()
         self.ajudante = subprocess.Popen(
             [str(CLONAGEM_PY), str(sistema.BASE / "voz_propria.py"), "--pai", str(os.getpid())],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
-        self._resposta_ajudante()   # espera o {"pronto": true}
+        processo, linhas = self.ajudante, self.linhas_ajudante
+
+        def ler():   # numa thread: assim a espera pela resposta tem limite (um Chatterbox travado não trava a voz)
+            for linha in processo.stdout:
+                linhas.put(linha)
+            linhas.put(None)
+        threading.Thread(target=ler, daemon=True).start()
+        try:
+            pronto = self._resposta_ajudante(LIMITE_ABRIR_MINHA_S)   # a 1ª vez baixa o modelo: demora
+            if pronto.get("aparelho") != "cuda":   # sem placa NVIDIA o Chatterbox leva minutos por frase
+                raise RuntimeError("sem placa de vídeo NVIDIA: a voz própria direta não roda neste PC "
+                                   "(a versão treinada, leve, roda)")
+        except Exception:
+            self._fechar_ajudante(falhou=True)
+            raise
         return self.ajudante
 
-    def _resposta_ajudante(self):
-        """A próxima linha JSON do ajudante (pula o que as bibliotecas imprimem de enfeite)."""
-        for linha in self.ajudante.stdout:
+    def _fechar_ajudante(self, falhou=False):
+        if falhou:
+            self.ajudante_falhou_ate = time.time() + ESPERA_APOS_FALHA_S
+        ajudante = getattr(self, "ajudante", None)
+        if ajudante and ajudante.poll() is None:
+            try:
+                ajudante.kill()
+            except OSError:
+                pass
+        self.ajudante = None
+
+    def _resposta_ajudante(self, limite=LIMITE_FRASE_MINHA_S):
+        """A próxima linha JSON do ajudante (pula o que as bibliotecas imprimem de enfeite), esperando até `limite`."""
+        fim = time.time() + limite
+        while True:
+            try:
+                linha = self.linhas_ajudante.get(timeout=max(0.1, fim - time.time()))
+            except queue.Empty:
+                raise RuntimeError(f"o ajudante da voz própria não respondeu em {limite} s") from None
+            if linha is None:
+                raise RuntimeError("o ajudante da voz própria fechou")
             try:
                 return json.loads(linha)
             except ValueError:
                 continue
-        raise RuntimeError("o ajudante da voz própria fechou")
 
     def _sintetizar_minha(self, frase, voz):
         """Uma frase na voz própria: (áudio float32, taxa) ou (None, 0) se o ajudante falhou."""
@@ -319,6 +367,8 @@ class Fala:
             self.erro = None   # voltou a funcionar: o painel para de avisar que caiu no Faber
             return audio, r["taxa"]
         except Exception as e:
+            if self.ajudante is not None:   # travou ou morreu no meio: fecha e dá um tempo antes de abrir de novo
+                self._fechar_ajudante(falhou=True)
             self.erro = f"a minha voz não respondeu ({e})"
             return None, 0
 
@@ -327,7 +377,10 @@ class Fala:
         try:
             if self.reserva is None:
                 from piper import PiperVoice
-                voz = next(v for v in VOZES if not (eh_minha(v) or eh_kokoro(v) or eh_edge(v)) and instalada(v))
+                voz = next((v for v in VOZES if not (eh_minha(v) or eh_kokoro(v) or eh_edge(v)) and instalada(v)), None)
+                if voz is None:
+                    self.erro = "a voz própria não respondeu e não tem nenhuma voz do Piper instalada pra falar no lugar"
+                    return None, 0
                 self.reserva = PiperVoice.load(str(PASTA / f"{voz}.onnx"))
             pedacos = [c.audio_float_array for c in self.reserva.synthesize(frase)]
             return (np.concatenate(pedacos).astype("float32"), self.reserva.config.sample_rate) if pedacos else (None, 0)

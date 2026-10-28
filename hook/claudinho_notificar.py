@@ -11,6 +11,7 @@ import urllib.request
 from pathlib import Path
 
 PORTA = 47821
+DADOS = Path(os.environ.get("CLAUDINHO_DADOS") or Path.home() / ".claudinho")
 
 
 def texto_de(conteudo):
@@ -50,8 +51,9 @@ def ultimos(transcript):
             if not pedido:   # ainda dentro da última rodada: anota o que ele editou ou criou
                 for b in msg.get("content") or []:
                     if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") in EDITORES:
-                        arq = (b.get("input") or {}).get("file_path") or (b.get("input") or {}).get("notebook_path")
-                        if arq and arq not in mexeu:
+                        entrada = b.get("input") if isinstance(b.get("input"), dict) else {}
+                        arq = entrada.get("file_path") or entrada.get("notebook_path")
+                        if isinstance(arq, str) and arq and arq not in mexeu:
                             mexeu.append(arq)
         elif not pedido and item.get("type") == "user" and not item.get("isMeta"):
             t = texto_de(msg.get("content")).strip()
@@ -80,8 +82,12 @@ def main():
         "session_id": dados.get("session_id"),
         "mexeu": mexeu,
     }, ensure_ascii=False).encode("utf-8")
+    try:   # a chave que o Claudinho criou: sem ela ele recusa (qualquer programa poderia mandar aviso falso)
+        chave = (DADOS / "aviso_token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return
     req = urllib.request.Request(f"http://127.0.0.1:{PORTA}/aviso", data=corpo,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json", "X-Claudinho-Aviso": chave})
     urllib.request.urlopen(req, timeout=1.5)
 
 

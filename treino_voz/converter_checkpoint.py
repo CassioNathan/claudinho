@@ -1,40 +1,20 @@
-"""Converte um checkpoint do Piper salvo no Linux pra carregar no Windows com o torch novo (weights_only=True).
+"""Converte um checkpoint do Piper salvo no Linux pra carregar no Windows com o torch novo.
 
-O checkpoint do Faber (rhasspy/piper-checkpoints) guarda um `pathlib.PosixPath` nos hiperparâmetros, que o torch
-recusa por segurança e que nem dá pra criar no Windows. Em vez de liberar tudo (`weights_only=False` roda código do
-arquivo), o arquivo é lido por um leitor restrito: só tensores e tipos simples; o caminho vira texto.
+O checkpoint do Faber (rhasspy/piper-checkpoints) guarda um `pathlib.PosixPath` nos hiperparâmetros: o torch recusa
+por segurança no modo seguro (`weights_only=True`), e nem dá pra criar um PosixPath no Windows. Aqui o arquivo é lido
+NO MODO SEGURO do próprio torch, que só monta tensores e tipos simples; a única coisa liberada a mais é o caminho,
+lido como `PurePosixPath` (que só guarda texto) e gravado de volta como texto. Nada do arquivo vira código.
 
     python converter_checkpoint.py entrada.ckpt saida.ckpt
 """
 import pathlib
-import pickle
 import sys
-import types
 
 import torch
 
-PERMITIDOS = ("torch", "collections", "numpy", "_codecs", "lightning", "pytorch_lightning", "piper")
-PERMITIDOS_BUILTINS = {"set", "frozenset", "dict", "list", "tuple", "int", "float", "str", "bool", "bytes", "slice",
-                       "complex", "bytearray", "range", "object", "getattr", "type"}
-
-
-class Leitor(pickle.Unpickler):
-    def find_class(self, modulo, nome):
-        if modulo == "pathlib" and nome in ("PosixPath", "PurePosixPath", "WindowsPath", "PureWindowsPath"):
-            return pathlib.PurePosixPath
-        if modulo == "builtins" and nome in PERMITIDOS_BUILTINS:
-            return super().find_class(modulo, nome)
-        if modulo.split(".")[0] in PERMITIDOS:
-            return super().find_class(modulo, nome)
-        raise pickle.UnpicklingError(f"bloqueado: {modulo}.{nome}")
-
-
-# o torch.load pede um "módulo pickle": este é o do Python com o leitor restrito no lugar do padrão
-leitor_seguro = types.ModuleType("leitor_seguro")
-leitor_seguro.Unpickler = Leitor
-leitor_seguro.load = lambda f, **kw: Leitor(f, **kw).load()
-leitor_seguro.UnpicklingError = pickle.UnpicklingError
-leitor_seguro.dumps, leitor_seguro.loads = pickle.dumps, pickle.loads
+# os nomes que o pickle usa pro caminho do Linux (Python até 3.12 e 3.13+) → um tipo que só guarda texto
+CAMINHOS = [(pathlib.PurePosixPath, nome) for nome in (
+    "pathlib.PosixPath", "pathlib.PurePosixPath", "pathlib._local.PosixPath", "pathlib._local.PurePosixPath")]
 
 
 def sem_caminhos(o):
@@ -47,9 +27,14 @@ def sem_caminhos(o):
     return o
 
 
+def ler(entrada):
+    """O checkpoint lido no modo seguro do torch (weights_only=True), com os caminhos liberados como texto."""
+    with torch.serialization.safe_globals(CAMINHOS):
+        return torch.load(entrada, map_location="cpu", weights_only=True)
+
+
 if __name__ == "__main__":
     entrada, saida = sys.argv[1], sys.argv[2]
-    ckpt = torch.load(entrada, map_location="cpu", weights_only=False, pickle_module=leitor_seguro)
-    torch.save(sem_caminhos(ckpt), saida)
-    torch.load(saida, map_location="cpu", weights_only=True)   # conferência: agora carrega no modo seguro
+    torch.save(sem_caminhos(ler(entrada)), saida)
+    torch.load(saida, map_location="cpu", weights_only=True)   # conferência: o convertido carrega sem nada liberado
     print("convertido:", saida)

@@ -31,8 +31,9 @@ def do_claude():
         dados = json.loads((Path.home() / ".claude.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
+    projetos = dados.get("projects") if isinstance(dados, dict) else None
     vistas, lista = set(), []
-    for bruto in dados.get("projects") or {}:
+    for bruto in projetos if isinstance(projetos, dict) else {}:
         pasta = Path(os.path.normpath(bruto))
         chave = str(pasta).lower()
         if (chave in vistas or pasta == Path.home() or "scratch-workspaces" in chave

@@ -939,19 +939,14 @@ function montarResto() {
     for (const c of document.querySelectorAll("#listaClaude input:not(:disabled)")) c.checked = true;
   };
   document.getElementById("liberarClaude").onclick = async () => {
-    const marcadas = [...document.querySelectorAll("#listaClaude input:checked:not(:disabled)")].map(c => c.value);
-    if (!marcadas.length) { avisar("marque pelo menos um"); return; }
-    await acao("pastas_do_claude:" + marcadas.join("\n"), `liberei ${marcadas.length} ✓`);
-    document.getElementById("projetosClaude").hidden = true;
+    if (await liberarMarcados(document.getElementById("listaClaude"))) document.getElementById("projetosClaude").hidden = true;
   };
   for (const b of document.querySelectorAll("[data-acao]")) b.onclick = () => acao(b.dataset.acao);
   atualizarVivos();
 }
-async function puxarProjetosClaude() {
-  const caixa = document.getElementById("listaClaude");
-  let lista;
-  try { lista = await api("/api/projetos_claude"); } catch (e) { avisar("não consegui ler os projetos do Claude"); return; }
-  caixa.innerHTML = lista.length ? "" : '<span class="desc">Nenhum projeto aberto no Claude ainda.</span>';
+// a lista dos projetos do Claude com caixinhas (Privacidade e o tour usam a mesma)
+function listarProjetos(caixa, lista, vazio) {
+  caixa.innerHTML = lista.length ? "" : `<span class="desc">${vazio}</span>`;
   for (const p of lista) {
     const linha = document.createElement("label");
     linha.className = "linha";
@@ -966,6 +961,18 @@ async function puxarProjetosClaude() {
     caixinha.disabled = p.liberada;
     caixa.appendChild(linha);
   }
+}
+async function liberarMarcados(caixa) {
+  const marcadas = [...caixa.querySelectorAll("input:checked:not(:disabled)")].map(c => c.value);
+  if (!marcadas.length) { avisar("marque pelo menos um"); return false; }
+  await acao("pastas_do_claude:" + marcadas.join("\n"), `liberei ${marcadas.length} ✓`);
+  for (const c of caixa.querySelectorAll("input:checked")) c.disabled = true;
+  return true;
+}
+async function puxarProjetosClaude() {
+  let lista;
+  try { lista = await api("/api/projetos_claude"); } catch (e) { avisar("não consegui ler os projetos do Claude"); return; }
+  listarProjetos(document.getElementById("listaClaude"), lista, "Nenhum projeto aberto no Claude ainda.");
   document.getElementById("projetosClaude").hidden = false;
 }
 function montarPastas() {
@@ -1236,8 +1243,6 @@ function atualizarVivos() {
 }
 
 let motorMontado = "";
-const MODELOS_CHAT = [["haiku", "Haiku ⚡", "rápido e econômico"], ["sonnet", "Sonnet 🧠", "equilibrado"],
-                      ["opus", "Opus 🦉", "o mais esperto, mais lento"]];
 // modelo de cada coisa fora do chat: [chave, ação, o que é]
 const ACOES_MODELO = [
   ["piadas", "Piadas e comentários 😄", "as piadas olhando a tela e os comentários de música"],
@@ -1249,7 +1254,7 @@ const ACOES_MODELO = [
 function tabelaAcoes(m) {
   const linhas = ACOES_MODELO.map(([id, nome, desc]) => `<div class="linha" style="padding:6px 0">
     <div class="info"><div class="titulo" style="font-size:13px">${nome}</div><div class="desc">${desc}</div></div>
-    <select class="campo" data-acao-modelo="${id}" style="flex:0 0 120px">${MODELOS_CHAT.map(([mid, mnome]) =>
+    <select class="campo" data-acao-modelo="${id}" style="flex:0 0 120px">${m.modelos.map(([mid, mnome]) =>
       `<option value="${mid}"${(m.modelos_acao || {})[id] === mid ? " selected" : ""}>${mnome}</option>`).join("")}</select></div>`).join("");
   return `<div style="margin-top:14px"><b>Modelo por ação</b></div>
     <div class="desc" style="margin-bottom:4px">Fora do chat, cada coisa pode usar um modelo. O Sonnet acerta mais e o Haiku
@@ -1257,7 +1262,10 @@ function tabelaAcoes(m) {
 }
 function ligarAcoes(caixa, m) {
   for (const s of caixa.querySelectorAll("[data-acao-modelo]"))
-    s.onchange = () => mudar("modelos_acao", Object.assign({}, m.modelos_acao, {[s.dataset.acaoModelo]: s.value}));
+    // manda o que está em TODOS os seletores agora (o m.modelos_acao guardado aqui pode estar velho: duas trocas
+    // rápidas faziam a segunda desfazer a primeira)
+    s.onchange = () => mudar("modelos_acao", Object.fromEntries(
+      [...caixa.querySelectorAll("[data-acao-modelo]")].map(x => [x.dataset.acaoModelo, x.value])));
 }
 const ESFORCOS = [["low", "baixo"], ["medium", "médio"], ["high", "alto"], ["xhigh", "muito alto"], ["max", "máximo"]];
 function montarMotor() {
@@ -1277,7 +1285,7 @@ function montarMotor() {
     caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa o Claude Code instalado e logado no seu PC (comando <code>claude</code>):
       chat com ferramentas, piadas olhando a tela e resumos. ${m.claude ? "" : "Instale o Claude Code e rode <code>claude</code> → <code>/login</code>."}</p>
       <div style="margin-top:12px"><b>Modelo do chat</b></div>
-      <div class="modelos-locais">${MODELOS_CHAT.map(([id, nome, desc]) => `<div class="modelo-local${id === m.chat_modelo ? " ativo" : ""}"
+      <div class="modelos-locais">${m.modelos.map(([id, nome, desc]) => `<div class="modelo-local${id === m.chat_modelo ? " ativo" : ""}"
         data-chat-modelo="${id}"><b>${nome}</b>${desc}</div>`).join("")}</div>
       <div style="margin-top:12px"><b>Esforço</b> <span class="valor" id="esforcoValor">${ESFORCOS[esforco < 0 ? 0 : esforco][1]}</span></div>
       <div class="linha-campo"><input type="range" min="0" max="${ESFORCOS.length - 1}" step="1" value="${esforco < 0 ? 0 : esforco}" id="esforco" style="flex:1"></div>
@@ -1332,17 +1340,17 @@ function montarMotor() {
 function montarConsumo() {
   const c = estado.consumo, caixa = document.getElementById("consumo");
   if (!c || !caixa) return;
-  const agora = Date.now() / 1000, limites = (c.plano && c.plano.rate_limits) || {};
+  const janelas = c.janelas || {};   // a conta (porcentagem, já resetou?) vem pronta do consumo.py
   const barra = (nome, j) => {
-    if (!j || (j.resets_at && j.resets_at < agora)) return "";
-    const p = Math.round(j.used_percentage || 0), quando = j.resets_at ? new Date(j.resets_at * 1000) : null;
+    if (!j) return "";
+    const p = j.pct, quando = j.reseta ? new Date(j.reseta * 1000) : null;
     const reseta = quando ? (nome === "5 horas" ? quando.toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"})
                                               : quando.toLocaleDateString("pt-BR", {day: "2-digit", month: "2-digit"})) : "";
     return `<div class="rotulo"><span>${nome}</span><b>${p}%</b></div>
       <div class="trilho"><i class="${p >= 80 ? "alto" : ""}" style="width:${Math.min(100, p)}%"></i></div>
       ${reseta ? `<div class="nota">reseta ${nome === "5 horas" ? "às" : "em"} ${reseta}</div>` : ""}`;
   };
-  const plano = barra("5 horas", limites.five_hour) + barra("semana", limites.seven_day);
+  const plano = barra("5 horas", janelas.five_hour) + barra("semana", janelas.seven_day);
   const visto = c.plano ? (c.plano.ha_minutos < 1 ? "agora" : `há ${c.plano.ha_minutos} min`) : "";
   const h = c.claudinho.hoje, t = c.claudinho.total;
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + " mi" : n >= 1e3 ? Math.round(n / 1e3) + " mil" : String(n);
@@ -1364,9 +1372,18 @@ function montarSistema() {
   document.getElementById("versao").textContent = "v" + sis.versao;
   const nova = document.getElementById("versaoNova");
   nova.hidden = !sis.nova;
-  if (sis.nova) {
-    nova.innerHTML = `🎉 Saiu a <b>v${sis.nova.versao}</b>: <a href="${sis.nova.url}" target="_blank" rel="noopener">ver e baixar</a>` +
-      " (feche o Claudinho, troque a pasta pela nova e abra; seus dados ficam).";
+  if (sis.nova) {   // o nome e o link vêm do GitHub: montados como texto, nunca como HTML
+    nova.replaceChildren();
+    const negrito = document.createElement("b");
+    negrito.textContent = "v" + sis.nova.versao;
+    const link = document.createElement("a");
+    link.textContent = "ver e baixar";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.href = String(sis.nova.url).startsWith("https://github.com/CassioNathan/claudinho/")
+      ? sis.nova.url : "https://github.com/CassioNathan/claudinho/releases/latest";
+    nova.append("🎉 Saiu a ", negrito, ": ", link,
+      " (feche o Claudinho, troque a pasta pela nova e abra; seus dados ficam).");
   }
   document.getElementById("descDados").textContent = "Seus dados ficam em " + sis.dados;
 }
@@ -1405,12 +1422,16 @@ function montarVozes(forcar) {
   sel.dataset.assinatura = assinatura;
   sel.innerHTML = "";
   for (const v of f.vozes) {
-    const rotulo = v.instalada ? v.nome : `${v.nome} — baixar (${v.tamanho})`;
-    sel.add(new Option(baixando === v.id ? `${v.nome} — baixando…` : rotulo, v.id, false, v.id === estado.cfg.voz_voz));
+    // voz própria não se baixa: sem o ambiente da clonagem ela fica marcada e desligada na lista
+    const minha = v.id.startsWith("minha:");
+    const rotulo = v.instalada ? v.nome : minha ? `${v.nome} — falta o ambiente da clonagem` : `${v.nome} — baixar (${v.tamanho})`;
+    const opcao = new Option(baixando === v.id ? `${v.nome} — baixando…` : rotulo, v.id, false, v.id === estado.cfg.voz_voz);
+    opcao.disabled = minha && !v.instalada;
+    sel.add(opcao);
   }
   sel.disabled = !!baixando;
   // a voz escolhida não deu (ex.: minha voz sem memória livre): ele fala no Faber até dar, e conta aqui
-  const caiu = f.erro_voz && estado.cfg.voz_voz.startsWith("minha:") ? `⚠ ${f.erro_voz}: por enquanto ele fala no Faber.` : "";
+  const caiu = f.erro_voz && estado.cfg.voz_voz.startsWith("minha:") ? `⚠ ${f.erro_voz}: por enquanto ele fala na voz reserva.` : "";
   info.textContent = f.erro ? f.erro : baixando ? "Baixando a voz… (uns segundos)" : caiu ||
     "Escolha uma. As que ainda não estão no PC baixam na hora (o tamanho aparece ao lado).";
   sel.onchange = async () => {
@@ -1576,24 +1597,8 @@ const PASSOS = [
     const caixa = corpo.querySelector("#tourProjetos");
     let lista = [];
     try { lista = await api("/api/projetos_claude"); } catch (e) { lista = []; }
-    caixa.innerHTML = lista.length ? "" : '<span class="desc">Nenhum projeto aberto no Claude ainda. Dá pra liberar pastas depois em Privacidade.</span>';
-    for (const p of lista) {
-      const linha = document.createElement("label");
-      linha.className = "linha";
-      linha.innerHTML = `<div class="info"><div class="titulo"></div><div class="desc"></div></div>
-        <input type="checkbox" style="width:18px;height:18px;accent-color:var(--laranja)">`;
-      linha.querySelector(".titulo").textContent = p.nome;
-      linha.querySelector(".desc").textContent = p.pasta + (p.liberada ? "  ·  já liberada" : "");
-      const c = linha.querySelector("input");
-      c.value = p.pasta; c.checked = p.liberada; c.disabled = p.liberada;
-      caixa.appendChild(linha);
-    }
-    corpo.querySelector("#tourLiberar").onclick = async () => {
-      const marcadas = [...caixa.querySelectorAll("input:checked:not(:disabled)")].map(c => c.value);
-      if (!marcadas.length) { avisar("marque pelo menos um"); return; }
-      await acao("pastas_do_claude:" + marcadas.join("\n"), `liberei ${marcadas.length} ✓`);
-      for (const c of caixa.querySelectorAll("input:checked")) c.disabled = true;
-    };
+    listarProjetos(caixa, lista, "Nenhum projeto aberto no Claude ainda. Dá pra liberar pastas depois em Privacidade.");
+    corpo.querySelector("#tourLiberar").onclick = () => liberarMarcados(caixa);
   }},
   {montar: corpo => {
     corpo.innerHTML = `<h3>🖥️ Neste PC</h3><div class="cartao">
@@ -1637,9 +1642,9 @@ function fecharTour() {
   if (!estado.cfg.tour_feito) mudar("tour_feito", true);
 }
 document.getElementById("tourSeguir").onclick = () => {
+  if (tourPasso === PASSOS.length - 1) { fecharTour(); return; }   // o fecharTour já chama o sair do passo
   const passo = PASSOS[tourPasso];
   if (passo.sair) passo.sair(document.getElementById("tourCorpo"));
-  if (tourPasso === PASSOS.length - 1) { fecharTour(); return; }
   tourPasso++;
   mostrarPasso();
 };

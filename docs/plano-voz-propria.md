@@ -132,7 +132,7 @@ falar. Funcionou. O que foi preciso adaptar:
 - **Exportar pra ONNX**: precisa de `onnxscript` e `onnx` no ambiente, e o exportador novo do torch (dynamo) falha no
   modelo; usar `treino_voz/exportar_onnx.py`, que força o exportador clássico (`dynamo=False`). O `.onnx` (63 MB) carrega e fala
   no Piper normal do Claudinho (1,3) e junto do `config.json` da voz.
-- Scripts: `treino_voz/gerar_frases_teste.py` (gera as frases e o `metadata.csv`), `treino_voz/converter_checkpoint.py`,
+- Scripts: `treino_voz/pipeline.py` (gera, confere, treina e exporta), `treino_voz/converter_checkpoint.py`,
   `treino_voz/exportar_onnx.py`.
 
 **Ainda falta**: rodar de verdade com a voz de referência do Cássio (`referencia.wav`, que está no PC da empresa) e as ~400 frases; o

@@ -112,10 +112,36 @@ mkdir -p $M && touch $M/__init__.py && cp <repo>/treino_voz/monotonic_core.py $M
 
 A voz (`~/.claudinho/vozes/minhas/<nome>/referencia.wav`) vai junto copiada do PC onde foi criada.
 
+## Treino-teste feito na RTX 5060 (27/10/2026): o que mudou em relação ao PC com RTX 3050
+
+Rodado de ponta a ponta com a voz **padrão** do Chatterbox (24 frases, sem clonar ninguém): gerar → treinar → exportar →
+falar. Funcionou. O que foi preciso adaptar:
+
+- **GPU nova, torch novo**: a RTX 5060 (Blackwell, `sm_120`) não roda o `torch 2.6.0+cu124` do plano. Usar
+  `torch 2.11.0+cu128` (`--extra-index-url https://download.pytorch.org/whl/cu128`). O `chatterbox-tts==0.1.7` pede
+  `torch==2.6.0`, então a instalação usa um arquivo de override (`torch>=2.6`, `torchaudio>=2.6`) com
+  `uv pip install --override overrides.txt ...`. Chatterbox carrega e gera normal (3,2 GB de placa).
+- **Checkpoint do Faber não carrega direto**: ele guarda um `pathlib.PosixPath` (criado no Linux) e carrega com hiperparâmetros do
+  Piper antigo (`model.sample_bytes`, opções de Trainer...), que o Piper 1.8 recusa. Solução, que também responde ao "a conferir
+  primeiro" deste plano: **`--model.warmstart_ckpt`** em vez de `--ckpt_path`. Copia todos os pesos de mesmo formato (784, 0 pulados) e
+  começa um otimizador novo. O arquivo é antes convertido por `treino_voz/converter_checkpoint.py` (leitor restrito, sem
+  executar código do arquivo; o caminho vira texto) para `base/faber_windows.ckpt`.
+- **Treino**: sem `--ckpt_path`; deixar o `--model.mos_metric` no padrão (o `val_mos` é monitorado e baixa o UTMOS na primeira
+  vez). `python -m piper.train fit ... --model.warmstart_ckpt base/faber_windows.ckpt --trainer.max_epochs N`. Na 5060, ~1,5–1,9
+  it/s com lote 8 (20 épocas em ~1 min com 24 frases; com ~400 frases e lote 16, estimar de novo).
+- **Exportar pra ONNX**: precisa de `onnxscript` e `onnx` no ambiente, e o exportador novo do torch (dynamo) falha no
+  modelo; usar `treino_voz/exportar_onnx.py`, que força o exportador clássico (`dynamo=False`). O `.onnx` (63 MB) carrega e fala
+  no Piper normal do Claudinho (1,3) e junto do `config.json` da voz.
+- Scripts: `treino_voz/gerar_frases_teste.py` (gera as frases e o `metadata.csv`), `treino_voz/converter_checkpoint.py`,
+  `treino_voz/exportar_onnx.py`.
+
+**Ainda falta**: rodar de verdade com a voz de referência do Cássio (`referencia.wav`, que está no PC da empresa) e as ~400 frases; o
+resto do treino-teste aqui só provou que o pipeline funciona.
+
 ## Passos (ordem)
 
 1. ~~Chatterbox direto como voz `minha:<nome>` (ajudante + fala.py)~~ ✓
-2. Treino-teste com ~20 frases (checkpoint antigo no Piper novo?) — **em casa, à noite**
+2. ~~Treino-teste com ~20 frases (checkpoint antigo no Piper novo?)~~ ✓ (na RTX 5060, com `warmstart_ckpt`; ver seção acima)
 3. Pipeline completo de treino (frases → gerar → conferir → treinar → exportar) como script
 4. Painel: criar a voz (arquivo, link do YouTube, microfone) + aviso + ouvir + apagar
 5. Painel: "Treinar versão leve" com progresso

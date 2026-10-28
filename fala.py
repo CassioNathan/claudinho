@@ -72,13 +72,21 @@ def eh_minha(voz):
     return bool(voz) and voz.startswith("minha:")
 
 
+def treinada(voz):
+    """A versão leve (Piper treinado) de uma voz própria, se existir: minhas/<nome>/voz.onnx."""
+    arquivo = MINHAS / voz.split(":", 1)[1] / "voz.onnx"
+    return arquivo if eh_minha(voz) and arquivo.exists() else None
+
+
 def achar_minhas():
     """Põe no catálogo as vozes próprias que existem em ~/.claudinho/vozes/minhas (uma pasta por voz)."""
     for v in [v for v in VOZES if eh_minha(v)]:
         del VOZES[v]
     if MINHAS.is_dir():
         for pasta in sorted(MINHAS.iterdir()):
-            if (pasta / "referencia.wav").exists():
+            if (pasta / "voz.onnx").exists():   # treinada: leve, roda no processador como as outras do Piper
+                VOZES[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (treinada, leve)"
+            elif (pasta / "referencia.wav").exists():
                 VOZES[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (Chatterbox, usa a placa de vídeo)"
 
 
@@ -93,6 +101,8 @@ def instalada(voz):
     if eh_kokoro(voz):
         return all((KOKORO_PASTA / a).exists() for a in KOKORO_ARQUIVOS)
     if eh_minha(voz):
+        if treinada(voz):
+            return True
         return CLONAGEM_PY.exists() and (MINHAS / voz.split(":", 1)[1] / "referencia.wav").exists()
     return (PASTA / f"{voz}.onnx").exists()
 
@@ -219,6 +229,11 @@ class Fala:
             try:
                 if eh_edge(escolhida):
                     self.voz = self.kokoro = None   # a síntese é feita pela internet, na hora de falar
+                elif treinada(escolhida):   # voz própria treinada: é um Piper como os outros
+                    from piper import PiperVoice
+                    voz = PiperVoice.load(str(treinada(escolhida)))
+                    list(voz.synthesize("oi"))
+                    self.voz, self.kokoro = voz, None
                 elif eh_minha(escolhida):
                     self.voz = self.kokoro = None   # quem fala é o ajudante do Chatterbox (processo à parte)
                     try:
@@ -427,7 +442,7 @@ class Fala:
                     audio, taxa = self._sintetizar_edge(frase, self.voz_nome.split(":", 1)[1])
                     if audio is None:
                         continue
-                elif eh_minha(self.voz_nome):
+                elif eh_minha(self.voz_nome) and self.voz is None:   # a treinada cai no Piper, lá embaixo
                     audio, taxa = self._sintetizar_minha(frase, self.voz_nome.split(":", 1)[1])
                     if audio is None:   # a voz própria não deu (memória, erro): não fica mudo, fala no Faber
                         audio, taxa = self._sintetizar_reserva(frase)

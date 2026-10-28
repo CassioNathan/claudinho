@@ -1,0 +1,234 @@
+Pronto, terminei o que você pediu.
+Já abri o programa pra você.
+Achei o arquivo, está na pasta do projeto.
+Não encontrei nada parecido com isso.
+O servidor subiu e já está respondendo.
+Deu erro na linha quarenta e dois, quer que eu olhe?
+Salvei tudo, pode ficar tranquilo.
+Terminei a tarefa e não apareceu nenhum erro.
+O projeto compilou de primeira, olha só que beleza.
+Abri o navegador numa aba nova.
+Já mandei a tarefa, é só esperar um pouquinho.
+Estou olhando a tela, um segundo.
+Terminou! Quer ver o resultado?
+Não consegui abrir esse programa, ele não está instalado.
+O teste passou, tudo certo por aqui.
+Encontrei três arquivos com esse nome.
+A conexão caiu, mas já voltou.
+Atualizei a lista e apareceram duas novidades.
+Fiz uma cópia de segurança antes de mexer.
+Tudo pronto, pode testar quando quiser.
+Cheguei no canto da tela e fico aqui quietinho.
+O download terminou, o arquivo está na pasta de downloads.
+Parece que a internet está lenta hoje.
+Deixei o programa aberto na janela de trás.
+Já anotei isso para não esquecer.
+Esse comando pode demorar um pouco, tenha paciência.
+Não vou apagar nada sem você confirmar.
+Preciso da sua permissão pra continuar.
+Pode falar, estou ouvindo.
+Entendi, vou fazer do jeito que você falou.
+Quer que eu continue ou prefere parar por aqui?
+Desculpa, não entendi direito, pode repetir?
+Tá bom, combinado então.
+Claro, é pra já!
+Pode deixar comigo.
+Deixa eu pensar um instante.
+Hum, boa pergunta.
+Isso eu não sei, mas posso procurar.
+Tem certeza que é isso mesmo?
+Acho que você tem razão.
+Concordo totalmente com você.
+Não concordo muito, mas vamos tentar.
+Calma, já estou resolvendo.
+Opa, achei o problema!
+Que susto, mas deu tudo certo.
+Eita, isso eu não esperava.
+Nossa, que demora, hein.
+Ufa, finalmente funcionou!
+Que bom que você voltou.
+Bom dia! Dormiu bem?
+Boa tarde, como vai o trabalho hoje?
+Boa noite, já está na hora de descansar.
+Até mais tarde, qualquer coisa me chama.
+Tchau, tchau, foi um prazer ajudar.
+Obrigado por conversar comigo.
+De nada, estou aqui pra isso.
+Imagina, foi um prazer.
+Você quer que eu abra o editor de código?
+Qual projeto você quer que eu abra agora?
+Posso resumir o que está na tela, se você quiser.
+Quer que eu procure essa música pra você?
+Você prefere que eu fale mais devagar?
+Quer um resumo curtinho ou a explicação completa?
+Já almoçou? Não esquece de comer alguma coisa.
+Que tal fazer uma pausa pra tomar água?
+Faz mais de uma hora que você está aí sentado, hein.
+Você já salvou o que estava fazendo?
+Será que não vale a pena testar isso de novo?
+Quer que eu anote isso numa lembrança?
+Qual é o nome do arquivo que você procura?
+Hoje é segunda-feira, vinte e sete de outubro.
+São exatamente três e meia da tarde.
+A reunião começa às dez e quinze.
+Faltam cinco minutos pro fim do expediente.
+Foram duzentos e cinquenta e três pedidos hoje.
+O total deu mil, quatrocentos e oitenta e nove reais.
+A versão um ponto dois já está disponível.
+O servidor respondeu em trezentos milissegundos.
+Ligue para o número quatro, três, dois, um, nove, oito.
+O endereço é rua das Flores, número cento e vinte.
+A temperatura hoje chega a trinta e dois graus.
+Passaram quarenta e sete minutos desde o último comentário.
+O arquivo tem quinze megabytes e oito páginas.
+O código postal começa com oitenta e um, zero, zero, zero.
+A API devolveu um erro quatrocentos e quatro.
+Você tem três mensagens novas no chat.
+A fatura vence no dia quinze do mês que vem.
+O resultado foi sete vírgula cinco de média.
+Faltam apenas dois por cento pra terminar.
+A senha expira em noventa dias.
+O banco de dados tem um milhão de registros.
+O texto tem cento e vinte palavras e seis parágrafos.
+Foram vinte e quatro horas de trabalho seguido.
+Na sexta-feira que vem tem feriado prolongado.
+O jogo começa às oito da noite, não vai perder.
+O pedido número cinco, seis, sete, oito chegou agora.
+O motoboy saiu pra entrega há dez minutos.
+A pizza chega em quarenta minutos, mais ou menos.
+O cardápio mudou: tem hambúrguer, batata frita e refrigerante.
+O cliente pediu dois lanches, uma porção de onze reais e um suco.
+A taxa de entrega é de cinco reais e cinquenta centavos.
+O pagamento foi aprovado, o pedido já está na cozinha.
+O entregador está chegando, prepara o troco.
+Quer acompanhar o pedido pelo mapa em tempo real?
+O restaurante fecha às onze da noite, então é bom pedir logo.
+Um pastel de queijo, um caldo de cana e um sorvete de coco.
+A feijoada de sábado vai ser servida com farofa e laranja.
+Que dia lindo, o sol está brilhando lá fora!
+Ontem choveu muito, mas hoje o céu está aberto.
+O gato subiu no telhado e ficou olhando a lua.
+O menino correu pelo parque até ficar sem fôlego.
+A professora explicou a lição com muita paciência.
+Meu irmão mais velho trabalha numa empresa de tecnologia.
+Quando o relógio bateu meia-noite, todo mundo gritou de alegria.
+Os pássaros cantam cedinho, antes mesmo do amanhecer.
+Preciso comprar pão, leite, queijo, manteiga e um pouco de café.
+A viagem de ônibus demorou três horas, mas valeu a pena.
+O trem passou depressa, fazendo um barulho enorme.
+Aquela rua estreita leva direto até a praça da igreja.
+A chuva fina molhava as folhas das árvores do quintal.
+Vamos juntos descobrir quem escondeu o chocolate do bolo.
+Zeca, o zangão, zumbia sem parar perto da janela.
+Três tigres tristes comiam trigo num prato de trigo.
+O rato roeu a roupa do rei de Roma, e a rainha ficou rouca de raiva.
+A aranha arranha a rã, a rã arranha a aranha.
+Quem casa quer casa, e quem quer casa, quer sossego.
+O sabiá sabia assobiar, mas ninguém sabia onde ele estava.
+Muito além do horizonte, havia um campo cheio de girassóis.
+A felicidade mora nas coisas simples, como um café quente.
+Não adianta chorar o leite derramado, vamos limpar e seguir.
+Água mole em pedra dura, tanto bate até que fura.
+Mais vale um pássaro na mão do que dois voando.
+Devagar se vai ao longe, e com calma tudo se resolve.
+Quem tem boca vai a Roma, e quem tem internet vai mais longe.
+O rápido caminhão de mudança passou pela avenida principal.
+Joaquim juntou os jornais velhos e jogou tudo no lixo reciclável.
+Ele disse que não vinha, mas apareceu quando ninguém esperava.
+Será que alguém sabe onde fica o outro lado da ponte?
+Como você conseguiu descobrir isso tão depressa?
+Por que será que o computador sempre trava na hora errada?
+Quanto tempo falta pra terminar esse trabalho todo?
+Onde foi que eu deixei aquele arquivo importante?
+Quando isso vai ficar pronto de verdade?
+Será que hoje vai dar tempo de tomar um café com calma?
+Qual é a melhor maneira de resolver esse problema aqui?
+Quem foi que mexeu nessa configuração ontem à noite?
+Para onde vai todo esse tempo que a gente perde nas reuniões?
+Que tal começar de novo, só que desta vez com mais cuidado?
+E se a gente tentasse um jeito mais simples de fazer isso?
+Hã? Você disse alguma coisa?
+Ah, tá, agora eu entendi!
+Ué, mas isso estava funcionando ontem.
+Nossa, que coisa linda!
+Ai, que susto, não vi você chegando.
+Poxa, que pena, quase deu certo.
+Eita, mas que bagunça é essa?
+Nossa Senhora, que demora pra carregar!
+Oba, deu certo, finalmente!
+Vixe, aí complicou.
+Hmm, isso está estranho, vou olhar de novo.
+Calma, calma, vai com calma que dá tempo.
+Ei, ei, olha só o que eu achei!
+Psiu, tem alguém aí?
+Shhh, silêncio, estou me concentrando.
+Haha, essa foi boa, hein!
+Rapaz, que dia puxado foi esse.
+Meu Deus, quanta coisa pra fazer hoje.
+Tá, mas e agora, o que a gente faz?
+Beleza, então bora lá!
+Valeu demais pela ajuda, de verdade.
+Que máximo, ficou perfeito!
+Que bobeira a minha, esqueci de salvar.
+Tô com sono, mas vamos em frente.
+Tô aqui só observando, pode continuar.
+Tô quase terminando, só mais um pouquinho.
+Hoje eu acordei animado, e você?
+Eu adoro quando tudo funciona de primeira.
+Eu gosto de ficar no canto da tela, é bem tranquilo.
+Eu não sou muito bom em adivinhar, mas eu tento.
+Eu prometo que vou avisar assim que terminar.
+Eu sei, eu sei, você já falou isso antes.
+Eu vou lá dar uma olhada e já volto.
+Eu estava pensando em te contar uma coisa.
+Eu acho que a gente merece uma pausa.
+Eu aprendi isso com você, sabia?
+Eu posso abrir qualquer programa que esteja instalado.
+Eu consigo olhar a tela quando você me pedir.
+Eu falo português do Brasil, com muito carinho.
+Nós dois formamos uma dupla e tanto.
+A gente começou cedo e já fez bastante coisa.
+O trabalho de hoje foi grande, mas deu pra cumprir tudo.
+Essa tarefa foi tranquila, quase não tive dificuldade.
+Esse erro apareceu duas vezes, mas já corrigi.
+Aquele botão estava com a cor um pouco diferente do outro.
+Essa linha fina quase não aparece no fundo branco.
+Você deixou a janela aberta, quer que eu feche?
+Vou mudar a cor desse botão pra ficar igual ao outro.
+A fonte está pequena demais, vou aumentar um pouco.
+O menu ficou torto no celular, preciso ajustar.
+O texto está com pouco contraste, dá pra melhorar.
+Achei um espaço sobrando entre esses dois cartões.
+O alinhamento está perfeito, parabéns pelo capricho.
+Atenção, existe uma diferença pequena entre essas duas cores.
+Reparei que o ícone está desfocado, vou trocar por outro.
+Só um instante, estou conferindo a imagem com mais atenção.
+Uma pequena mudança aqui já resolve o problema.
+Tudo bem por aqui, e por aí, como estão as coisas?
+Lembra daquele problema do começo da semana? Já foi resolvido.
+Se precisar de mim, é só dizer o meu nome.
+A qualquer hora do dia, eu estou por aqui.
+Quando você estiver cansado, eu aviso pra descansar um pouco.
+Descansa um pouco, que o código não vai fugir.
+Respira fundo e vamos resolver isso juntos.
+Foi um dia longo, mas você mandou muito bem.
+Parabéns, você terminou mais uma etapa!
+Sempre que eu falo, uma pequena luz acende aqui dentro.
+Cada comentário meu é feito com carinho e uma pitada de bom humor.
+Um bug a menos é um motivo a mais pra sorrir.
+Programar sem café é como carro sem gasolina.
+Quando o código funciona, parece até mágica.
+Reunião longa demais merece pelo menos um bom lanche.
+Só mais um commit e eu juro que paro.
+Esse projeto está cada dia mais bonito.
+Esse sistema é grande, mas a gente conhece cada cantinho dele.
+A sexta-feira chegou, e com ela a vontade de descansar.
+Segunda-feira começa com café forte e muita disposição.
+O fim de semana passou voando, nem deu pra perceber.
+No domingo à tarde, nada melhor que um bom filme.
+Todo mundo erra, o importante é aprender com o erro.
+O mais difícil é começar, o resto vai fluindo.
+Quem persiste sempre chega mais longe.
+Um passo de cada vez, e logo a gente chega lá.
+Tudo parece difícil até ficar pronto.
+Confia no processo, que a gente chega ao resultado certo.

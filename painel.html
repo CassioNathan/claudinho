@@ -174,11 +174,7 @@
   .status-ext { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 10px; font-size: 11.5px;
                 background: #3a3935; color: var(--apagado); }
   .status-ext.ok { background: rgba(111,191,115,.16); color: #9fdca2; }
-  .cartao-ext { margin-top: auto; background: #2a2927; border: 1px solid #36352f; border-radius: 12px; padding: 11px 12px;
-                display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
-  .cartao-ext .status-ext { align-self: flex-start; margin: 0; }
-  .cartao-ext .botao { padding: 7px 10px; font-size: 12.5px; }
-  .rodape-lateral { margin-top: 0 !important; }
+  .acoes-ext { display: flex; align-items: center; gap: 10px; }
   .fundo-modal { position: fixed; inset: 0; background: rgba(15,14,13,.7); display: grid; place-items: center; z-index: 4; }
   .fundo-modal[hidden] { display: none; }
   .modal { background: var(--cartao); border: 1px solid #3d3c38; border-radius: 16px; padding: 20px 24px; width: min(560px, 90vw);
@@ -276,11 +272,6 @@
       <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
     </div>
   </nav>
-  <div class="cartao-ext">
-    <div class="topo-ext">🧩 <b>Extensão do navegador</b></div>
-    <div class="status-ext" id="statusExt">—</div>
-    <button class="botao" id="instalarExt">Instalar extensão</button>
-  </div>
   <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span>
     <div class="consumo" id="consumo"></div></div>
 </aside>
@@ -671,6 +662,12 @@
           enquanto você usa o Claude Code. Registra no ~/.claude/settings.json (com backup antes).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="barra"><span></span></label>
       </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">🧩 Extensão do navegador</div><div class="desc">Deixa ele tocar música no
+          YouTube e repetir rotinas em sites (Chrome, Edge ou Opera).</div></div>
+        <div class="acoes-ext"><span class="status-ext" id="statusExt">—</span>
+          <button class="botao" id="instalarExt">Instalar extensão</button></div>
+      </div>
       <div class="linha" style="flex-wrap:wrap">
         <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
           resumos. Ao trocar, a conversa do chat recomeça (o mini cérebro e as piadas continuam).</div></div>
@@ -725,7 +722,7 @@
         não use a pasta <code>_internal\extensao</code> de dentro do programa, que não tem a chave:
         <div class="caminho"><code id="pastaExt"></code><button class="botao" id="copiarPasta">Copiar</button></div></li>
     </ol>
-    <p>Pronto: com o YouTube Music aberto, o cantinho da lateral vira <b>conectada</b>. Depois ela se atualiza sozinha.</p>
+    <p>Pronto: com o YouTube Music aberto, a linha dela em Sistema vira <b>conectada</b>. Depois ela se atualiza sozinha.</p>
     <div style="text-align:right"><button class="botao principal" id="fecharModal">Entendi</button></div>
   </div>
 </div>
@@ -1412,7 +1409,10 @@ function montarVozes(forcar) {
     sel.add(new Option(baixando === v.id ? `${v.nome} — baixando…` : rotulo, v.id, false, v.id === estado.cfg.voz_voz));
   }
   sel.disabled = !!baixando;
-  info.textContent = f.erro ? f.erro : baixando ? "Baixando a voz… (uns segundos)" : "Escolha uma. As que ainda não estão no PC baixam na hora (o tamanho aparece ao lado).";
+  // a voz escolhida não deu (ex.: minha voz sem memória livre): ele fala no Faber até dar, e conta aqui
+  const caiu = f.erro_voz && estado.cfg.voz_voz.startsWith("minha:") ? `⚠ ${f.erro_voz}: por enquanto ele fala no Faber.` : "";
+  info.textContent = f.erro ? f.erro : baixando ? "Baixando a voz… (uns segundos)" : caiu ||
+    "Escolha uma. As que ainda não estão no PC baixam na hora (o tamanho aparece ao lado).";
   sel.onchange = async () => {
     const v = f.vozes.find(x => x.id === sel.value);
     if (v.instalada) { await mudar("voz_voz", v.id); acao("voz_testar", "falando… 🔊"); }
@@ -1603,7 +1603,7 @@ const PASSOS = [
         <label class="chave"><input type="checkbox" data-tour-sistema="aviso"><span></span></label></div>` +
       chave("avisar_versao", "Avisar quando sair versão nova 🎉") + `</div>
       <p style="margin-top:12px"><b>Extensão do navegador</b> (opcional): deixa eu tocar música no YouTube e repetir rotinas em sites.
-      Fica no cartão <b>Extensão do navegador</b>, na lateral do painel.</p>`;
+      Fica em <b>Privacidade e sistema → Sistema</b>.</p>`;
     ligarChaves(corpo);
   }},
   {montar: corpo => {

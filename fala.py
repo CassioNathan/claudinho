@@ -316,6 +316,7 @@ class Fala:
             arquivo = Path(r["arquivo"])
             audio = np.load(arquivo)
             arquivo.unlink(missing_ok=True)
+            self.erro = None   # voltou a funcionar: o painel para de avisar que caiu no Faber
             return audio, r["taxa"]
         except Exception as e:
             self.erro = f"a minha voz não respondeu ({e})"

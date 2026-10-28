@@ -2874,7 +2874,8 @@ class Claudinho:
             "stt": {"provedores": [{"id": k, "nome": i["nome"]} for k, i in stt.PROVEDORES.items()],
                     "chave": bool(sistema.ler_segredo("stt_chave")), "teste": self.stt_teste,
                     "erro": self.voz.nuvem_erro},
-            "fala": {"vozes": fala.catalogo(), "baixando": self.fala.baixando, "erro": self.fala.erro_download},
+            "fala": {"vozes": fala.catalogo(), "baixando": self.fala.baixando, "erro": self.fala.erro_download,
+                     "erro_voz": self.fala.erro, "carregada": self.fala.voz_nome},
             "sistema": {"versao": sistema.VERSAO, "inicio": sistema.abre_com_windows(), "aviso": sistema.aviso_ligado(),
                         "barra": sistema.barra_ligada(),
                         "claude": tem_ia(), "dados": str(DADOS), "empacotado": sistema.EMPACOTADO,
@@ -2918,7 +2919,7 @@ class Claudinho:
         """Abre uma página do servidor local numa janela de app do Edge (sem barra de navegador), no monitor
         do Claudinho. Se já estiver aberta, só traz pra frente."""
         url = f"http://127.0.0.1:{PORTA}{caminho}"
-        aberta = next((j["hwnd"] for j in janelas.listar() if j["titulo"].startswith(titulo)), None)
+        aberta = next((j["hwnd"] for j in janelas.listar(minimizadas=True) if j["titulo"].startswith(titulo)), None)
         if aberta:
             user32.ShowWindow(aberta, 9)  # SW_RESTORE
             abrir.forcar_frente(aberta)
@@ -3083,13 +3084,15 @@ class Claudinho:
 
     def falar_balao(self, fala):
         """Tudo o que ele solta em balão (piada, comentário, aviso, resumo) também sai em voz, se a voz (🔊) está ligada."""
-        if not self.cfg["voz_fala"] or fala["tipo"] == "resposta" or motores.tela_cheia():
-            return   # resposta de chat já é falada em fluxo; em jogo/tela cheia ele fica quieto
+        if not self.cfg["voz_fala"] or fala["tipo"] == "resposta" or motores.tela_cheia() or fala.get("falado"):
+            return   # resposta de chat já é falada em fluxo; em jogo/tela cheia ele fica quieto; balão que saiu da
+                     # frente e voltou pra fila não repete
         d = fala.get("dados") or {}
         texto = fala.get("texto") or d.get("resumo") or d.get("resposta") or ""
         if fala["tipo"] == "aviso":
             texto = "Pronto! " + texto[:300]
         if texto and not self.conversa_voz:
+            fala["falado"] = True
             self.fala.falar(formatar.limpar(texto))
             if self.balao is not None:
                 self.balao.espera_fala = time.time() + 90
@@ -4551,8 +4554,8 @@ class Claudinho:
                 self.fechar_balao()  # tira o "pensando…" (uma revisão na tela volta pra fila)
                 fluxo, self.fluxo_revisao = self.fluxo_revisao, None
                 if fluxo and not erro:   # resposta de um botão da revisão: volta no balão dela, com os botões
-                    self.enfileirar({"tipo": "comentario", "texto": texto, "duracao": None,
-                                     "revisao": dict(fluxo, ultimo=texto)}, FIXO, na_frente=True)
+                    self.enfileirar({"tipo": "comentario", "texto": texto, "duracao": None, "falado": True,  # (a voz
+                                     "revisao": dict(fluxo, ultimo=texto)}, FIXO, na_frente=True)  # já leu, aqui embaixo)
                 elif erro and self.cfg["motor"] == "claude_code" and ERRO_DE_LOGIN.search(erro):   # login vencido
                     self.enfileirar({"tipo": "comentario", "texto": AVISO_LOGIN, "duracao": 90, "login": True},
                                     IMPORTANTE, na_frente=True)

@@ -105,12 +105,14 @@ def no_ponto(lista, x, y):
     return None
 
 
-def listar(area=None):
-    """Janelas visíveis de verdade, da frente para trás. `area` filtra pelo monitor."""
+def listar(area=None, minimizadas=False):
+    """Janelas visíveis de verdade, da frente para trás. `area` filtra pelo monitor; `minimizadas` inclui as
+    que estão na barra de tarefas (sem filtro de tamanho, que minimizada não tem)."""
     achadas = []
 
     def cb(hwnd, _):
-        if not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+        icone = user32.IsIconic(hwnd)
+        if not user32.IsWindowVisible(hwnd) or (icone and not minimizadas):
             return True
         if not user32.GetWindowTextLengthW(hwnd) or oculta(hwnd):
             return True
@@ -118,7 +120,7 @@ def listar(area=None):
             return True
         j = descrever(hwnd)
         esq, topo, dir_, base = j["rect"]
-        if dir_ - esq < 200 or base - topo < 150 or j["exe"] in IGNORAR:
+        if (not icone and (dir_ - esq < 200 or base - topo < 150)) or j["exe"] in IGNORAR:
             return True
         if area:
             cx, cy = (esq + dir_) / 2, (topo + base) / 2

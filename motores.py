@@ -19,10 +19,16 @@ import threading
 import time
 import urllib.request
 
+import consumo
 import sistema
 
 MOTORES = ("claude_code", "api", "ollama", "nenhum")
-MODELOS_API = {"rapido": "claude-haiku-5-5", "esperto": "claude-sonnet-5-5"}
+# o `claude --model haiku` cai em versão antiga (haiku 4.5, sonnet 4.6, opus 4.7): o Claudinho pede o ID completo
+MODELOS_CLAUDE = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
+MODELOS_API = MODELOS_CLAUDE
+# qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
+TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
+                  "resumo": "sonnet", "avisos": "haiku"}
 OLLAMA = "http://127.0.0.1:11434"
 # modelos locais que o painel oferece: o leve só lê texto; o maior também enxerga o print da tela
 MODELOS_OLLAMA = {
@@ -30,11 +36,22 @@ MODELOS_OLLAMA = {
     "gemma3:4b": {"nome": "Maior", "tamanho": "~3,3 GB", "visao": True},
 }
 
-CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b"}  # o claudinho.pyw atualiza
+CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b", "modelos": dict(TAREFAS_PADRAO)}  # o .pyw atualiza
 
 
-def configurar(motor, ollama_modelo):
-    CONFIG.update(motor=motor if motor in MOTORES else "claude_code", ollama_modelo=ollama_modelo)
+def configurar(motor, ollama_modelo, modelos=None):
+    CONFIG.update(motor=motor if motor in MOTORES else "claude_code", ollama_modelo=ollama_modelo,
+                  modelos=modelos_validos(modelos))
+
+
+def modelos_validos(modelos):
+    """O "Modelo por ação" do painel, completo e só com modelos que existem."""
+    modelos = modelos if isinstance(modelos, dict) else {}
+    return {t: modelos.get(t) if modelos.get(t) in MODELOS_CLAUDE else padrao for t, padrao in TAREFAS_PADRAO.items()}
+
+
+def modelo_da(tarefa):
+    return CONFIG["modelos"].get(tarefa) or TAREFAS_PADRAO.get(tarefa, "haiku")
 
 
 # ---------- Claude Code (o processo `claude -p`) ----------
@@ -48,7 +65,7 @@ def env_limpo():
     return env
 
 
-def rodar_claude(texto, extra=(), sid=None, timeout=600, stream=False, sem_pensar=False):
+def rodar_claude(texto, extra=(), sid=None, timeout=600, stream=False, sem_pensar=False, pasta=None, tarefa=None):
     exe = shutil.which("claude")
     if not exe:
         raise RuntimeError("Não achei o comando `claude` no PATH.")
@@ -62,26 +79,31 @@ def rodar_claude(texto, extra=(), sid=None, timeout=600, stream=False, sem_pensa
     if sem_pensar:  # sem raciocínio estendido: piada não precisa, e caía de ~30s para ~3s
         env["MAX_THINKING_TOKENS"] = "0"
     proc = subprocess.run(cmd, input=texto, capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", cwd=sistema.DADOS, env=env, timeout=timeout,
+                          errors="replace", cwd=pasta or sistema.DADOS, env=env, timeout=timeout,
                           creationflags=subprocess.CREATE_NO_WINDOW)
     linhas = proc.stdout.strip().splitlines()
     if not linhas:
         raise RuntimeError((proc.stderr or "sem resposta do claude").strip()[-300:])
-    return json.loads(linhas[-1])
+    d = json.loads(linhas[-1])
+    if tarefa:   # o contador de consumo do Claudinho (painel, debaixo do player)
+        consumo.registrar(tarefa, d.get("total_cost_usd"), *consumo.tokens_de(d.get("usage")))
+    return d
 
 
 ENXUTO = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
           "--no-session-persistence", "--tools", ""]
 
 
-def _completar_claude_code(prompt, imagens, esperto, timeout):
-    modelo = "sonnet" if esperto else "haiku"
+def _completar_claude_code(prompt, imagens, modelo, timeout, tarefa):
+    # Haiku e Sonnet sem pensar (rápido); o Opus 5.5 não deixa desligar: vai com o esforço baixo
+    sem_pensar = modelo != "opus"
+    extra = ["--model", MODELOS_CLAUDE[modelo], *([] if sem_pensar else ["--effort", "low"]), *ENXUTO]
     if imagens:
         mensagem = {"type": "user", "message": {"role": "user", "content": [*imagens, {"type": "text", "text": prompt}]}}
-        d = rodar_claude(json.dumps(mensagem) + "\n", ["--model", modelo, *ENXUTO], timeout=timeout, stream=True,
-                         sem_pensar=True)
+        d = rodar_claude(json.dumps(mensagem) + "\n", extra, timeout=timeout, stream=True, sem_pensar=sem_pensar,
+                         tarefa=tarefa)
     else:
-        d = rodar_claude(prompt, ["--model", modelo, *ENXUTO], timeout=timeout, sem_pensar=True)
+        d = rodar_claude(prompt, extra, timeout=timeout, sem_pensar=sem_pensar, tarefa=tarefa)
     if d.get("is_error"):
         raise RuntimeError(d.get("result") or "erro do Claude Code")
     return d.get("result", "")
@@ -100,11 +122,11 @@ def _cliente():
     return anthropic.Anthropic(api_key=chave, timeout=120.0)
 
 
-def _pedido_api(esperto):
+def _pedido_api(modelo):
     """Haiku sem pensamento pras coisas rápidas; Sonnet com pensamento leve quando precisa ler direito."""
-    if esperto:
-        return {"model": MODELOS_API["esperto"], "output_config": {"effort": "low"}}
-    return {"model": MODELOS_API["rapido"], "thinking": {"type": "disabled"}, "output_config": {"effort": "low"}}
+    if modelo in ("sonnet", "opus"):   # esses não aceitam desligar o pensamento: esforço baixo
+        return {"model": MODELOS_API[modelo], "output_config": {"effort": "low"}}
+    return {"model": MODELOS_API["haiku"], "thinking": {"type": "disabled"}, "output_config": {"effort": "low"}}
 
 
 def _texto_da_resposta(r):
@@ -113,9 +135,10 @@ def _texto_da_resposta(r):
     return "".join(b.text for b in r.content if b.type == "text").strip()
 
 
-def _completar_api(prompt, imagens, esperto, max_tokens):
-    r = _cliente().messages.create(max_tokens=max_tokens, **_pedido_api(esperto),
+def _completar_api(prompt, imagens, modelo, max_tokens, tarefa):
+    r = _cliente().messages.create(max_tokens=max_tokens, **_pedido_api(modelo),
                                    messages=[{"role": "user", "content": [*imagens, {"type": "text", "text": prompt}]}])
+    consumo.registrar(tarefa, consumo.custo_api(r.model, r.usage), *consumo.tokens_de(r.usage))
     return _texto_da_resposta(r)
 
 
@@ -305,14 +328,15 @@ def ve_imagem():
     return CONFIG["motor"] in ("claude_code", "api")
 
 
-def completar(prompt, imagens=(), esperto=False, max_tokens=600, timeout=180):
-    """Uma pergunta, uma resposta (piadas, comentário de música, resumos). Erro vira exceção."""
+def completar(prompt, imagens=(), tarefa="piadas", max_tokens=600, timeout=180):
+    """Uma pergunta, uma resposta (piadas, comentário de música, resumos). `tarefa` escolhe o modelo
+    (TAREFAS_PADRAO, ajustável no painel). Erro vira exceção."""
     motor = CONFIG["motor"]
     imagens = list(imagens) if ve_imagem() else []
     if motor == "claude_code":
-        return _completar_claude_code(prompt, imagens, esperto, timeout)
+        return _completar_claude_code(prompt, imagens, modelo_da(tarefa), timeout, tarefa)
     if motor == "api":
-        return _completar_api(prompt, imagens, esperto, max_tokens)
+        return _completar_api(prompt, imagens, modelo_da(tarefa), max_tokens, tarefa)
     if motor == "ollama":
         return _completar_ollama(prompt, imagens, max_tokens, timeout)
     raise RuntimeError("sem motor de IA")
@@ -421,7 +445,7 @@ class ChatAPI(ChatSimples):
                 cliente = _cliente()
                 # Haiku sem pensamento: a conversa guardada só tem texto, e bloco de pensamento faltando no
                 # histórico seria "histórico editado" pra API. O Sonnet (resumo de tela) é uma pergunta só.
-                pedido = _pedido_api(modelo == "sonnet")
+                pedido = _pedido_api(modelo or "haiku")
                 conversa = self.mensagens + [{"role": "user", "content": conteudo}]
                 ferramentas = FERRAMENTAS + [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
                 self.interrompido = False
@@ -430,6 +454,7 @@ class ChatAPI(ChatSimples):
                         return "✋ Parei.", None, None
                     r = cliente.messages.create(max_tokens=4000, system=self.instrucoes(), tools=ferramentas,
                                                 messages=conversa, **pedido)
+                    consumo.registrar("chat", consumo.custo_api(r.model, r.usage), *consumo.tokens_de(r.usage))
                     if r.stop_reason not in ("tool_use", "pause_turn"):
                         break
                     conversa.append({"role": "assistant", "content": r.content})

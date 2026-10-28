@@ -126,6 +126,33 @@ def _e_nosso(comando):
     return "claudinho_notificar" in comando or "claudinho-cli" in comando or ("cli.py" in comando and " aviso" in comando)
 
 
+def barra_ligada():
+    linha = (_ler_settings() or {}).get("statusLine") or {}
+    return "claudinho" in linha.get("command", "") and " status" in linha.get("command", "")
+
+
+def ligar_barra(ligar):
+    """Põe (ou tira) a barra de status do Claudinho no ~/.claude/settings.json, com backup antes. Não troca uma
+    barra que já é sua: o Claude Code só tem uma."""
+    dados = _ler_settings()
+    if dados is None:
+        raise RuntimeError("o ~/.claude/settings.json está com erro de formato; não mexi nele")
+    atual = dados.get("statusLine")
+    if atual and not barra_ligada():
+        if not ligar:
+            return
+        raise RuntimeError("você já tem uma barra de status no Claude Code; não troquei a sua")
+    arquivo = CLAUDE / "settings.json"
+    if arquivo.exists():
+        shutil.copy(arquivo, arquivo.with_name("settings.json.bak-claudinho"))
+    if ligar:
+        dados["statusLine"] = {"type": "command", "command": comando_texto("status")}
+    else:
+        dados.pop("statusLine", None)
+    CLAUDE.mkdir(exist_ok=True)
+    arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def aviso_ligado():
     dados = _ler_settings() or {}
     return any(_e_nosso(h.get("command", "")) for g in dados.get("hooks", {}).get("Stop", []) for h in g.get("hooks", []))

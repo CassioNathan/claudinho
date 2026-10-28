@@ -61,6 +61,13 @@
   .rodape-lateral { margin-top: auto; padding: 12px; color: var(--apagado); font-size: 12px; }
   .rodape-lateral .musica { color: var(--texto); display: block; margin-top: 4px; white-space: nowrap;
                             overflow: hidden; text-overflow: ellipsis; }
+  .consumo { margin-top: 12px; }
+  .consumo .rotulo { display: flex; justify-content: space-between; margin-top: 6px; }
+  .consumo .rotulo b { color: var(--texto); font-weight: 600; }
+  .consumo .trilho { height: 5px; border-radius: 3px; background: #3a3935; margin-top: 3px; overflow: hidden; }
+  .consumo .trilho i { display: block; height: 100%; background: var(--laranja); }
+  .consumo .trilho i.alto { background: #e5534b; }
+  .consumo .nota { margin-top: 6px; font-size: 11px; }
 
   /* ---------- conteúdo ---------- */
   main { overflow-y: auto; padding: 30px 38px 60px; scroll-behavior: smooth; }
@@ -274,7 +281,8 @@
     <div class="status-ext" id="statusExt">—</div>
     <button class="botao" id="instalarExt">Instalar extensão</button>
   </div>
-  <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span></div>
+  <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span>
+    <div class="consumo" id="consumo"></div></div>
 </aside>
 
 <main id="principal">
@@ -354,9 +362,10 @@
         <label class="chave"><input type="checkbox" data-cfg="comentar_tela"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Em vez de piada, ele lê a janela em que você está (com o OCR do Windows, no seu PC)
-          e fala quando aparece um erro novo ou quando você está empacado no mesmo erro. A dica vem com botões: <b>explica</b> e <b>corrige</b>
-          levam o print pro chat, 👎 faz ele largar o assunto. Usa a IA (Haiku) só nessas horas; sem nada útil, fica quieto.</div></div>
+        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: quando um chat do Claude Code termina mexendo
+          em arquivo, ele confere se o pedido foi feito mesmo (lê o código e o git diff, sem mudar nada) e, se o projeto
+          tiver testes, pede pra rodar. O veredito vem com o botão <b>corrige</b>, que leva tudo pro chat. Pasta fora das
+          liberadas: ele pede pra liberar o projeto inteiro uma vez.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_junior"><span></span></label>
       </div>
       <div class="linha">
@@ -655,6 +664,12 @@
         <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div>
           <div class="desc" id="descAviso">Registra um aviso no ~/.claude/settings.json (com backup antes).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Mostrar meu consumo do Claude 📊</div><div class="desc">Põe a barra de status do
+          Claudinho no Claude Code (seu limite de 5 horas e o semanal, Pro/Max) e mostra debaixo do player. Só atualiza
+          enquanto você usa o Claude Code. Registra no ~/.claude/settings.json (com backup antes).</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="barra"><span></span></label>
       </div>
       <div class="linha" style="flex-wrap:wrap">
         <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
@@ -1210,6 +1225,7 @@ function atualizarVivos() {
   montarInstalados();
   montarRotinas();
   document.getElementById("musica").textContent = estado.musica || "nada";
+  montarConsumo();
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
   document.getElementById("totalLembrancas").textContent = estado.lembrancas_total.toLocaleString("pt-BR");
   const ext = estado.extensao, st = document.getElementById("statusExt");
@@ -1223,6 +1239,30 @@ function atualizarVivos() {
 }
 
 let motorMontado = "";
+const MODELOS_CHAT = [["haiku", "Haiku ⚡", "rápido e econômico"], ["sonnet", "Sonnet 🧠", "equilibrado"],
+                      ["opus", "Opus 🦉", "o mais esperto, mais lento"]];
+// modelo de cada coisa fora do chat: [chave, ação, o que é]
+const ACOES_MODELO = [
+  ["piadas", "Piadas e comentários 😄", "as piadas olhando a tela e os comentários de música"],
+  ["revisao", "Revisão do Júnior 🔎", "quando um chat do Claude Code termina mexendo em arquivo, confere se ficou feito"],
+  ["junior_chat", "Corrigir pela revisão", "o botão \"corrige\" da revisão, só naquela pergunta"],
+  ["resumo", "Resumir a janela 📄", "o atalho de resumir/explicar o que está na tela"],
+  ["avisos", "Avisos e notificações 🔔", "o resumo das notificações e o aviso de chat do Claude Code que terminou"],
+];
+function tabelaAcoes(m) {
+  const linhas = ACOES_MODELO.map(([id, nome, desc]) => `<div class="linha" style="padding:6px 0">
+    <div class="info"><div class="titulo" style="font-size:13px">${nome}</div><div class="desc">${desc}</div></div>
+    <select class="campo" data-acao-modelo="${id}" style="flex:0 0 120px">${MODELOS_CHAT.map(([mid, mnome]) =>
+      `<option value="${mid}"${(m.modelos_acao || {})[id] === mid ? " selected" : ""}>${mnome}</option>`).join("")}</select></div>`).join("");
+  return `<div style="margin-top:14px"><b>Modelo por ação</b></div>
+    <div class="desc" style="margin-bottom:4px">Fora do chat, cada coisa pode usar um modelo. O Sonnet acerta mais e o Haiku
+      gasta bem menos: deixe o Sonnet onde a resposta precisa ser certeira (a revisão) e o Haiku no que é toda hora (piadas).</div>${linhas}`;
+}
+function ligarAcoes(caixa, m) {
+  for (const s of caixa.querySelectorAll("[data-acao-modelo]"))
+    s.onchange = () => mudar("modelos_acao", Object.assign({}, m.modelos_acao, {[s.dataset.acaoModelo]: s.value}));
+}
+const ESFORCOS = [["low", "baixo"], ["medium", "médio"], ["high", "alto"], ["xhigh", "muito alto"], ["max", "máximo"]];
 function montarMotor() {
   const m = estado.motor;
   for (const b of document.querySelectorAll("#motores button")) {
@@ -1232,17 +1272,33 @@ function montarMotor() {
   const [pronto, motivo] = m.pronto;
   const situacao = pronto ? '<span class="status-ext ok">pronto ✓</span>' : `<span class="status-ext">${motivo}</span>`;
   const caixa = document.getElementById("detalheMotor");
-  const assinatura = JSON.stringify([m.atual, m.api_chave, m.ollama, m.ollama_modelo, m.pronto]);
+  const assinatura = JSON.stringify([m.atual, m.api_chave, m.ollama, m.ollama_modelo, m.pronto, m.chat_modelo, m.chat_esforco, m.modelos_acao]);
   if (assinatura === motorMontado) return;  // não apaga o que você está digitando (o painel atualiza a cada 3 s)
   motorMontado = assinatura;
   if (m.atual === "claude_code") {
+    const esforco = ESFORCOS.findIndex(e => e[0] === m.chat_esforco);
     caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa o Claude Code instalado e logado no seu PC (comando <code>claude</code>):
-      chat com ferramentas, piadas olhando a tela e resumos. ${m.claude ? "" : "Instale o Claude Code e rode <code>claude</code> → <code>/login</code>."}</p>`;
+      chat com ferramentas, piadas olhando a tela e resumos. ${m.claude ? "" : "Instale o Claude Code e rode <code>claude</code> → <code>/login</code>."}</p>
+      <div style="margin-top:12px"><b>Modelo do chat</b></div>
+      <div class="modelos-locais">${MODELOS_CHAT.map(([id, nome, desc]) => `<div class="modelo-local${id === m.chat_modelo ? " ativo" : ""}"
+        data-chat-modelo="${id}"><b>${nome}</b>${desc}</div>`).join("")}</div>
+      <div style="margin-top:12px"><b>Esforço</b> <span class="valor" id="esforcoValor">${ESFORCOS[esforco < 0 ? 0 : esforco][1]}</span></div>
+      <div class="linha-campo"><input type="range" min="0" max="${ESFORCOS.length - 1}" step="1" value="${esforco < 0 ? 0 : esforco}" id="esforco" style="flex:1"></div>
+      <div class="desc" style="margin-top:4px">Mais esforço = ele pensa mais antes de responder: fica melhor nas coisas difíceis,
+        mas demora mais e gasta mais do seu plano. O Haiku leve é o mais rápido. Vale só pro chat.</div>
+      ${tabelaAcoes(m)}`;
+    ligarAcoes(caixa, m);
+    for (const c of caixa.querySelectorAll("[data-chat-modelo]")) c.onclick = () => mudar("chat_modelo", c.dataset.chatModelo);
+    const slide = document.getElementById("esforco");
+    slide.oninput = () => { document.getElementById("esforcoValor").textContent = ESFORCOS[slide.value][1]; };
+    slide.onchange = () => mudar("chat_esforco", ESFORCOS[slide.value][0]);
   } else if (m.atual === "api") {
     caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa uma chave da API da Anthropic (crie em console.anthropic.com): paga por uso,
       com o Haiku nas coisas do dia a dia e o Sonnet no resumo de tela. A chave fica guardada criptografada pelo Windows, só no seu usuário.</p>
       <div class="linha-campo"><input id="chaveApi" class="campo" type="password" placeholder="${m.api_chave ? "chave salva — cole outra pra trocar" : "sk-ant-…"}" autocomplete="off">
-      <button class="botao principal" id="salvarChave">Salvar</button>${m.api_chave ? '<button class="botao" id="apagarChave">Apagar</button>' : ""}</div>`;
+      <button class="botao principal" id="salvarChave">Salvar</button>${m.api_chave ? '<button class="botao" id="apagarChave">Apagar</button>' : ""}</div>
+      ${tabelaAcoes(m)}`;
+    ligarAcoes(caixa, m);
     document.getElementById("salvarChave").onclick = () => {
       const v = document.getElementById("chaveApi").value.trim();
       if (v) acao("api_chave:" + v, "chave salva 🔑");
@@ -1275,12 +1331,37 @@ function montarMotor() {
       vêm do banco de frases; música, YouTube, esquetes, skins e o resto funcionam normal.</p>`;
   }
 }
+// debaixo do player: o seu limite do plano (pela barra de status do Claude Code) e o gasto do Claudinho
+function montarConsumo() {
+  const c = estado.consumo, caixa = document.getElementById("consumo");
+  if (!c || !caixa) return;
+  const agora = Date.now() / 1000, limites = (c.plano && c.plano.rate_limits) || {};
+  const barra = (nome, j) => {
+    if (!j || (j.resets_at && j.resets_at < agora)) return "";
+    const p = Math.round(j.used_percentage || 0), quando = j.resets_at ? new Date(j.resets_at * 1000) : null;
+    const reseta = quando ? (nome === "5 horas" ? quando.toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"})
+                                              : quando.toLocaleDateString("pt-BR", {day: "2-digit", month: "2-digit"})) : "";
+    return `<div class="rotulo"><span>${nome}</span><b>${p}%</b></div>
+      <div class="trilho"><i class="${p >= 80 ? "alto" : ""}" style="width:${Math.min(100, p)}%"></i></div>
+      ${reseta ? `<div class="nota">reseta ${nome === "5 horas" ? "às" : "em"} ${reseta}</div>` : ""}`;
+  };
+  const plano = barra("5 horas", limites.five_hour) + barra("semana", limites.seven_day);
+  const visto = c.plano ? (c.plano.ha_minutos < 1 ? "agora" : `há ${c.plano.ha_minutos} min`) : "";
+  const h = c.claudinho.hoje, t = c.claudinho.total;
+  const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + " mi" : n >= 1e3 ? Math.round(n / 1e3) + " mil" : String(n);
+  caixa.innerHTML = `seu plano do Claude${plano ? `<span class="nota" style="display:inline;margin-left:4px">(${visto})</span>${plano}`
+      : `<div class="nota">${estado.sistema && estado.sistema.barra ? "aparece depois que você usar o Claude Code"
+                                                                      : "ligue em Sistema → Mostrar meu consumo"}</div>`}
+    <div style="margin-top:10px">Claudinho gastou</div>
+    <div class="rotulo"><span>hoje</span><b>${fmt(h.entrada + h.saida)} tokens · US$ ${h.custo.toFixed(2)}</b></div>
+    <div class="rotulo"><span>total</span><b>${fmt(t.entrada + t.saida)} tokens · US$ ${t.custo.toFixed(2)}</b></div>`;
+}
 function montarSistema() {
   montarMotor();
   const sis = estado.sistema;
   for (const el of document.querySelectorAll("input[data-sistema]")) {
     el.checked = !!sis[el.dataset.sistema];
-    el.disabled = el.dataset.sistema === "aviso" && !sis.claude && !sis.aviso;
+    el.disabled = (el.dataset.sistema === "aviso" || el.dataset.sistema === "barra") && !sis.claude && !sis[el.dataset.sistema];
     el.onchange = () => acao(`${el.dataset.sistema}:${el.checked ? 1 : 0}`, el.checked ? "ligado ✓" : "desligado ✓");
   }
   document.getElementById("versao").textContent = "v" + sis.versao;
@@ -1414,7 +1495,7 @@ const PASSOS = [
         <div><b>💬 Conversar</b>Clica em mim e pergunta. Ou chama "Ei Claudinho" no microfone, e eu respondo falando.</div>
         <div><b>✓ Avisar o Claude Code</b>Quando um chat seu termina, eu aviso com um resuminho de uma linha.</div>
         <div><b>🛠️ Fazer por você</b>Abro programas e projetos, aperto atalhos que você me ensina e repito rotinas em sites.</div>
-        <div><b>🧑‍💻 Júnior</b>Fico de olho na sua tela e aviso quando aparece um erro, com "explica" e "corrige".</div>
+        <div><b>🧑‍💻 Júnior</b>Quando um chat do Claude Code termina mexendo em arquivo, confiro se ficou feito mesmo.</div>
         <div><b>😂 Diversão</b>Piadas do que você está fazendo, esquetes à toa, música e um monte de roupinha.</div>
         <div><b>🔒 Você manda</b>O que mexe no PC eu pergunto antes. Com a faixa nos olhos eu não olho nada.</div>
       </div>`;
@@ -1458,7 +1539,7 @@ const PASSOS = [
     const jeito = () => !estado.cfg.comentar_tela ? "quieto" : estado.cfg.modo_junior ? "junior" : "piadas";
     opcoes(corpo, [
       {id: "piadas", nome: "😂 Piadas", desc: "comento o que está na tela de vez em quando"},
-      {id: "junior", nome: "🧑‍💻 Júnior", desc: "sem piada: só falo quando aparece erro, com dica útil"},
+      {id: "junior", nome: "🧑‍💻 Júnior", desc: "sem piada: confiro o trabalho dos chats do Claude Code"},
       {id: "quieto", nome: "🤫 Quietinho", desc: "só falo quando você me chama ou chega aviso"},
     ], jeito, id => { mudar("comentar_tela", id !== "quieto"); mudar("modo_junior", id === "junior"); });
     corpo.insertAdjacentHTML("beforeend", "<p style='margin-top:14px'>E o meu jeito de ser:</p>");

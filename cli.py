@@ -4,6 +4,7 @@
     claudinho-cli abrir <ação> [...]    o mesmo que python abrir.py (abrir site, pesquisa, programa)
     claudinho-cli mcp                   o servidor MCP do Claudinho (uma ferramenta: abrir programa)
     claudinho-cli aviso                 o hook "Stop" do Claude Code (lê o JSON no stdin e avisa o Claudinho)
+    claudinho-cli status                a barra de status do Claude Code (seu limite de 5 h e semanal)
     claudinho-cli lancar <alvo> [args]  abre programa/site/arquivo fora do job do Claudinho (sistema.lancar)
 
 Existe pra ninguém precisar ter Python instalado: o Claudinho empacotado chama este exe.
@@ -15,7 +16,7 @@ def main():
     for fluxo in (sys.stdout, sys.stderr):  # acentos e ♪ saem certinho pro chat
         if fluxo is not None and hasattr(fluxo, "reconfigure"):
             fluxo.reconfigure(encoding="utf-8")
-    if len(sys.argv) < 2 or sys.argv[1] not in ("musica", "abrir", "aviso", "mcp", "lancar"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("musica", "abrir", "aviso", "status", "mcp", "lancar"):
         sys.exit(__doc__)
     qual = sys.argv[1]
     if qual == "lancar":  # já nasceu fora do job: o que abrir aqui não fecha junto com o Claudinho
@@ -32,6 +33,12 @@ def main():
     elif qual == "abrir":
         import abrir
         abrir.main()
+    elif qual == "status":
+        import claudinho_status  # nunca pode quebrar nem travar o Claude Code
+        try:
+            claudinho_status.main()
+        except Exception:
+            pass
     elif qual == "mcp":
         import claudinho_mcp
         claudinho_mcp.servidor.run()

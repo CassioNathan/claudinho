@@ -113,7 +113,7 @@ def catalogo():
     return [{"id": v, "nome": nome, "instalada": instalada(v),
              "tamanho": ("precisa de internet" if eh_edge(v) else "sua, no seu PC" if eh_minha(v) else
                          "~350 MB, o modelo vale pras 3 vozes do Kokoro" if eh_kokoro(v) else "~60 MB")}
-            for v, nome in VOZES.items()]
+            for v, nome in list(VOZES.items())]
 
 
 achar_minhas()

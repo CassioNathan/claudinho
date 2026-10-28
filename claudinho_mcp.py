@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.mcpserver import Image, MCPServer
 
+import consumo
 import programas
 import projetos
 import rotinas
@@ -89,6 +90,16 @@ def esperar_janela(janela: str, segundos: int = 120) -> str:
         return teclas_mod.esperar(janela[:80], segundos)
     except Exception as e:
         return f"não consegui esperar: {e}"
+
+
+@servidor.tool()
+def meu_consumo() -> str:
+    """Consumo do Claude dele: quanto do limite de 5 horas e do semanal do plano já foi usado (e quando resetam), e
+    quanto o próprio Claudinho gastou hoje e no total. Use quando ele perguntar de consumo, limite ou gasto."""
+    try:
+        return consumo.texto()
+    except Exception as e:
+        return f"não consegui ler o consumo: {e}"
 
 
 @servidor.tool()

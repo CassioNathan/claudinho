@@ -12,7 +12,6 @@ Roda no ambiente da clonagem (~/.claudinho/vozes/clonagem/.venv), em estágios q
 Tudo fica em ~/.claudinho/vozes/clonagem/trabalho/<voz>/ ; o progresso, em progresso.json. Prioridade baixa de
 processador, pra não pesar o PC; o estágio de gerar pausa quando tem algo em tela cheia (jogo).
 """
-import csv
 import ctypes
 import difflib
 import json
@@ -115,7 +114,6 @@ def montar_frases(t):
 
 def salvar_wav(caminho, wav, taxa_origem):
     import numpy as np
-    import torch
     import torchaudio
     x = torchaudio.functional.resample(wav.cpu(), taxa_origem, TAXA).squeeze(0).clamp(-1, 1)
     pcm = (x.numpy() * 32767).astype(np.int16)

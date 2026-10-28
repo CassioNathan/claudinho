@@ -27,14 +27,17 @@ destrutivo ele recusa. A voz e a memória ficam no seu PC.
   `~/.claude.json`) pra você marcar quais liberar. Ler fica livre; mudar arquivo ou rodar comando continua pedindo.
 - **Avisos em fila:** quando um chat do Claude Code termina, ele avisa (projeto, o que foi pedido, resposta).
   Sua pergunta tem prioridade; os avisos esperam e somem sozinhos.
-  O que ele fala nos balões (avisos, dicas do Júnior, resumos) entra na conversa: vai inteiro junto da sua próxima
+  O que ele fala nos balões (avisos, revisões do Júnior, resumos) entra na conversa: vai inteiro junto da sua próxima
   mensagem e, se você responde abrindo o balão de uma fala, o chat sabe que é resposta àquela fala.
 - **Piadas sobre a tela:** banco de frases + Haiku olhando um print. Modo TDAH 🐿️ (o deboche maldoso 😈 é o jeito do Ultron),
   avaliação boa/ruim (ele aprende), memória do dia e **faixa nos olhos 🙈** (aí não tira print).
-- **Modo Júnior 🧑‍💻:** em vez de piada, ele lê a janela em que você está com o OCR do próprio Windows (local, de graça)
-  e só chama a IA quando aparece um erro novo ou quando o mesmo erro fica na tela por 8 minutos (empacou). A dica vem
-  com a janela nítida e o texto lido, e tem botões: **explica** e **corrige** levam o print pro chat, 👎 faz ele largar
-  o assunto. Pula programas bloqueados, as janelas dele e respeita a faixa nos olhos.
+- **Modo Júnior 🧑‍💻:** sem piada. Quando um chat do Claude Code termina mexendo em arquivo, ele confere se o pedido
+  foi feito mesmo: lê o código e o `git diff` (no Sonnet, sem mudar nada) e, se o projeto tiver testes, pede **Pode/Não**
+  pra rodar. O veredito vem num balão com **corrige**, que leva tudo pro chat. Pasta fora das liberadas: ele pede pra
+  liberar a raiz do projeto uma vez. (A olhada de tela do Júnior saiu: as dicas não eram precisas.)
+- **Consumo 📊:** debaixo do player no painel, o seu limite de 5 horas e o semanal do Claude (pela barra de status do
+  Claude Code, que ele registra se você ligar) e quanto o próprio Claudinho gastou hoje e no total. No chat, é só
+  perguntar. Em **Motor de IA** dá pra escolher o modelo do chat, o esforço e o modelo de cada ação.
 - **Música:** sabe o que está tocando (Spotify, YouTube no navegador etc., pelos controles de mídia
   do Windows), zoa a música de vez em quando, comenta quando começa uma música nova (curiosidade sobre
   a banda/estilo ou cantarolando com ♪, nunca a letra) e controla o player: no menu (⏯ ⏭ ⏮) ou pedindo no chat
@@ -145,11 +148,12 @@ A versão fica em `sistema.py` (`VERSAO`).
 | `frases.py` | banco de frases (edite à vontade) |
 | `janelas.py` | lê as janelas abertas no Windows |
 | `atualizacao.py` | olha a última release no GitHub e diz se tem versão nova (só leitura; quem atualiza é você) |
-| `junior.py` | olhos do modo Júnior: OCR do Windows na janela em foco, erro novo e empacado |
+| `consumo.py` | o seu limite do plano (barra de status) e o gasto do próprio Claudinho |
 | `abrir.py` | ajudante limitado: só abre site, pesquisa ou programa da lista |
 | `emojis.py` | pacote de reações em pixel art (desenhos, cores, frases e quando aparecem) |
 | `musica.py` | o que está tocando + tocar/pausar/próxima/anterior |
 | `hook/claudinho_notificar.py` | hook "Stop" do Claude Code que manda os avisos |
+| `hook/claudinho_status.py` | barra de status do Claude Code: mostra e guarda o seu limite de 5 h e semanal |
 | `instalar.py` | instalação pra quem roda do código |
 | `sistema.py` | versão, caminhos (código ou empacotado), atalho de inicialização e o aviso do Claude Code |
 | `cli.py` | o ajudante de linha de comando (vira `claudinho-cli.exe`) |

@@ -17,11 +17,19 @@ NUMEROS = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cin
 UNIDADES = {"segundo": 1, "segundos": 1, "minuto": 60, "minutos": 60, "hora": 3600, "horas": 3600}
 MAX_TIMER_S = 12 * 3600
 
-_EDU = r"(?:(?:por favor|claudinho|ai|ei|oi)\s+)?"          # "ei, pausa" / "Claudinho, pausa" ainda é comando
-_FIM = r"(?:\s+(?:por favor|ai|pra mim|claudinho))?"
+# "ei, pausa", "tá beleza, rola mais", "na verdade, pausa o vídeo" ainda são comando: tira esse começo e fim
+_EDU = r"(?:(?:por favor|claudinho|ai|ei|oi|ta|beleza|ok|certo|agora|na verdade|entao|tipo|ah|cara)\s+)*"
+_FIM = r"(?:\s+(?:por favor|ai|pra mim|claudinho|beleza|ta|ok))*"
+_VIDEO = r"(?:o\s+|esse\s+|este\s+)?(?:video|youtube)(?:\s+que\s+(?:ta|esta)\s+(?:tocando|rodando|rolando|passando))?"
 _MUSICA = r"(?:\s+(?:a|essa|esta)?\s*(?:musica|som|faixa))?"
 
 FIXOS = [
+    ("video_pausar", rf"(?:pausa|pausar|pause|para|parar|pare)\s+{_VIDEO}"),
+    ("video_tocar", rf"(?:da|de|dar|aperta)\s+(?:o\s+|um\s+)?play(?:\s+(?:no|nesse)\s+(?:video|youtube))?|"
+                    rf"(?:continua|continuar|despausa|volta|solta|roda)\s+{_VIDEO}"),
+    ("rolar_cima", r"(?:(?:rola|rolar|sobe|subir|volta)(?:\s+(?:a|o))?(?:\s+(?:tela|pagina))?\s+(?:pra|para)\s+cima|"
+                   r"(?:sobe|subir)(?:\s+a)?\s+(?:tela|pagina))(?:\s+(?:um\s+)?pouco)?(?:\s+mais)?"),
+    ("rolar_baixo", r"(?:rola|rolar|desce|descer)(?:\s+(?:a|o|um|pouco|mais|tela|pagina|pra|para|baixo))*"),
     ("pausar", rf"(?:pausa|pausar|pause|para|parar|pare)(?:\s+(?:a|o))?{_MUSICA}"),
     ("tocar", r"(?:continua|continuar|despausa|play|volta a tocar|solta o som|pode tocar)" + _MUSICA),
     ("proxima", rf"(?:proxima|pula|pular|passa|passar|avanca)(?:\s+(?:a|essa|pra proxima))?{_MUSICA}"),
@@ -39,6 +47,13 @@ TIMER = re.compile(r"(?:(?:poe|coloca|bota|faz|marca|liga)\s+)?(?:um\s+)?(?:time
                    r"(?:de|pra|para)\s+(?P<tempo>.+)")
 LEMBRAR = re.compile(r"(?:me\s+)?(?:avisa|lembra|lembre|chama)(?:\s+me)?\s+(?:em|daqui a|daqui)\s+(?P<tempo>.+?)"
                      r"(?:\s+(?:de|que|pra|para)\s+(?P<lembrete>.+))?")
+# vídeo: "avança 30 segundos", "volta dez segundos"
+PULAR_VIDEO = re.compile(r"(?P<dir>avanca|adianta|pula|volta|retrocede|voltar|avancar)\s+(?:o\s+video\s+)?(?:uns\s+)?"
+                         r"(?P<n>\d+|[a-z]+)\s+segundos?")
+# abas do navegador: "vai pra aba do YouTube", "volta pro YouTube", "fecha a aba da Strandberg", "fecha essa aba"
+IR_ABA = re.compile(r"(?:vai|volta|muda|troca|passa|abre)\s+(?:pra|para|pro|na)\s+(?:a\s+|o\s+)?"
+                    r"(?:(?:aba|guia)\s+(?:do\s+|da\s+|de\s+)?)?(?P<termo>.+)")
+FECHAR_ABA = re.compile(r"(?:fecha|fechar|feche)\s+(?:a\s+|essa\s+|esta\s+)?(?:aba|guia)(?:\s+(?:do|da|de)\s+(?P<termo>.+))?")
 # o que não é nome de programa nem de música: frase com isso é pedido composto, fica pro chat
 EMENDAS = {"e", "depois", "entao", "pra", "para", "porque", "que", "se", "quando", "no youtube", "video"}
 
@@ -81,6 +96,17 @@ def entender(texto):
     for acao, padrao in FIXOS:
         if re.fullmatch(padrao, frase):
             return acao, None
+    m = PULAR_VIDEO.fullmatch(frase)
+    if m:
+        n = int(m.group("n")) if m.group("n").isdigit() else NUMEROS.get(m.group("n"))
+        if n and n <= 600:
+            return ("video_voltar" if m.group("dir").startswith(("volta", "retro")) else "video_avancar"), n
+    m = FECHAR_ABA.fullmatch(frase)
+    if m:
+        return "fechar_aba", (m.group("termo") or "").strip()
+    m = IR_ABA.fullmatch(frase)
+    if m and len(m.group("termo").split()) <= 4 and not _composto(m.group("termo")):
+        return "ir_aba", m.group("termo")
     m = TIMER.fullmatch(frase) or LEMBRAR.fullmatch(frase)
     if m:
         s = segundos(m.group("tempo"))

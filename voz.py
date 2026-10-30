@@ -60,6 +60,8 @@ GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
 LIMIAR_VOZ = 0.4                # abaixo do 0,5 padrão: pega voz baixa ou longe do microfone
 ESPERA_INICIAL = 8.0            # chamou e não falou nada: desiste depois disso
 MAX_DICA = 180                  # caracteres de vocabulário na dica do Whisper (o limite dele é ~224 tokens)
+NOTA_ALTA = 0.95                # detector bem seguro: aceita o nome escrito meio errado pelo Whisper ("Acrojinho")
+PARECIDO_COM_NOTA_ALTA = 0.55   # o quanto a palavra precisa parecer com o nome nesse caso
 MEMORIA_NOTA_S = 1.5            # a nota que o detector deu até isso antes da fala começar ainda conta pra ela
 RUIDO_CLASSICO = {"obrigado", "obrigada", "tchau", "tchau tchau", "muito obrigado", "obrigado por assistir"}
 ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se")
@@ -96,6 +98,18 @@ def achar_apelido(texto, apelidos, minimo=0.78, inicio_max=None):
             if bateu:
                 resto = " ".join(palavras[i + n:]).strip(" ,.;:!?-–…")
                 return True, resto
+    return False, ""
+
+
+def nome_aproximado(texto, nome, ate=4, minimo=PARECIDO_COM_NOTA_ALTA):
+    """Com o detector seguro de que ouviu a chamada: alguma das primeiras palavras parece o nome, mesmo escrita
+    errada ("E Acrojinho, toca…")? Devolve (achou, o_que_veio_depois)."""
+    palavras = texto.split()
+    alvo = " ".join(normalizar(nome))
+    for i, palavra in enumerate(palavras[:ate]):
+        p = " ".join(normalizar(palavra))
+        if p and len(p) >= 5 and difflib.SequenceMatcher(None, p, alvo).ratio() >= minimo:
+            return True, " ".join(palavras[i + 1:]).strip(" ,.;:!?-–…")
     return False, ""
 
 
@@ -633,6 +647,8 @@ class Voz:
             # duas frases de chamada diferentes de uma vez, baixinho: é o Whisper repetindo a dica, não você
             registrar(f"chamada IGNORADA (eco da dica, pico={pico:.3f}) | {texto}")
             return
+        if nota is not None and not achou and nota >= NOTA_ALTA:
+            achou, resto = nome_aproximado(texto, nome)
         if nota is not None:
             registrar(f"detector nota={nota:.2f} → {'ACORDOU' if achou else 'Whisper não confirmou'} conf={conf:.2f} "
                       f"pico={pico:.3f} | {texto}")

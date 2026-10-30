@@ -250,3 +250,49 @@ def test_voz_sem_detector_fica_no_jeito_antigo(monkeypatch):
     v.config, v.detector, v.detector_versao, v.detector_erro = (lambda: {"voz_detector": True}), None, None, None
     v._atualizar_detector()
     assert v.detector is None
+
+
+# ---------- comandos de vídeo, tela e abas ----------
+@pytest.mark.parametrize("frase, esperado", [
+    ("Tá beleza, rola um pouco mais.", ("rolar_baixo", None)), ("rola pra cima", ("rolar_cima", None)),
+    ("Na verdade, pausa o vídeo que tá tocando.", ("video_pausar", None)), ("dá play", ("video_tocar", None)),
+    ("avança 30 segundos", ("video_avancar", 30)), ("volta dez segundos", ("video_voltar", 10)),
+    ("volta pro YouTube", ("ir_aba", "youtube")), ("fecha a aba da Strandberg", ("fechar_aba", "strandberg")),
+    ("fecha essa aba", ("fechar_aba", "")), ("sobe o volume", ("volume_mais", None))])
+def test_comandos_de_video_e_abas(frase, esperado):
+    import comandos
+    assert comandos.entender(frase) == esperado
+
+
+def test_achar_aba_pelo_nome():
+    import abas
+    lista = [{"id": 1, "titulo": "Strandberg Boden Essential 6 - YouTube", "site": "www.youtube.com", "ativa": True},
+             {"id": 2, "titulo": "Caixa de entrada - Gmail", "site": "mail.google.com"},
+             {"id": 3, "titulo": "AliExpress Black Friday - YouTube", "site": "www.youtube.com", "tocando": True}]
+    assert abas.achar("estrangberg", lista)["id"] == 1
+    assert abas.achar("gmail", lista)["id"] == 2
+    assert abas.achar("youtube", lista)["id"] == 3   # a que está tocando
+    assert abas.achar("netflix", lista) is None
+
+
+# ---------- meus comandos e roteador ----------
+def test_meus_comandos():
+    import meus_comandos as m
+    lista = m.validar_lista([{"nome": "Modo trabalho", "frases": ["modo trabalho", "bora trabalhar"],
+                              "acoes": [{"tipo": "programa", "valor": "IntelliJ"}, {"tipo": "rm", "valor": "x"}]},
+                             {"nome": "vazio", "acoes": []}, "lixo"])
+    assert len(lista) == 1 and [a["tipo"] for a in lista[0]["acoes"]] == ["programa"]
+    assert m.achar("Ei, bora trabalha", lista)["nome"] == "Modo trabalho"
+    assert m.achar("que horas são", lista) is None
+    assert not m.vale_rotear("como funciona o hook?") and m.vale_rotear("deixa o vídeo parado")
+    assert m.ler_roteador('{"id": "video_pausar"}', lista) == ("video_pausar", None)
+    assert m.ler_roteador('{"id": "meu:Modo trabalho"}', lista)[0] == "meu"
+    assert m.ler_roteador('{"id": "apagar_tudo"}', lista) is None
+    assert m.ler_roteador('{"id": "ir_aba", "arg": ""}', lista) is None
+
+
+def test_nome_aproximado_com_detector_seguro():
+    import voz
+    assert voz.nome_aproximado("Acrojinho.", "Claudinho") == (True, "")
+    assert voz.nome_aproximado("E Claudim, toca algo", "Claudinho") == (True, "toca algo")
+    assert not voz.nome_aproximado("Tem nada de ver o que está acontecendo.", "Claudinho")[0]

@@ -4,6 +4,7 @@
 //                  já está aberta, sem roubar o foco (sem aba: abre uma em segundo plano)
 //   YouTube: sempre numa aba nova, trazida pra frente
 //   Rotinas: nos sites que você liberou, repete o caminho que você gravou (rotinas.js)
+//   Abas: lista as abas abertas (título e site) e troca ou fecha uma, pelo id que o Claudinho escolheu
 importScripts("config.js", "consultas.js", "rotinas.js");  // self.CLAUDINHO = {porta, token} (gerado na instalação)
 
 const BASE = `http://127.0.0.1:${self.CLAUDINHO.porta}`;
@@ -29,7 +30,23 @@ async function trazerPraFrente(aba) {
   await chrome.windows.update(aba.windowId, {focused: true});
 }
 
+// as abas abertas, pro Claudinho achar "a aba da Strandberg" pelo título sem tirar print da tela
+async function listarAbas() {
+  const abas = await chrome.tabs.query({});
+  return abas.filter(a => a.id >= 0).map(a => ({id: a.id, titulo: a.title || "", site: (() => {
+    try { return new URL(a.url).hostname; } catch (e) { return ""; } })(), ativa: a.active, tocando: !!a.audible,
+    janela: a.windowId}));
+}
+
 async function executar(c) {
+  if (c.acao === "aba") {   // trocar pra uma aba ou fechar (o Claudinho escolheu pelo título)
+    const [ativa] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+    const id = c.id === "ativa" ? (ativa && ativa.id) : Number(c.id);
+    if (!id && id !== 0) return;
+    if (c.qual === "focar") await trazerPraFrente(await chrome.tabs.get(id));
+    else if (c.qual === "fechar") await chrome.tabs.remove(id);
+    return;
+  }
   if (c.site === "ytmusic" && playerVivo() && !c.nova) {
     player.fila.push(c);  // o player do Opera busca no próximo "oi"
     return;
@@ -57,6 +74,10 @@ async function consultar(c) {
   let resultado;
   try {
     const rotina = c.acao === "rotina";
+    if (c.modo === "abas") {   // não abre nem mexe em nada: só a lista
+      await responder(c, {ok: true, dados: await listarAbas()});
+      return;
+    }
     const limite = new Promise((_, falhou) => setTimeout(() => falhou(new Error(rotina ? "a rotina passou de 3 minutos" :
       "a consulta travou em: " + (self.consultasClaudinho.andamento.etapa || "início"))), rotina ? 170000 : 35000));
     const trabalho = rotina ? self.rotinasClaudinho.rodar(c) : self.consultasClaudinho.consultar(c);
@@ -64,6 +85,10 @@ async function consultar(c) {
   } catch (e) {
     resultado = {ok: false, erro: String((e && e.message) || e)};
   }
+  await responder(c, resultado);
+}
+
+async function responder(c, resultado) {
   try {
     await fetch(`${BASE}/ext/resultado`, {
       method: "POST",

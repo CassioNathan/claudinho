@@ -63,13 +63,18 @@ import consumo
 import tela
 import atualizacao
 import projetos
+import abas
 import ativacao
 import comandos
+import meus_comandos
 import revisao
 from motores import env_limpo
 
 PORTA = 47821
 MAX_PERGUNTAS_CONVERSA = 30  # depois disso (ou no dia seguinte) o chat começa uma conversa nova
+# ...ou quando cada chamada já manda isso de tokens: toda mensagem reenvia o histórico inteiro (prints inclusive),
+# então uma conversa comprida custa cada vez mais por pergunta (chegou a 88 mil tokens por passo com o Sonnet)
+MAX_CONTEXTO_CONVERSA = 45_000
 DADOS = sistema.DADOS  # ~/.claudinho (cada pessoa tem o seu)
 CONFIG = DADOS / "config.json"  # o resto (piadas, notas, avisos, conversa) fica no claudinho.db
 
@@ -100,6 +105,7 @@ CONFIG_PADRAO = {
     "voz_encerrar": 8.0,                 # segundos sem falar depois da resposta até encerrar a conversa por voz
     "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
     "voz_comandos": True,                # comandos rápidos (pausa, próxima, toca X, abre X, timer, volume) sem passar pela IA
+    "voz_pausar_midia": True,            # chamou por voz: pausa a música/vídeo enquanto ouve e volta a tocar no fim
     "voz_detector": True,                # palavra de ativação treinada (ativacao.py): só chama o Whisper quando ela ouve
     "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
@@ -134,6 +140,9 @@ CONFIG_PADRAO = {
     "atalhos_programas": teclas.PADRAO,
     "programas_bloqueados": [],          # programas que o chat não abre nem mexe (painel → Programas)
     "rotinas": [],                       # rotinas gravadas em sites pela extensão (painel → Rotinas de sites)
+    "comandos_meus": [],                 # seus comandos de voz (painel → Faz por mim → Meus comandos)
+    "voz_roteador": True,                # frase que não bateu com nenhum comando: o modelo barato diz se é algum deles
+    "voz_sem_comando": "chat",           # não era comando: "chat" (manda pro chat) ou "estrito" (diz que não sabe)
     "mestre": {"nome": "", "sobre": ""},  # "Meu Mestre" no painel: quem usa o Claudinho (vira o CLAUDE.md do chat)
 }
 
@@ -149,8 +158,8 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "navegador_claude", "emojis", "borda", "borda_forca",
-                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
-                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_detector", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "voz_roteador", "voz_sem_comando",
+                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -221,6 +230,10 @@ NAVEGADOR_LIVRE = ("mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrom
 INTERVALO_VERSAO_S = 12 * 3600    # de quanto em quanto tempo ele olha se tem versão nova no GitHub
 ESPERA_REINICIAR_S = 300          # reiniciar: quanto o PowerShell espera este Claudinho fechar antes de abrir o novo
 ESPERA_REPETIR_S = 120            # chat do Claude Code esperando você: no máximo um balão por sessão nesse tempo
+
+
+# comandos que decidem o que toca: depois deles, o fim da conversa por voz não retoma a música que pausou
+MEXE_NA_MIDIA = {"pausar", "tocar", "proxima", "anterior", "musica", "video_pausar", "video_tocar"}
 
 
 def registrar_comando(texto, acao):
@@ -766,6 +779,7 @@ class ChatClaude:
         self.personalidade = personalidade
         self.modelo = modelo if modelo in MODELOS_CHAT else "haiku"
         self.custo_processo = 0.0
+        self.contexto = 0            # tokens que a última chamada mandou (instruções + histórico + prints)
         self.esforco = esforco if esforco in ESFORCOS else "low"
         self.navegador = navegador   # Claude in Chrome ligado (painel → Privacidade)
         self.pastas = [p for p in pastas_leitura if Path(p).exists()]
@@ -828,7 +842,8 @@ class ChatClaude:
                                       "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos,"
                                       "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas,"
                                       "mcp__claudinho__esperar_janela,mcp__claudinho__rotinas_conhecidas,"
-                                      "mcp__claudinho__rodar_rotina,mcp__claudinho__meu_consumo"
+                                      "mcp__claudinho__rodar_rotina,mcp__claudinho__meu_consumo,"
+                                      "mcp__claudinho__abas_navegador,mcp__claudinho__ir_para_aba"
                                       + ("," + NAVEGADOR_LIVRE if self.navegador else "")),  # *_confirmada: popup
                # espera às cegas (sleep 15) fazia PC rápido esperar à toa e PC lento não esperar o bastante:
                # quem espera programa abrir é a esperar_janela, que volta assim que ele fica pronto
@@ -905,6 +920,7 @@ class ChatClaude:
                 self.fechar()
                 self.sid = None
             self.aquecer()
+        self.contexto = 0
         threading.Thread(target=zerar, daemon=True).start()
 
     def responder_controle(self, ev):
@@ -965,6 +981,8 @@ class ChatClaude:
                         if ev.get("type") == "control_request":
                             self.responder_controle(ev)
                         elif ev.get("type") == "assistant":
+                            entrada = consumo.tokens_de((ev.get("message") or {}).get("usage"))[0]
+                            self.contexto = entrada or self.contexto   # cresce a cada passo (print, resposta…)
                             for bloco in (ev.get("message") or {}).get("content") or []:
                                 if isinstance(bloco, dict) and bloco.get("type") == "tool_use":
                                     self.ao_usar_ferramenta(bloco.get("name", ""), bloco.get("input") or {})
@@ -1351,7 +1369,7 @@ def iniciar_servidor(eventos):
                             comando = dados.get("comando") or {}
                             # "abrir" a extensão faz mesmo sem aba daquele site (ela cria uma); o resto precisa da aba
                             aberta = extensao_conectada() and (
-                                (EXT["abas"].get(site) or 0) > 0 or comando.get("acao") == "abrir")
+                                (EXT["abas"].get(site) or 0) > 0 or comando.get("acao") in ("abrir", "aba"))
                             if aberta:
                                 EXT["fila"].append(dict(comando, site=site, criado=agora))
                             return self.responder(200, json.dumps({"entregue": aberta}).encode("utf-8"))
@@ -1821,6 +1839,8 @@ class Claudinho:
                            chave_stt=lambda: sistema.ler_segredo("stt_chave"),
                            saudacao=self.texto_saudacao, vocabulario=self.vocabulario_voz)
         self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
+        self.midia_pausada = False  # pausei a música/vídeo quando você chamou: volta a tocar no fim da conversa
+        self.comando_pendente = False  # um comando de voz ainda está sendo resolvido (roteador, lista de abas)
         self.sinal_voz = None      # balãozinho de pontinhos sobre o mascote enquanto a voz carrega
         self.voz_status = ""
         self.ligar_voz()
@@ -2834,6 +2854,10 @@ class Claudinho:
             valor = max(10, min(100, int(valor)))
         elif chave == "atalhos_programas":
             valor = teclas.validar_lista(valor)
+        elif chave == "comandos_meus":
+            valor = meus_comandos.validar_lista(valor)
+        elif chave == "voz_sem_comando":
+            valor = valor if valor in ("chat", "estrito") else "chat"
         elif chave == "rotinas":
             valor = rotinas.validar_lista(valor)
         elif chave == "programas_bloqueados":
@@ -3467,12 +3491,107 @@ class Claudinho:
             self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
 
     # ---------- comandos rápidos da voz (comandos.py): o que tem resposta certa não vai pra IA ----------
-    def comando_rapido(self, texto):
-        """Se a frase é só um comando fixo, faz e responde como se fosse o chat (balão + voz). False: vai pro chat."""
-        pedido = comandos.entender(texto)
+    # ---------- modo comandos (meus_comandos.py): regra fixa → comando seu → roteador barato → chat ----------
+    def atender_voz(self, texto):
+        """O que você falou na conversa por voz: comando resolve sem a IA grande; o resto vai pro chat."""
+        if not self.cfg["voz_comandos"]:
+            return self.mandar_pro_chat(texto)
+        if self.comando_rapido(texto):
+            return
+        meu = meus_comandos.achar(texto, self.cfg["comandos_meus"])
+        if meu:
+            return self.rodar_meu_comando(texto, meu)
+        if self.cfg["voz_roteador"] and tem_ia() and meus_comandos.vale_rotear(texto):
+            self.comando_pendente = True
+            lista = list(self.cfg["comandos_meus"])
+
+            def rotear():
+                try:
+                    r = meus_comandos.ler_roteador(
+                        motores.ROTEADOR.perguntar(meus_comandos.prompt_roteador(texto, lista)), lista)
+                except Exception:
+                    r = None
+                self.eventos.put(("roteado", texto, r))
+            threading.Thread(target=rotear, daemon=True).start()
+            return
+        self.sem_comando(texto)
+
+    def roteado(self, texto, pedido):
+        self.comando_pendente = False
+        if pedido and pedido[0] == "meu":
+            registrar_comando(texto, f"roteador → meu:{pedido[1]['nome']}")
+            return self.rodar_meu_comando(texto, pedido[1])
+        if pedido:
+            registrar_comando(texto, f"roteador → {pedido[0]}")
+            if self.comando_rapido(texto, pedido):
+                return
+        self.sem_comando(texto)
+
+    def sem_comando(self, texto):
+        """Não era comando: vai pro chat, ou (modo estrito) ele diz que ainda não sabe."""
+        if self.cfg["voz_sem_comando"] == "estrito":
+            return self.responder_comando(texto, "nenhum", "Isso eu ainda não sei fazer. Dá pra me ensinar em "
+                                          "Meus comandos, no painel.")
+        self.mandar_pro_chat(texto)
+
+    def mandar_pro_chat(self, texto):
+        if self.entrada and not self.ocupado:
+            self.escrever_no_chat(texto)
+            self.enviar()
+        if not self.ocupado and self.conversa_voz:
+            self.voz.resposta_chegou()
+
+    def rodar_meu_comando(self, texto, c):
+        """Um comando seu: as ações em ordem, em segundo plano; a resposta sai na hora."""
+        falas = [a["valor"] for a in c["acoes"] if a["tipo"] == "falar"]
+        if any(a["tipo"] == "musica" for a in c["acoes"]):
+            self.midia_pausada = False   # o comando escolhe o que toca: no fim da conversa não retomo por cima
+
+        def fazer():
+            for a in c["acoes"]:
+                try:
+                    r = self.fazer_acao(a)
+                except Exception as e:
+                    r = f"erro: {e}"
+                registrar_comando(f"{c['nome']} · {a['tipo']} {a['valor'][:40]}", str(r or "ok")[:80])
+                time.sleep(0.6)   # um programa abrindo antes do próximo passo
+        threading.Thread(target=fazer, daemon=True).start()
+        self.responder_comando(texto, f"meu:{c['nome']}", " ".join(falas) or f"Feito: {c['nome']}.")
+
+    def fazer_acao(self, a):
+        """Uma ação de um comando seu (roda fora da thread da tela). Devolve o que fez, pro comandos.log."""
+        tipo, valor = a["tipo"], a["valor"]
+        if tipo == "programa":
+            return programas.abrir(valor)
+        if tipo == "site":
+            from urllib.parse import urlparse
+            url = valor if "://" in valor else "https://" + valor
+            if urlparse(url).scheme not in ("http", "https") or not urlparse(url).netloc:
+                return "endereço recusado"
+            sistema.lancar(url)
+            return f"abri {url}"
+        if tipo == "musica":
+            self.tocar_no_youtube_music(valor)
+            return "tocando"
+        if tipo == "atalho":
+            return teclas.apertar(valor, a.get("janela") or "")
+        if tipo == "rotina":
+            return rotinas.rodar(valor)
+        if tipo == "projeto":
+            return projetos.abrir(a.get("janela") or "", valor)
+        if tipo == "aba":
+            return abas.ir(valor)[1]
+        return None   # "falar": já foi na resposta
+
+    def comando_rapido(self, texto, pedido=None):
+        """Se a frase é só um comando fixo, faz e responde como se fosse o chat (balão + voz). False: vai pro chat.
+        `pedido`: (acao, arg) já entendido pelo roteador."""
+        pedido = pedido or comandos.entender(texto)
         if not pedido:
             return False
         acao, arg = pedido
+        if acao in MEXE_NA_MIDIA:
+            self.midia_pausada = False   # você decidiu o que toca: no fim da conversa não retomo por cima
         if acao == "abrir":   # só se achar o programa; senão o chat tenta do jeito dele (projeto, site…)
             achados = programas.achar(arg)
             if not achados:
@@ -3490,6 +3609,34 @@ class Claudinho:
         elif acao == "musica":
             self.tocar_no_youtube_music(arg)
             resposta = f"Procurando {arg}."
+        elif acao.startswith("video_"):   # o vídeo do YouTube, pela extensão (sem aba do YouTube: tecla de mídia)
+            qual = {"video_pausar": "pausar", "video_tocar": "tocar", "video_avancar": "avancar",
+                    "video_voltar": "voltar"}[acao]
+
+            def no_video(q=qual, n=arg):
+                if not musica.no_player("youtube", q, n) and q in ("pausar", "tocar"):
+                    musica.controlar(q)
+            threading.Thread(target=no_video, daemon=True).start()
+            resposta = {"pausar": "Pausei o vídeo.", "tocar": "Dando play.",
+                        "avancar": f"Avancei {arg} segundos.", "voltar": f"Voltei {arg} segundos."}[qual]
+        elif acao in ("rolar_baixo", "rolar_cima"):   # na janela que você está usando (pula o Claudinho)
+            tecla = "pagedown" if acao == "rolar_baixo" else "pageup"
+            threading.Thread(target=teclas.apertar, args=(tecla, "", 1), daemon=True).start()
+            resposta = "Rolando." if acao == "rolar_baixo" else "Subindo."
+        elif acao in ("ir_aba", "fechar_aba"):
+            if not extensao_conectada():
+                return False   # sem a extensão o chat tenta do jeito dele
+
+            self.comando_pendente = True
+
+            def na_aba():   # a lista de abas vem da extensão (pode levar uns segundos): fora da thread da tela
+                try:
+                    ok, frase = abas.ir(arg) if acao == "ir_aba" else abas.fechar(arg)
+                except Exception as e:
+                    ok, frase = False, str(e)
+                self.eventos.put(("comando_tarde", texto, acao, ok, frase))
+            threading.Thread(target=na_aba, daemon=True).start()
+            return True
         elif acao == "horas":
             resposta = f"São {time.strftime('%H:%M')}."
         elif acao == "timer":
@@ -3503,6 +3650,20 @@ class Claudinho:
                 user32.keybd_event(tecla, 0, 0, 0)
                 user32.keybd_event(tecla, 0, 2, 0)   # KEYEVENTF_KEYUP
             resposta = {"volume_mais": "Aumentei.", "volume_menos": "Abaixei.", "mudo": "Feito."}[acao]
+        self.responder_comando(texto, acao, resposta)
+        return True
+
+    def comando_tarde(self, texto, acao, ok, resposta):
+        """Resposta de um comando rápido que precisou esperar (ex.: achar a aba). Não deu: a frase vai pro chat."""
+        self.comando_pendente = False
+        if ok:
+            self.responder_comando(texto, acao, resposta)
+        else:
+            registrar_comando(texto, f"{acao} → chat ({resposta})")
+            self.sem_comando(texto)
+
+    def responder_comando(self, texto, acao, resposta):
+        """Comando rápido feito: responde como se fosse o chat (balão com o campo, voz) e anota na conversa."""
         registrar_comando(texto, acao)
         self.mem.registrar_mensagem("eu", texto)
         self.mem.registrar_mensagem("claudinho", resposta)
@@ -3513,7 +3674,6 @@ class Claudinho:
         if self.conversa_voz:   # a voz espera isso pra falar/ouvir a próxima
             self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
             self.voz.resposta_chegou()
-        return True
 
     def estado_detector(self):
         """Pro painel: o modelo da palavra de ativação existe? está rodando? e os números do treino."""
@@ -3601,7 +3761,8 @@ class Claudinho:
         pergunta = texto
         # cada mensagem relê o histórico todo: conversa de outro dia ou longa demais começa do zero,
         # levando só o finalzinho da anterior pra não perder o fio
-        if self.mem.conversa_velha(MAX_PERGUNTAS_CONVERSA):
+        if (self.mem.conversa_velha(MAX_PERGUNTAS_CONVERSA)
+                or getattr(self.chat, "contexto", 0) > MAX_CONTEXTO_CONVERSA):
             anterior = self.mem.conversa_atual()
             self.mem.nova_conversa()
             self.chat.nova_conversa()
@@ -3719,12 +3880,16 @@ class Claudinho:
         self.voz_status = estado
         if estado == "chamado":   # ouviu o nome: reage no mascote (sem abrir o chat) e já vai aquecendo o motor
             self.mostrar_sinal_voz()
+            self.pausar_midia_pra_ouvir()
+            if self.cfg["voz_comandos"] and self.cfg["voz_roteador"]:
+                threading.Thread(target=motores.ROTEADOR.aquecer, daemon=True).start()
             self.chat.ultimo_uso = time.time()
             threading.Thread(target=self.chat.aquecer, daemon=True).start()
             return
         self.esconder_sinal_voz()
         if estado == "fim":
             self.conversa_voz = False
+            self.retomar_midia()
             if self.entrada:  # o balão da última resposta volta a sumir sozinho, como numa conversa digitada
                 self.entrada.ate = time.time() + 20
                 self.entrada.mostrar_faixa(False)
@@ -3795,6 +3960,19 @@ class Claudinho:
         if self.entrada.faixa_ativa:
             self.entrada.desenhar_faixa(list(self.voz.niveis), self.voz.em_voz, carregando, self.t,
                                         falando=self.voz_status == "falando")
+
+    def pausar_midia_pra_ouvir(self):
+        """Como a Alexa: chamou, a música/vídeo para (senão o som dele entra no que você fala). Volta no fim."""
+        m = self.musica
+        if not self.cfg["voz_pausar_midia"] or not (m and m.get("tocando")) or self.midia_pausada:
+            return
+        self.midia_pausada = True
+        threading.Thread(target=musica.controlar, args=("pausar",), daemon=True).start()
+
+    def retomar_midia(self):
+        if self.midia_pausada:
+            self.midia_pausada = False
+            threading.Thread(target=musica.controlar, args=("tocar",), daemon=True).start()
 
     def abrir_conversa_por_voz(self):
         """O chat abre já com o cursor no campo, como no clique. Ocupado pensando na outra: não abre."""
@@ -4692,13 +4870,14 @@ class Claudinho:
             elif ev[0] == "voz_texto":
                 self.escrever_no_chat(ev[1])
             elif ev[0] == "voz_enviar":
-                if self.entrada and self.cfg["voz_comandos"] and self.comando_rapido(ev[1]):
-                    pass   # era um comando fixo: já fez e respondeu, sem passar pela IA
-                elif self.entrada:
-                    self.escrever_no_chat(ev[1])
-                    self.enviar()
-                if not self.ocupado:  # não saiu (campo vazio, ocupado…): não tem resposta pra esperar
+                if self.entrada:
+                    self.atender_voz(ev[1])
+                if not self.ocupado and not self.comando_pendente:  # não saiu (campo vazio…): nada pra esperar
                     self.voz.resposta_chegou()
+            elif ev[0] == "comando_tarde":
+                self.comando_tarde(*ev[1:])
+            elif ev[0] == "roteado":
+                self.roteado(*ev[1:])
             elif ev[0] == "voz_cancelar":
                 self.fala.parar()
                 self.conversa_voz = False
@@ -4708,6 +4887,8 @@ class Claudinho:
             elif ev[0] == "ferramenta":  # ele está mexendo no PC (abrindo algo, rodando comando)
                 # print pedido: o balão avisa que ele está olhando (o print vai pra IA)
                 nome, entrada = ev[1], ev[2] or {}
+                if "musica.py" in str(entrada.get("command", "")):
+                    self.midia_pausada = False   # o chat mexeu na música/vídeo: no fim não retomo por cima
                 if "rodar_rotina" in nome:  # rotina que lê algo: ele conta o que leu inteiro, não só o começo
                     self.fala_orcamento = None
                 self.usou_ferramenta = ("olhando a tela" if nome.endswith("ver_tela") else

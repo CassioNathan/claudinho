@@ -34,7 +34,7 @@ MODELOS = {
 MODELOS_CLAUDE = {apelido: m["id"] for apelido, m in MODELOS.items()}
 # qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
 TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
-                  "resumo": "sonnet", "avisos": "haiku"}
+                  "resumo": "sonnet", "avisos": "haiku", "roteador": "haiku"}
 OLLAMA = "http://127.0.0.1:11434"
 # modelos locais que o painel oferece: o leve só lê texto; o maior também enxerga o print da tela
 MODELOS_OLLAMA = {
@@ -114,6 +114,88 @@ def _completar_claude_code(prompt, imagens, modelo, timeout, tarefa):
     if d.get("is_error"):
         raise RuntimeError(d.get("result") or "erro do Claude Code")
     return d.get("result", "")
+
+
+class ClaudeAquecido:
+    """Um `claude -p` que fica aberto esperando a próxima pergunta curta (o roteador de comandos da voz). Abrir o
+    processo leva ~7 s no Windows e a resposta do Haiku ~0,7 s: aberto, o pedido sai em ~1-2 s. Ele lembra as
+    perguntas anteriores (é uma conversa), então recomeça a cada RECOMECAR perguntas pra não crescer."""
+    RECOMECAR = 15
+
+    def __init__(self, tarefa):
+        self.tarefa, self.proc, self.feitas, self.custo = tarefa, None, 0, 0.0
+        self.trava = threading.Lock()
+
+    def _abrir(self):
+        exe = shutil.which("claude")
+        if not exe:
+            raise RuntimeError("Não achei o comando `claude` no PATH.")
+        modelo = modelo_da(self.tarefa)
+        env = env_limpo()
+        if modelo != "opus":
+            env["MAX_THINKING_TOKENS"] = "0"
+        sistema.DADOS.mkdir(exist_ok=True)
+        self.proc = subprocess.Popen(
+            [exe, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+             "--model", MODELOS_CLAUDE[modelo], *([] if modelo != "opus" else ["--effort", "low"]), *ENXUTO],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+            errors="replace", cwd=sistema.DADOS, env=env, creationflags=subprocess.CREATE_NO_WINDOW)
+        self.modelo, self.feitas, self.custo = modelo, 0, 0.0
+
+    def fechar(self):
+        if self.proc:
+            try:
+                self.proc.kill()
+            except OSError:
+                pass
+        self.proc = None
+
+    def aquecer(self):
+        """Abre o processo antes de precisar (a primeira pergunta já sai rápida)."""
+        with self.trava:
+            if CONFIG["motor"] == "claude_code" and (not self.proc or self.proc.poll() is not None):
+                try:
+                    self._abrir()
+                except Exception:
+                    self.proc = None
+
+    def perguntar(self, texto, timeout=30):
+        """A resposta em texto (erro vira exceção). Fora do Claude Code, é uma chamada normal (a API já é rápida)."""
+        if CONFIG["motor"] != "claude_code":
+            return completar(texto, tarefa=self.tarefa, max_tokens=120, timeout=timeout)
+        with self.trava:
+            if (not self.proc or self.proc.poll() is not None or self.feitas >= self.RECOMECAR
+                    or self.modelo != modelo_da(self.tarefa)):
+                self.fechar()
+                self._abrir()
+            self.feitas += 1
+            proc = self.proc
+            vigia = threading.Timer(timeout, self.fechar)   # travou: mata o processo e a leitura termina
+            vigia.start()
+            try:
+                proc.stdin.write(json.dumps({"type": "user", "message": {"role": "user", "content": texto}}) + "\n")
+                proc.stdin.flush()
+                for linha in proc.stdout:
+                    try:
+                        ev = json.loads(linha)
+                    except ValueError:
+                        continue
+                    if ev.get("type") == "result":
+                        custo = float(ev.get("total_cost_usd") or 0)   # o claude soma desde que abriu
+                        consumo.registrar(self.tarefa, max(0.0, custo - self.custo), *consumo.tokens_de(ev.get("usage")))
+                        self.custo = custo
+                        if ev.get("is_error"):
+                            raise RuntimeError(ev.get("result") or "erro do Claude Code")
+                        return ev.get("result", "")
+                raise RuntimeError("o claude fechou sem responder")
+            except (OSError, ValueError) as e:
+                self.fechar()
+                raise RuntimeError(f"o roteador caiu ({e})") from e
+            finally:
+                vigia.cancel()
+
+
+ROTEADOR = ClaudeAquecido("roteador")
 
 
 # ---------- API da Anthropic (chave guardada criptografada pelo Windows) ----------

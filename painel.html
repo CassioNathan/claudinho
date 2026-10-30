@@ -264,6 +264,7 @@
       <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
       <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
       <a data-alvo="rotinas_sec"><span class="ic">🌐</span>Rotinas de sites</a>
+      <a data-alvo="comandos_sec"><span class="ic">🗣️</span>Meus comandos</a>
     </div>
     <div class="aba" data-aba="sistema"><span class="ic">🔒</span>Privacidade e sistema</div>
     <div class="sub-nav">
@@ -538,6 +539,23 @@
         <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Roteador de comandos 🧭</div><div class="desc">A frase não bateu com nenhum comando
+          mas parece um pedido ("deixa o vídeo parado")? O modelo barato só diz qual comando é, numa chamada mínima
+          (uns centavos por mil pedidos). Pergunta e conversa vão direto pro chat.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_roteador"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Quando não é comando</div><div class="desc">Mandar pro chat (como sempre) ou o modo
+          estrito: ele só faz comandos e diz que ainda não sabe o resto (não gasta nada com conversa).</div></div>
+        <select class="campo" id="vozSemComando" style="flex:0 0 150px"><option value="chat">mandar pro chat</option>
+          <option value="estrito">modo estrito</option></select>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Pausar a música ao ouvir ⏸️</div><div class="desc">Chamou, a música ou o vídeo para
+          (senão o som dele entra no que você fala) e volta a tocar quando a conversa acaba.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_pausar_midia"><span></span></label>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Um modelo
           pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e
           a TV não acordam ele à toa.</div></div>
@@ -663,6 +681,19 @@
       ler</b> pra ele ler uma lista, como o quadro de um kanban) e salve com um nome. Depois é só pedir no chat.
       Senha nunca é gravada; o chat só repete o que você gravou.</p>
     <div id="rotinas"></div>
+  </section>
+  <section id="comandos_sec">
+    <h2>🗣️ Meus comandos</h2>
+    <p class="sub">Frases que ele resolve na hora, sem conversar com a IA grande: fale uma delas na conversa por voz
+      ("modo trabalho", "bora jogar") e ele faz as ações em ordem. Erro de escuta passa; se a frase sair diferente, o
+      roteador (modelo barato) ainda reconhece qual comando é.</p>
+    <div id="meusComandos"></div>
+    <div class="cartao" style="margin-top:10px">
+      <div class="linha novo-prog">
+        <input id="novoComando" placeholder="nome do comando (ex.: Modo trabalho)" maxlength="40">
+        <button class="botao" id="addComando">+ Novo comando</button>
+      </div>
+    </div>
   </section>
   <section id="sistema">
     <h2>🖥️ Sistema</h2>
@@ -1184,6 +1215,101 @@ async function salvarRotinas(lista, texto) {
   montarRotinas(true);
   avisar(texto);
 }
+// ---------- meus comandos de voz: nome, frases e ações em ordem ----------
+const TIPOS_ACAO = [["programa", "abrir programa", "ex.: IntelliJ"], ["site", "abrir site", "ex.: github.com"],
+  ["musica", "tocar música", "ex.: lofi pra estudar"], ["projeto", "abrir projeto", "pasta do projeto"],
+  ["atalho", "apertar atalho", "ex.: shift+f10"], ["rotina", "rodar rotina", "nome da rotina"],
+  ["aba", "ir pra aba", "ex.: youtube"], ["falar", "falar", "o que ele responde"]];
+function comandosAgora() { return JSON.parse(JSON.stringify(estado.cfg.comandos_meus || [])); }
+async function salvarComandos(lista, texto) {
+  await mudar("comandos_meus", lista);
+  montarMeusComandos(true);
+  if (texto) avisar(texto);
+}
+function campoPequeno(valor, dica, largura) {
+  const c = document.createElement("input");
+  c.value = valor || ""; c.placeholder = dica; c.maxLength = 200;
+  c.style.cssText = `flex:${largura};min-width:0;background:#3a3936;color:var(--texto);border:1px solid #55534e;border-radius:6px;padding:5px 8px;font:inherit;font-size:12px`;
+  return c;
+}
+function montarMeusComandos(forcar) {
+  const caixa = document.getElementById("meusComandos");
+  if (!caixa) return;
+  const assinatura = JSON.stringify(estado.cfg.comandos_meus);
+  if (!forcar && (caixa.dataset.assinatura === assinatura || caixa.contains(document.activeElement))) return;
+  caixa.dataset.assinatura = assinatura;
+  caixa.innerHTML = "";
+  const lista = estado.cfg.comandos_meus || [];
+  if (!lista.length) {
+    caixa.innerHTML = '<div class="cartao"><span class="desc">Nenhum comando ainda. Crie o primeiro aqui embaixo.</span></div>';
+  }
+  lista.forEach((c, i) => {
+    const cartao = document.createElement("div");
+    cartao.className = "cartao prog";
+    const topo = document.createElement("div");
+    topo.className = "prog-topo";
+    topo.innerHTML = "<b></b>";
+    topo.querySelector("b").textContent = c.nome;
+    const tirar = document.createElement("button");
+    tirar.className = "tirar-pasta"; tirar.textContent = "✕"; tirar.title = "apagar o comando"; tirar.style.marginLeft = "auto";
+    tirar.onclick = () => { const l = comandosAgora(); l.splice(i, 1); salvarComandos(l, "comando apagado ✓"); };
+    topo.appendChild(tirar);
+    cartao.appendChild(topo);
+    const frases = document.createElement("div");
+    frases.className = "linha";
+    frases.innerHTML = '<div class="info"><div class="titulo" style="font-size:12px">Frases (separadas por vírgula)</div></div>';
+    const f = campoPequeno(c.frases.join(", "), "modo trabalho, bora trabalhar", 2);
+    f.onchange = () => { const l = comandosAgora(); l[i].frases = f.value.split(",").map(x => x.trim()).filter(Boolean); salvarComandos(l, "salvo ✓"); };
+    frases.appendChild(f);
+    cartao.appendChild(frases);
+    c.acoes.forEach((a, k) => {
+      const linha = document.createElement("div");
+      linha.className = "linha"; linha.style.gap = "6px";
+      const tipo = document.createElement("select");
+      tipo.className = "campo"; tipo.style.flex = "0 0 140px";
+      tipo.innerHTML = TIPOS_ACAO.map(([v, n]) => `<option value="${v}">${k + 1}. ${n}</option>`).join("");
+      tipo.value = a.tipo;
+      const dica = (TIPOS_ACAO.find(t => t[0] === a.tipo) || [])[2] || "";
+      const valor = campoPequeno(a.valor, dica, 2);
+      const extra = campoPequeno(a.janela, a.tipo === "projeto" ? "programa (ex.: IntelliJ)" : "janela (opcional)", 1);
+      extra.hidden = !["atalho", "projeto"].includes(a.tipo);
+      const tira = document.createElement("button");
+      tira.className = "tirar-pasta"; tira.textContent = "✕"; tira.title = "tirar a ação";
+      const gravar = () => { const l = comandosAgora(); l[i].acoes[k] = {tipo: tipo.value, valor: valor.value.trim(), janela: extra.value.trim()}; salvarComandos(l, "salvo ✓"); };
+      tipo.onchange = gravar; valor.onchange = gravar; extra.onchange = gravar;
+      tira.onclick = () => { const l = comandosAgora(); l[i].acoes.splice(k, 1); salvarComandos(l, l[i].acoes.length ? "salvo ✓" : "comando sem ação: apagado"); };
+      linha.append(tipo, valor, extra, tira);
+      cartao.appendChild(linha);
+    });
+    // ação nova: só vale depois de preencher (comando sem ação não é salvo)
+    const nova = document.createElement("div");
+    nova.className = "linha"; nova.style.gap = "6px";
+    const tipo = document.createElement("select");
+    tipo.className = "campo"; tipo.style.flex = "0 0 140px";
+    tipo.innerHTML = TIPOS_ACAO.map(([v, n]) => `<option value="${v}">+ ${n}</option>`).join("");
+    const valor = campoPequeno("", "o quê (ex.: IntelliJ)", 2);
+    tipo.onchange = () => { valor.placeholder = (TIPOS_ACAO.find(t => t[0] === tipo.value) || [])[2] || ""; };
+    const add = document.createElement("button");
+    add.className = "botao"; add.textContent = "Adicionar";
+    add.onclick = () => {
+      if (!valor.value.trim()) { avisar("preencha o quê"); return; }
+      const l = comandosAgora(); l[i].acoes.push({tipo: tipo.value, valor: valor.value.trim(), janela: ""});
+      salvarComandos(l, "ação adicionada ✓");
+    };
+    nova.append(tipo, valor, add);
+    cartao.appendChild(nova);
+    caixa.appendChild(cartao);
+  });
+  document.getElementById("addComando").onclick = () => {
+    const nome = document.getElementById("novoComando").value.trim();
+    if (!nome) { avisar("dê um nome"); return; }
+    // nasce com uma ação "falar" (comando sem ação não é salvo): troque ou adicione as de verdade
+    const l = comandosAgora();
+    l.push({nome, frases: [nome], acoes: [{tipo: "falar", valor: `Bora: ${nome}!`, janela: ""}]});
+    document.getElementById("novoComando").value = "";
+    salvarComandos(l, "comando criado ✓ — agora adicione as ações");
+  };
+}
 function montarRotinas(forcar) {
   const caixa = document.getElementById("rotinas");
   const assinatura = JSON.stringify(estado.cfg.rotinas);
@@ -1249,6 +1375,7 @@ function atualizarVivos() {
   montarProgramas();
   montarInstalados();
   montarRotinas();
+  montarMeusComandos();
   document.getElementById("musica").textContent = estado.musica || "nada";
   montarConsumo();
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
@@ -1271,6 +1398,7 @@ const ACOES_MODELO = [
   ["junior_chat", "Corrigir pela revisão", "o botão \"corrige\" da revisão, só naquela pergunta"],
   ["resumo", "Resumir a janela 📄", "o atalho de resumir/explicar o que está na tela"],
   ["avisos", "Avisos e notificações 🔔", "o resumo das notificações e o aviso de chat do Claude Code que terminou"],
+  ["roteador", "Roteador de comandos 🧭", "diz qual dos seus comandos a frase falada pede (chamada mínima)"],
 ];
 function tabelaAcoes(m) {
   const linhas = ACOES_MODELO.map(([id, nome, desc]) => `<div class="linha" style="padding:6px 0">
@@ -1474,6 +1602,9 @@ function montarVoz() {
     : det.erro ? `Não carregou: ${det.erro}`
     : det.info && det.info.acerto != null ? `Treinado: reconhece ${Math.round(det.info.acerto * 100)}% das chamadas nos testes; em áudio qualquer, só ~${Math.round(det.info.disparos_por_hora)} vez(es) por hora ele pede pro Whisper conferir (e o Whisper ainda tem que ouvir a chamada pra acordar).${det.ligado ? " Rodando ✓" : " Liga junto com a escuta por voz."}`
     : "Treinado.");
+  const semCmd = document.getElementById("vozSemComando");
+  if (document.activeElement !== semCmd) semCmd.value = estado.cfg.voz_sem_comando || "chat";
+  semCmd.onchange = () => mudar("voz_sem_comando", semCmd.value);
   const vocab = document.getElementById("vozVocabulario");
   if (document.activeElement !== vocab) vocab.value = estado.cfg.voz_vocabulario || "";
   document.getElementById("formVocabulario").onsubmit = ev => {

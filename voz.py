@@ -58,6 +58,7 @@ GANHO_ALVO = 0.08               # volume (RMS) que o ganho automático procura n
 GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
 LIMIAR_VOZ = 0.4                # abaixo do 0,5 padrão: pega voz baixa ou longe do microfone
 ESPERA_INICIAL = 8.0            # chamou e não falou nada: desiste depois disso
+MAX_DICA = 180                  # caracteres de vocabulário na dica do Whisper (o limite dele é ~224 tokens)
 RUIDO_CLASSICO = {"obrigado", "obrigada", "tchau", "tchau tchau", "muito obrigado", "obrigado por assistir"}
 ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se")
 
@@ -213,7 +214,8 @@ def tocar(nome):
 
 class Voz:
     def __init__(self, config, ao_acordar, ao_texto, ao_enviar, ao_cancelar, pausado=lambda: False, ao_erro=print,
-                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None, saudacao=lambda: None):
+                 ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None, saudacao=lambda: None,
+                 vocabulario=lambda: ""):
         """config(): dict com voz_apelidos, voz_silencio, voz_microfone, voz_modelo_apelido, voz_modelo_fala,
         voz_sons (relido a cada uso: mudar no painel vale na hora)."""
         self.config = config
@@ -222,6 +224,8 @@ class Voz:
         self.ao_estado, self.conversa_viva = ao_estado, conversa_viva
         self.fala = fala             # fala.Fala: a voz do Claudinho (None = só texto)
         self.saudacao = saudacao     # () -> cumprimento curto que ele fala quando a conversa por voz começa (ou None)
+        # () -> nomes que você costuma falar (programas, projetos, artistas): vão de dica pro Whisper escrever certo
+        self.vocabulario = vocabulario
         self.chave_stt = chave_stt   # a chave do provedor de reconhecimento na nuvem (guardada criptografada)
         self.nuvem_erro = None       # por que a última tentativa na nuvem caiu pro local (None = deu certo)
         self.ultimo_motor = "local"  # quem fez a última transcrição: "nuvem" ou "local" (vai pro voz.log)
@@ -336,6 +340,19 @@ class Voz:
         if " ".join(normalizar(texto)) in RUIDO_CLASSICO and len(audio) / TAXA < 4 and logprob < -0.5:
             return "", -9.0   # o Whisper "ouve" um "Obrigado." no meio do ruído
         return texto, (logprob if sem_fala < 0.6 else -5.0)
+
+    def _dica_vocabulario(self):
+        """A dica do texto final: "Spotify, IntelliJ, Legião Urbana." (curta: dica longa o Whisper "ouve" no ruído)."""
+        try:
+            termos = [t.strip() for t in (self.vocabulario() or "").split(",") if t.strip()]
+        except Exception:
+            return None
+        dica = ""
+        for t in dict.fromkeys(termos):
+            if len(dica) + len(t) + 2 > MAX_DICA:
+                break
+            dica += (", " if dica else "") + t
+        return dica + "." if dica else None
 
     def transcrever(self, audio, modelo, prompt=None):
         return self.transcrever_detalhado(audio, modelo, prompt)[0]
@@ -778,7 +795,8 @@ class Voz:
             texto, confianca = r[1], r[2]
         else:
             try:
-                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], beam=5)
+                texto, confianca = self.transcrever_detalhado(audio, cfg["voz_modelo_fala"], beam=5,
+                                                              prompt=self._dica_vocabulario())
             except Exception as e:
                 self.ao_erro(f"o Whisper falhou ({e})")
                 return None

@@ -450,6 +450,15 @@
         </form>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Palavras que ele erra 📝</div><div class="desc">Nomes que você fala e o Whisper escreve
+          errado (projetos, programas, bandas), separados por vírgula: vão de dica pra ele acertar. Os programas que você ensinou,
+          os projetos liberados e o artista tocando já entram sozinhos.</div></div>
+        <form id="formVocabulario" style="display:flex;gap:8px">
+          <input id="vozVocabulario" autocomplete="off" maxlength="300" placeholder="faturamento, IntelliJ, Legião Urbana" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
+          <button class="botao principal">Salvar</button>
+        </form>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Reconhecimento da fala ☁️</div><div class="desc" id="sttInfo">O Whisper do PC erra mais que os modelos na nuvem.
           Com um provedor, só o que você diz DEPOIS da chamada vai pra internet (a chamada "Ei Claudinho" é detectada aqui no PC), e se a nuvem falhar ele
           volta pro Whisper local. Custa centavos por hora de fala; a chave é sua e fica criptografada.</div></div>
@@ -521,6 +530,12 @@
         <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Quando a conversa por voz abre, ele fala um oi curtinho
           (com o seu nome, se estiver preenchido em "Meu Mestre") pra você saber que ele já está ouvindo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_saudacao"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Comandos rápidos ⚡</div><div class="desc">"Pausa", "próxima", "toca Legião Urbana",
+          "abre o Spotify", "que horas são", "timer de 5 minutos", "aumenta o volume": ele faz na hora, sem passar pela IA.
+          Frase com mais coisa ("abre o projeto e me diz o que tem") continua indo pro chat.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
@@ -1446,6 +1461,13 @@ function montarVoz() {
   document.getElementById("formApelidos").onsubmit = ev => {
     ev.preventDefault();
     mudar("voz_apelidos", ap.value.split(",").map(s => s.trim()).filter(Boolean));
+  };
+  const vocab = document.getElementById("vozVocabulario");
+  if (document.activeElement !== vocab) vocab.value = estado.cfg.voz_vocabulario || "";
+  document.getElementById("formVocabulario").onsubmit = ev => {
+    ev.preventDefault();
+    mudar("voz_vocabulario", vocab.value.split(",").map(s => s.trim()).filter(Boolean).join(", "));
+    avisar("salvei ✓");
   };
   const mic = document.getElementById("vozMic");
   mic.innerHTML = "";

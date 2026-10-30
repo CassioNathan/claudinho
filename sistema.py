@@ -157,18 +157,25 @@ def ligar_barra(ligar):
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# os eventos em que o aviso entra: Stop (o chat terminou) e Notification (parou esperando você aprovar algo)
+EVENTOS_AVISO = ("Stop", "Notification")
+
+
+def _nossos(dados, evento):
+    grupos = (dados.get("hooks") or {}).get(evento) or []
+    return [h.get("command", "") for g in grupos if isinstance(g, dict) for h in g.get("hooks", [])
+            if isinstance(h, dict) and _e_nosso(h.get("command", ""))]
+
+
 def aviso_ligado():
-    dados = _ler_settings() or {}
-    return any(_e_nosso(h.get("command", "")) for g in dados.get("hooks", {}).get("Stop", []) for h in g.get("hooks", []))
+    return bool(_nossos(_ler_settings() or {}, "Stop"))
 
 
 def atualizar_aviso():
-    """Aviso ligado por uma versão antiga (ex.: a cópia em ~/.claude/hooks, que não manda a chave): troca pelo de
-    agora. Não mexe se estiver desligado ou se já for o atual."""
+    """Aviso ligado por uma versão antiga (a cópia em ~/.claude/hooks, que não manda a chave, ou só no Stop, sem o
+    "esperando você"): troca pelo de agora. Não mexe se estiver desligado ou se já for o atual."""
     dados = _ler_settings() or {}
-    nossos = [h.get("command", "") for g in dados.get("hooks", {}).get("Stop", []) for h in g.get("hooks", [])
-              if _e_nosso(h.get("command", ""))]
-    if nossos and nossos != [comando_texto("aviso")]:
+    if _nossos(dados, "Stop") and any(_nossos(dados, e) != [comando_texto("aviso")] for e in EVENTOS_AVISO):
         ligar_aviso(True)
 
 
@@ -180,13 +187,14 @@ def ligar_aviso(ligar):
     arquivo = CLAUDE / "settings.json"
     if arquivo.exists():
         shutil.copy(arquivo, arquivo.with_name("settings.json.bak-claudinho"))
-    paradas = dados.setdefault("hooks", {}).setdefault("Stop", [])
-    for grupo in paradas:  # tira o nosso (de versões antigas também); se ligar, põe de novo atualizado
-        grupo["hooks"] = [h for h in grupo.get("hooks", []) if not _e_nosso(h.get("command", ""))]
-    paradas[:] = [g for g in paradas if g.get("hooks")]
-    if ligar:
-        paradas.append({"hooks": [{"type": "command", "command": comando_texto("aviso"), "timeout": 10}]})
-    if not paradas:
-        dados["hooks"].pop("Stop")
+    for evento in EVENTOS_AVISO:
+        grupos = dados.setdefault("hooks", {}).setdefault(evento, [])
+        for grupo in grupos:  # tira o nosso (de versões antigas também); se ligar, põe de novo atualizado
+            grupo["hooks"] = [h for h in grupo.get("hooks", []) if not _e_nosso(h.get("command", ""))]
+        grupos[:] = [g for g in grupos if g.get("hooks")]
+        if ligar:
+            grupos.append({"hooks": [{"type": "command", "command": comando_texto("aviso"), "timeout": 10}]})
+        if not grupos:
+            dados["hooks"].pop(evento)
     CLAUDE.mkdir(exist_ok=True)
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")

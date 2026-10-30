@@ -63,6 +63,7 @@ import consumo
 import tela
 import atualizacao
 import projetos
+import comandos
 import revisao
 from motores import env_limpo
 
@@ -97,6 +98,8 @@ CONFIG_PADRAO = {
     "voz_depurar": False,                # guarda os últimos áudios em ~/.claudinho/voz_debug (diagnóstico)
     "voz_encerrar": 8.0,                 # segundos sem falar depois da resposta até encerrar a conversa por voz
     "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
+    "voz_comandos": True,                # comandos rápidos (pausa, próxima, toca X, abre X, timer, volume) sem passar pela IA
+    "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
     "voz_limpar": True,                  # ganho automático (na faixa) + filtro de ruído no microfone
@@ -138,14 +141,14 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 ESTADO, FALA, IMPORTANTE, FIXO = 0, 1, 2, 3   # FIXO: a revisão do Júnior; só sai pelos botões dela
 # falas com balão próprio (botões, título): a chave que a fala traz → método balao_<chave> do Claudinho. Na ordem:
 # se uma fala trouxer duas, vale a primeira. "aviso" e "notificacoes" vêm do tipo da fala; "piada", do modo avaliação
-BALOES_ESPECIAIS = ("login", "revisar_pasta", "revisao", "atualizacao")
-FALAS_DE_FORA = {"aviso", "notificacoes", "revisao"}                   # texto de fora: vai pro chat marcado como dado
+BALOES_ESPECIAIS = ("login", "espera", "revisar_pasta", "revisao", "atualizacao")
+FALAS_DE_FORA = {"aviso", "notificacoes", "revisao", "espera"}         # texto de fora: vai pro chat marcado como dado
 FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entram no histórico da conversa
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "navegador_claude", "emojis", "borda", "borda_forca",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
-                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -215,6 +218,27 @@ NAVEGADOR_LIVRE = ("mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrom
 
 INTERVALO_VERSAO_S = 12 * 3600    # de quanto em quanto tempo ele olha se tem versão nova no GitHub
 ESPERA_REINICIAR_S = 300          # reiniciar: quanto o PowerShell espera este Claudinho fechar antes de abrir o novo
+ESPERA_REPETIR_S = 120            # chat do Claude Code esperando você: no máximo um balão por sessão nesse tempo
+
+
+def registrar_comando(texto, acao):
+    """Log curto dos comandos rápidos (~/.claudinho/comandos.log), pra ver o que a voz pegou sem a IA."""
+    try:
+        with open(sistema.DADOS / "comandos.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%d/%m %H:%M:%S')} {acao}: {texto[:120]}\n")
+    except OSError:
+        pass
+
+
+def traduzir_espera(mensagem):
+    """A notificação do Claude Code vem em inglês ("Claude needs your permission to use Bash"): o balão fala português."""
+    mensagem = str(mensagem or "").strip()
+    m = re.search(r"permission to use (.+)$", mensagem, re.I)
+    if m:
+        return f"quer permissão pra usar {m.group(1).rstrip('.')}."
+    if re.search(r"needs your (attention|input)|waiting for your input", mensagem, re.I):
+        return "tem uma pergunta pra você."
+    return mensagem or "precisa de você."
 
 # o que o painel oferece pro chat do Claude Code (apelidos da tabela motores.MODELOS e níveis do `--effort`)
 MODELOS_CHAT = tuple(motores.MODELOS)
@@ -1776,6 +1800,7 @@ class Claudinho:
         self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
         self.lendo_notificacoes = False
         self.falas_mostradas = deque(maxlen=6)  # (quando, texto) do que ele falou nos balões
+        self.esperas = {}          # session_id -> quando avisou que aquele chat do Claude Code está esperando você
         self.falas_pro_chat = deque(maxlen=8)   # (quando, texto) falado nos balões desde a sua última mensagem
         self.respondendo_a = None   # a fala do balão em que você abriu a conversa: a sua mensagem é resposta a ela
         self.chat = self.criar_chat()
@@ -1792,7 +1817,7 @@ class Claudinho:
                            ao_estado=lambda e: self.eventos.put(("voz_estado", e)),
                            conversa_viva=lambda: self.conversa_voz and self.entrada is not None, fala=self.fala,
                            chave_stt=lambda: sistema.ler_segredo("stt_chave"),
-                           saudacao=self.texto_saudacao)
+                           saudacao=self.texto_saudacao, vocabulario=self.vocabulario_voz)
         self.conversa_voz = False  # a conversa atual nasceu de uma chamada por voz (digitada não tem esse fluxo)
         self.sinal_voz = None      # balãozinho de pontinhos sobre o mascote enquanto a voz carrega
         self.voz_status = ""
@@ -2814,6 +2839,8 @@ class Claudinho:
         elif chave == "voz_apelidos":
             valor = [str(a).strip()[:30] for a in (valor if isinstance(valor, list) else []) if str(a).strip()][:8]
             valor = valor or list(CONFIG_PADRAO["voz_apelidos"])
+        elif chave == "voz_vocabulario":
+            valor = str(valor or "").replace("\n", " ").strip()[:300]
         elif chave == "voz_silencio":
             valor = max(0.6, min(5.0, float(valor)))
         elif chave == "voz_volume":
@@ -3089,6 +3116,18 @@ class Claudinho:
             resumo = (texto[:120].rsplit(" ", 1)[0] + "…") if len(texto) > 120 else texto
         self.eventos.put(("aviso_pronto", dict(dados, resumo=resumo)))
 
+    def sessao_esperando(self, dados):
+        """Um chat do Claude Code parou esperando você (permissão pra rodar algo ou uma pergunta). Avisa uma vez por
+        sessão a cada ESPERA_REPETIR_S: o Claude Code repete a notificação enquanto você não responde."""
+        sid = dados.get("session_id") or dados.get("pasta") or "?"
+        agora = time.time()
+        if agora - self.esperas.get(sid, 0) < ESPERA_REPETIR_S:
+            return
+        self.esperas[sid] = agora
+        projeto = dados.get("projeto") or "?"
+        texto = f"O chat de {projeto} está parado esperando você: {traduzir_espera(dados.get('mensagem'))}"
+        self.enfileirar({"tipo": "comentario", "texto": texto, "duracao": 45, "espera": dados}, IMPORTANTE)
+
     def rodape_aviso(self, dados):
         partes = []
         pedido = (dados.get("pedido") or "").strip().replace("\n", " ")
@@ -3142,6 +3181,15 @@ class Claudinho:
                      duracao=fala["duracao"],
                      botoes=[("limpar", lambda: self.limpar_notificacoes(fala["ids"]), True),
                              ("deixa", self.fechar_balao, False)])
+
+    def balao_espera(self, fala):  # um chat do Claude Code parou pedindo permissão ou fazendo uma pergunta
+        try:
+            import winsound
+            winsound.MessageBeep(0x30)
+        except Exception:
+            pass
+        return Balao(self, fala["tipo"], fala["texto"], titulo=f"⏳ {fala['espera'].get('projeto') or '?'} esperando você",
+                     duracao=fala["duracao"], botoes=[("ok", self.fechar_balao, True)])
 
     def balao_login(self, fala):  # o Claude Code está sem login: botão que abre o terminal pra fazer /login
         return Balao(self, fala["tipo"], fala["texto"], titulo="🔑 preciso de login", duracao=fala["duracao"],
@@ -3415,6 +3463,75 @@ class Claudinho:
             recente = self.falas_recentes(minutos=3)
             self.respondendo_a = (time.time(), recente[-1][1]) if recente else None
             self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
+
+    # ---------- comandos rápidos da voz (comandos.py): o que tem resposta certa não vai pra IA ----------
+    def comando_rapido(self, texto):
+        """Se a frase é só um comando fixo, faz e responde como se fosse o chat (balão + voz). False: vai pro chat."""
+        pedido = comandos.entender(texto)
+        if not pedido:
+            return False
+        acao, arg = pedido
+        if acao == "abrir":   # só se achar o programa; senão o chat tenta do jeito dele (projeto, site…)
+            achados = programas.achar(arg)
+            if not achados:
+                return False
+            nome = achados[0][1]["nome"]
+            recusa = programas.recusa(arg)
+            resposta = f"{recusa}." if recusa else f"Abrindo {nome}."
+            if not recusa:
+                threading.Thread(target=programas.abrir, args=(arg,), daemon=True).start()
+        elif acao in ("pausar", "tocar", "proxima", "anterior"):
+            if not self.musica and acao != "tocar":
+                return False   # não tem música: "para"/"próxima" podem ser outra coisa, o chat decide
+            threading.Thread(target=musica.controlar, args=(acao,), daemon=True).start()
+            resposta = {"pausar": "Pausei.", "tocar": "Voltando.", "proxima": "Próxima.", "anterior": "Voltei uma."}[acao]
+        elif acao == "musica":
+            self.tocar_no_youtube_music(arg)
+            resposta = f"Procurando {arg}."
+        elif acao == "horas":
+            resposta = f"São {time.strftime('%H:%M')}."
+        elif acao == "timer":
+            s, lembrete = arg
+            quando = comandos.falar_tempo(s)
+            self.after(s * 1000, lambda: self.timer_acabou(quando, lembrete))
+            resposta = f"Beleza, te aviso em {quando}" + (f" pra {lembrete}." if lembrete else ".")
+        else:   # volume do Windows pelas teclas de mídia
+            tecla, vezes = {"volume_mais": (0xAF, 5), "volume_menos": (0xAE, 5), "mudo": (0xAD, 1)}[acao]
+            for _ in range(vezes):
+                user32.keybd_event(tecla, 0, 0, 0)
+                user32.keybd_event(tecla, 0, 2, 0)   # KEYEVENTF_KEYUP
+            resposta = {"volume_mais": "Aumentei.", "volume_menos": "Abaixei.", "mudo": "Feito."}[acao]
+        registrar_comando(texto, acao)
+        self.mem.registrar_mensagem("eu", texto)
+        self.mem.registrar_mensagem("claudinho", resposta)
+        self.fechar_conversa()
+        self.abrir_conversa(resposta)
+        if self.cfg["voz_fala"]:
+            self.fala.falar(resposta)
+        if self.conversa_voz:   # a voz espera isso pra falar/ouvir a próxima
+            self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
+            self.voz.resposta_chegou()
+        return True
+
+    def vocabulario_voz(self):
+        """Nomes pra dica do Whisper, os seus primeiro: o que você escreveu no painel, os programas que ensinou, as
+        pastas dos projetos liberados e o artista tocando agora. Roda na thread da voz: só lê."""
+        termos = [t for t in str(self.cfg.get("voz_vocabulario") or "").split(",")]
+        termos += [p.get("programa", "") for p in self.cfg.get("atalhos_programas") or [] if isinstance(p, dict)]
+        termos += [Path(p).name for p in self.cfg.get("pastas_leitura") or [] if isinstance(p, str)]
+        m = self.musica
+        if m and m.get("artista"):
+            termos.append(m["artista"])
+        return ", ".join(t.strip() for t in termos if t and t.strip())
+
+    def timer_acabou(self, quando, lembrete):
+        try:
+            import winsound
+            winsound.MessageBeep(0x30)
+        except Exception:
+            pass
+        texto = f"⏰ {lembrete[:1].upper() + lembrete[1:]}!" if lembrete else f"⏰ Deu {quando}!"
+        self.comentar(texto, duracao=30, prioridade=IMPORTANTE)
 
     def abrir_conversa(self, texto, por_clique=False):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
@@ -4562,7 +4679,9 @@ class Claudinho:
             elif ev[0] == "voz_texto":
                 self.escrever_no_chat(ev[1])
             elif ev[0] == "voz_enviar":
-                if self.entrada:
+                if self.entrada and self.cfg["voz_comandos"] and self.comando_rapido(ev[1]):
+                    pass   # era um comando fixo: já fez e respondeu, sem passar pela IA
+                elif self.entrada:
                     self.escrever_no_chat(ev[1])
                     self.enviar()
                 if not self.ocupado:  # não saiu (campo vazio, ocupado…): não tem resposta pra esperar
@@ -4624,7 +4743,10 @@ class Claudinho:
             elif ev[0] == "atalho_ocupado":
                 self.comentar(prioridade=IMPORTANTE, texto=f"O atalho {ev[1]} já é usado por outro programa. "
                               "Troca o \"atalho_comentar\" no config.json.")
+            elif ev[0] == "aviso" and ev[1].get("evento") == "espera":
+                self.sessao_esperando(ev[1])
             elif ev[0] == "aviso":
+                self.esperas.pop(ev[1].get("session_id"), None)   # terminou: a espera dela acabou
                 self.lembrar_do_dia(ev[1])
                 self.talvez_revisar(ev[1])
                 if len(formatar.limpar(ev[1].get("resposta") or "")) <= 260:

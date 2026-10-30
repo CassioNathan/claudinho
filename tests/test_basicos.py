@@ -170,3 +170,59 @@ def test_nota_do_checkpoint():
 def test_normalizar_frase():
     import pipeline
     assert pipeline.normalizar("Ação, João!  Ñ") == "acao joao n"
+
+
+# ---------- vigia: chat do Claude Code esperando você ----------
+@pytest.mark.parametrize("dados, sim", [({"notification_type": "permission_prompt"}, True),
+                                        ({"notification_type": "elicitation_dialog"}, True),
+                                        ({"notification_type": "idle_prompt"}, False),
+                                        ({"message": "Claude needs your permission to use Bash"}, True),
+                                        ({"message": "Claude is waiting for your input"}, False)])
+def test_hook_so_avisa_quando_espera_voce(dados, sim):
+    import claudinho_notificar
+    assert claudinho_notificar.esperando_voce(dados) == sim
+
+
+def test_ligar_aviso_poe_stop_e_notification(tmp_path, monkeypatch):
+    monkeypatch.setattr(sistema, "CLAUDE", tmp_path)
+    (tmp_path / "settings.json").write_text(json.dumps({"hooks": {"Stop": [{"hooks": [
+        {"type": "command", "command": "meu-hook.sh"}]}]}}), encoding="utf-8")
+    sistema.ligar_aviso(True)
+    dados = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert sistema.aviso_ligado() and sistema._nossos(dados, "Notification") == [sistema.comando_texto("aviso")]
+    assert dados["hooks"]["Stop"][0]["hooks"][0]["command"] == "meu-hook.sh"   # o hook da pessoa fica
+    sistema.ligar_aviso(False)
+    dados = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert "Notification" not in dados["hooks"] and not sistema.aviso_ligado()
+    assert dados["hooks"]["Stop"][0]["hooks"][0]["command"] == "meu-hook.sh"
+
+
+# ---------- comandos rápidos da voz ----------
+@pytest.mark.parametrize("frase, esperado", [
+    ("Pausa.", ("pausar", None)), ("Claudinho, pula essa música", ("proxima", None)), ("continua", ("tocar", None)),
+    ("toca Legião Urbana", ("musica", "legiao urbana")), ("coloca Coldplay pra tocar", ("musica", "coldplay")),
+    ("abre o Spotify", ("abrir", "spotify")), ("que horas são?", ("horas", None)),
+    ("põe um timer de cinco minutos", ("timer", (300, ""))),
+    ("me lembra em 20 minutos de tirar o bolo", ("timer", (1200, "tirar o bolo"))),
+    ("aumenta o volume", ("volume_mais", None)), ("muta", ("mudo", None))])
+def test_comando_rapido(frase, esperado):
+    import comandos
+    assert comandos.entender(frase) == esperado
+
+
+@pytest.mark.parametrize("frase", ["abre o projeto e me diz o que tem", "toca no YouTube o vídeo do gato",
+                                   "me explica o que é um hook", "para de falar", "timer de muito tempo",
+                                   "qual é a capital da França e quantos habitantes ela tem hoje em dia"])
+def test_conversa_vai_pro_chat(frase):
+    import comandos
+    assert comandos.entender(frase) is None
+
+
+def test_dica_de_vocabulario_curta():
+    import voz
+    v = voz.Voz.__new__(voz.Voz)
+    v.vocabulario = lambda: "Spotify, , IntelliJ, Spotify, " + ", ".join(f"projeto{i}" for i in range(100))
+    dica = v._dica_vocabulario()
+    assert dica.startswith("Spotify, IntelliJ, projeto0") and len(dica) <= voz.MAX_DICA + 1
+    v.vocabulario = lambda: ""
+    assert v._dica_vocabulario() is None

@@ -63,6 +63,7 @@ import consumo
 import tela
 import atualizacao
 import projetos
+import ativacao
 import comandos
 import revisao
 from motores import env_limpo
@@ -99,6 +100,7 @@ CONFIG_PADRAO = {
     "voz_encerrar": 8.0,                 # segundos sem falar depois da resposta até encerrar a conversa por voz
     "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
     "voz_comandos": True,                # comandos rápidos (pausa, próxima, toca X, abre X, timer, volume) sem passar pela IA
+    "voz_detector": True,                # palavra de ativação treinada (ativacao.py): só chama o Whisper quando ela ouve
     "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
@@ -148,7 +150,7 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "navegador_claude", "emojis", "borda", "borda_forca",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas",
-                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_detector", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -2962,7 +2964,7 @@ class Claudinho:
                       "chat_modelo": self.cfg["chat_modelo"], "chat_esforco": self.cfg["chat_esforco"],
                       "modelos_acao": self.cfg["modelos_acao"],
                       "modelos": [[k, m["nome"], m["desc"]] for k, m in motores.MODELOS.items()]},
-            "voz": {"estado": self.voz.estado, "microfones": voz.microfones()},
+            "voz": {"estado": self.voz.estado, "microfones": voz.microfones(), "detector": self.estado_detector()},
             "stt": {"provedores": [{"id": k, "nome": i["nome"]} for k, i in stt.PROVEDORES.items()],
                     "chave": bool(sistema.ler_segredo("stt_chave")), "teste": self.stt_teste,
                     "erro": self.voz.nuvem_erro},
@@ -3512,6 +3514,17 @@ class Claudinho:
             self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
             self.voz.resposta_chegou()
         return True
+
+    def estado_detector(self):
+        """Pro painel: o modelo da palavra de ativação existe? está rodando? e os números do treino."""
+        info = None
+        if ativacao.disponivel():
+            try:
+                info = json.loads(ativacao.INFO.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                info = {}
+        return {"treinado": ativacao.disponivel(), "ligado": self.voz.detector is not None,
+                "erro": self.voz.detector_erro, "info": info if isinstance(info, dict) else None}
 
     def vocabulario_voz(self):
         """Nomes pra dica do Whisper, os seus primeiro: o que você escreveu no painel, os programas que ensinou, as

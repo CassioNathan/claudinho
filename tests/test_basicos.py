@@ -226,3 +226,27 @@ def test_dica_de_vocabulario_curta():
     assert dica.startswith("Spotify, IntelliJ, projeto0") and len(dica) <= voz.MAX_DICA + 1
     v.vocabulario = lambda: ""
     assert v._dica_vocabulario() is None
+
+
+# ---------- palavra de ativação ----------
+def test_ativacao_sem_modelo_usa_o_whisper(tmp_path, monkeypatch):
+    import ativacao
+    monkeypatch.setattr(ativacao, "PASTA", tmp_path)
+    monkeypatch.setattr(ativacao, "MODELO", tmp_path / "claudinho.onnx")
+    monkeypatch.setattr(ativacao, "INFO", tmp_path / "claudinho.json")
+    assert not ativacao.disponivel()
+    assert ativacao.limiar() == ativacao.LIMIAR_PADRAO
+    (tmp_path / "claudinho.json").write_text('{"limiar": 0.37}', encoding="utf-8")
+    assert ativacao.limiar() == pytest.approx(0.37)
+    (tmp_path / "claudinho.json").write_text("[1, 2]", encoding="utf-8")
+    assert ativacao.limiar() == ativacao.LIMIAR_PADRAO
+
+
+def test_voz_sem_detector_fica_no_jeito_antigo(monkeypatch):
+    import ativacao
+    import voz
+    monkeypatch.setattr(ativacao, "disponivel", lambda: False)
+    v = voz.Voz.__new__(voz.Voz)
+    v.config, v.detector, v.detector_versao, v.detector_erro = (lambda: {"voz_detector": True}), None, None, None
+    v._atualizar_detector()
+    assert v.detector is None

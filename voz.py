@@ -22,6 +22,7 @@ import wave
 import zlib
 from pathlib import Path
 
+import ativacao
 import stt
 
 import numpy as np
@@ -59,6 +60,7 @@ GANHO_MAX = 25.0                # até quantas vezes ele aumenta o microfone
 LIMIAR_VOZ = 0.4                # abaixo do 0,5 padrão: pega voz baixa ou longe do microfone
 ESPERA_INICIAL = 8.0            # chamou e não falou nada: desiste depois disso
 MAX_DICA = 180                  # caracteres de vocabulário na dica do Whisper (o limite dele é ~224 tokens)
+MEMORIA_NOTA_S = 1.5            # a nota que o detector deu até isso antes da fala começar ainda conta pra ela
 RUIDO_CLASSICO = {"obrigado", "obrigada", "tchau", "tchau tchau", "muito obrigado", "obrigado por assistir"}
 ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se")
 
@@ -241,6 +243,9 @@ class Voz:
         self.modelos, self.trava_modelos = {}, threading.Lock()
         self.trava_transcricao = threading.Lock()
         self.vad = None
+        self.detector = None        # ativacao.Detector: o modelo da palavra de ativação (None = só o Whisper)
+        self.detector_versao = None  # data do claudinho.onnx carregado (treinou de novo: recarrega)
+        self.detector_erro = None
         self.estado = "parado"      # parado | ouvindo_apelido | acordando | ouvindo_fala | enviando
         self.ultimo_uso_fala = 0.0
         self.ditando = False                  # botão do microfone do chat: grava e entrega o texto (sem chamada, sem enviar)
@@ -442,8 +447,26 @@ class Voz:
             except queue.Empty:
                 return
 
+    def _atualizar_detector(self):
+        """Liga, desliga ou recarrega o detector da palavra de ativação conforme o painel e o modelo treinado."""
+        querer = bool(self.config().get("voz_detector", True)) and ativacao.disponivel()
+        versao = ativacao.MODELO.stat().st_mtime if querer else None
+        if versao == self.detector_versao:
+            return
+        self.detector, self.detector_versao = None, versao
+        if querer:
+            try:
+                self.detector = ativacao.Detector()
+                self.detector_erro = None
+                registrar(f"detector da palavra de ativação ligado (limiar {self.detector.limiar:.2f})")
+            except Exception as e:
+                self.detector_erro = str(e)
+                registrar(f"detector não carregou ({e}); usando só o Whisper")
+
     def _laco(self):
         janela = np.zeros(0, dtype="float32")
+        notas = collections.deque(maxlen=64)   # (quando, nota do detector) dos últimos ~8 s
+        inicio_segmento = 0.0
         pre = []          # ~0,5 s antes de começar a falar
         segmento = []     # o que você está falando (esperando o apelido)
         silencio = 0
@@ -458,6 +481,8 @@ class Voz:
             if estava_ditando:
                 estava_ditando = False
                 janela, pre, segmento, silencio = janela[:0], [], [], 0
+                if self.detector:
+                    self.detector.zerar()
             try:
                 bloco = self.fila.get(timeout=0.5)
             except queue.Empty:
@@ -466,14 +491,23 @@ class Voz:
                 ultima_checagem = time.time()
                 pausado = bool(self.pausado())
                 self._descarregar_fala_parada()
+                self._atualizar_detector()
             if pausado:
                 janela, pre, segmento, silencio = janela[:0], [], [], 0
                 continue
             janela = np.concatenate([janela, bloco])[-TAXA:]
+            detector = self.detector
+            if detector:
+                try:
+                    notas.append((time.time(), detector.processar(bloco)))
+                except Exception as e:   # o detector quebrou: volta pro jeito antigo até reiniciar a voz
+                    registrar(f"detector falhou ({e}); usando só o Whisper")
+                    self.detector, detector = None, None
             tem_voz = self.em_voz = self._prob_voz(janela) > LIMIAR_VOZ
             if tem_voz:
                 if not segmento:
                     segmento = list(pre)
+                    inicio_segmento = time.time() - len(pre) * SEG_BLOCO
                 segmento.append(bloco)
                 silencio = 0
             elif segmento:
@@ -487,7 +521,17 @@ class Voz:
                 audio = np.concatenate(segmento)
                 segmento, silencio, pre = [], 0, []
                 if len(audio) > 0.25 * TAXA:
-                    self._checar_apelido(audio)
+                    if detector:   # o detector decide se vale chamar o Whisper (a sala falando não gasta nada)
+                        nota = max((n for t, n in notas if t >= inicio_segmento - MEMORIA_NOTA_S), default=0.0)
+                        if nota >= detector.limiar:
+                            self._checar_apelido(audio, nota=nota)
+                        elif nota >= detector.limiar / 2:
+                            registrar(f"detector quase: nota {nota:.2f} (limiar {detector.limiar:.2f})")
+                    else:
+                        self._checar_apelido(audio)
+                    if self.detector:   # depois de uma conversa o áudio de antes não vale mais
+                        self.detector.zerar()
+                        notas.clear()
                 janela = janela[:0]
 
     # ---------- ditado (botão do microfone do chat) ----------
@@ -566,7 +610,9 @@ class Voz:
         ao_texto(texto.strip())
 
     # ---------- apelido ----------
-    def _checar_apelido(self, audio):
+    def _checar_apelido(self, audio, nota=None):
+        """Essa fala é uma chamada? `nota`: o detector da palavra de ativação já achou que sim (o Whisper só confirma
+        e pega o resto da frase; a confiança dele não barra)."""
         cfg = self.config()
         apelidos = [a for a in cfg["voz_apelidos"] if a.strip()]
         if not apelidos:
@@ -586,6 +632,13 @@ class Voz:
         if achou and sum(1 for a in apelidos if all(w in palavras for w in normalizar(a))) >= 2 and pico < 0.35:
             # duas frases de chamada diferentes de uma vez, baixinho: é o Whisper repetindo a dica, não você
             registrar(f"chamada IGNORADA (eco da dica, pico={pico:.3f}) | {texto}")
+            return
+        if nota is not None:
+            registrar(f"detector nota={nota:.2f} → {'ACORDOU' if achou else 'Whisper não confirmou'} conf={conf:.2f} "
+                      f"pico={pico:.3f} | {texto}")
+            if achou:
+                self.nivel_chamada = float(np.percentile(np.abs(audio), 90))
+                self._conversar(resto)
             return
         if achou and conf < CONFIANCA_CHAMADA:
             # com a dica das frases na mão o Whisper "ouve" um "Oi Claudinho" no meio do ruído: sem confiança, não vale

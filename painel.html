@@ -538,6 +538,12 @@
         <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Um modelo
+          pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e
+          a TV não acordam ele à toa.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_detector"><span></span></label>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_sons"><span></span></label>
       </div>
@@ -1462,6 +1468,12 @@ function montarVoz() {
     ev.preventDefault();
     mudar("voz_apelidos", ap.value.split(",").map(s => s.trim()).filter(Boolean));
   };
+  const det = (estado.voz && estado.voz.detector) || {}, detInfo = document.getElementById("detectorInfo");
+  const base = 'Um modelo pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e a TV não acordam ele à toa. ';
+  detInfo.textContent = base + (!det.treinado ? "Ainda não foi treinado neste PC (treino_ativacao/): sem ele, a chamada é só pelo Whisper."
+    : det.erro ? `Não carregou: ${det.erro}`
+    : det.info && det.info.acerto != null ? `Treinado: reconhece ${Math.round(det.info.acerto * 100)}% das chamadas nos testes; em áudio qualquer, só ~${Math.round(det.info.disparos_por_hora)} vez(es) por hora ele pede pro Whisper conferir (e o Whisper ainda tem que ouvir a chamada pra acordar).${det.ligado ? " Rodando ✓" : " Liga junto com a escuta por voz."}`
+    : "Treinado.");
   const vocab = document.getElementById("vozVocabulario");
   if (document.activeElement !== vocab) vocab.value = estado.cfg.voz_vocabulario || "";
   document.getElementById("formVocabulario").onsubmit = ev => {

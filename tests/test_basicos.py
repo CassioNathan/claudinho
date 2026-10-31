@@ -79,11 +79,12 @@ def test_preco_vem_da_tabela_de_modelos():
     assert set(motores.MODELOS_CLAUDE) == set(motores.MODELOS)
 
 
-def test_janelas_do_plano_tira_as_resetadas():
+def test_janelas_do_plano_zera_as_resetadas():
     plano = {"rate_limits": {"five_hour": {"used_percentage": "40", "resets_at": time.time() + 3600},
                              "seven_day": {"used_percentage": 90, "resets_at": 1}}}
     janelas = consumo.janelas_do_plano(plano)
-    assert list(janelas) == ["five_hour"] and janelas["five_hour"]["pct"] == 40
+    assert janelas["five_hour"]["pct"] == 40 and not janelas["five_hour"]["resetou"]
+    assert janelas["seven_day"] == {"pct": 0, "reseta": None, "resetou": True}
     assert consumo.janelas_do_plano({"rate_limits": "lixo"}) == {} and consumo.janelas_do_plano({}) == {}
 
 
@@ -469,3 +470,79 @@ def test_tarefas_do_painel():
     assert tarefas.repeticao_da_resposta("uma vez por semana") == "semanal"
     assert tarefas.repeticao_da_resposta("só hoje") == "uma"
     assert tarefas.repeticao_da_resposta("dias úteis") == "uteis"
+
+
+# ---------- ficha dos programas ----------
+def test_ficha_basica_sem_ia():
+    import fichas
+    jogo = fichas.basica("eldenring.exe", r"D:\SteamLibrary\steamapps\common\ELDEN RING\Game\eldenring.exe",
+                         {"produto": "ELDEN RING"})
+    assert (jogo["nome"], jogo["categoria"], jogo["comentar"]) == ("ELDEN RING", "jogo", "pouco")
+    assert fichas.basica("code.exe")["categoria"] == "programacao"
+    assert fichas.basica("opera.exe", site="youtube.com", titulo="Algum vídeo - YouTube")["categoria"] == "video"
+    assert fichas.basica("opera.exe", site="exemplo.com.br")["categoria"] == "outro"   # site não é "o navegador"
+
+
+def test_ficha_chave_do_navegador_e_do_site():
+    import fichas
+    assert fichas.chave("chrome.exe", "www.YouTube.com") == "site:youtube.com"
+    assert fichas.chave("chrome.exe") == "exe:chrome.exe"
+    assert fichas.chave("cs2.exe", "youtube.com") == "exe:cs2.exe"   # site só vale no navegador
+
+
+def test_ficha_no_prompt_e_onde_comentar():
+    import fichas
+    jogo = {"nome": "CS2", "categoria": "jogo", "o_que_e": "jogo de tiro", "faz": "", "comentar": "pouco"}
+    assert "nunca descreva a interface" in fichas.contexto(jogo)
+    assert fichas.contexto(None) == ""
+    assert fichas.pode_comentar(None) and not fichas.pode_comentar(dict(jogo, comentar="nao"))
+
+
+def test_ficha_corrigida_por_voce_nao_e_refeita(monkeypatch, tmp_path):
+    import fichas
+    monkeypatch.setattr(fichas, "ARQUIVO", tmp_path / "fichas.json")
+    fichas.gravar({"site:lc.com.br": dict(fichas.basica("opera.exe", site="lc.com.br"), quando=0)})
+    assert fichas.corrigir("site:lc.com.br", {"faz": "atendendo chamados", "comentar": "nao", "categoria": "xyz"})
+    f = fichas.buscar("opera.exe", "lc.com.br")
+    assert (f["faz"], f["comentar"], f["categoria"], f["origem"]) == ("atendendo chamados", "nao", "outro", "voce")
+    chamou = []
+    monkeypatch.setattr(fichas.threading, "Thread", lambda *a, **k: chamou.append(1))
+    fichas.garantir({"exe": "opera.exe", "hwnd": 0, "titulo": ""}, "lc.com.br")
+    assert not chamou
+    assert fichas.apagar("site:lc.com.br") and fichas.buscar("opera.exe", "lc.com.br") is None
+
+
+def test_ficha_generica_e_dominio():
+    import fichas
+    assert fichas.generica({"categoria": "outro", "o_que_e": "sistema de vendas"})
+    assert fichas.generica({"categoria": "trabalho", "o_que_e": "um site que permite navegar na internet"})
+    assert not fichas.generica({"categoria": "video", "o_que_e": "site de vídeos online"})
+    assert fichas.dominio_raiz("portal.lcsistemas.com.br") == "lcsistemas.com.br"
+    assert fichas.dominio_raiz("music.youtube.com") == "youtube.com"
+
+
+def test_ficha_le_a_pagina_do_site(monkeypatch):
+    import fichas
+    pagina = ('<html><head><title>LC Sistemas | Revendas</title><meta content="ERP Web e PIX" name="description">'
+              "<meta property='og:site_name' content='LC Sistemas'></head></html>")
+    monkeypatch.setattr(fichas, "_baixar", lambda url, **k: pagina)
+    assert fichas.pesquisar_site("lcsistemas.com.br") == {"nome": "LC Sistemas", "texto": "LC Sistemas | Revendas; ERP Web e PIX"}
+
+    def sem_rede(url, **k):
+        raise OSError
+    monkeypatch.setattr(fichas, "_baixar", sem_rede)
+    assert fichas.pesquisar_site("x.com.br") == {}
+
+
+def test_ficha_pesquisa_uma_vez_so(monkeypatch, tmp_path):
+    import fichas
+    monkeypatch.setattr(fichas, "ARQUIVO", tmp_path / "fichas.json")
+    pesquisas = []
+    monkeypatch.setattr(fichas, "pesquisar_site", lambda s: pesquisas.append(s) or {"nome": "LC Sistemas", "texto": "ERP Web e PIX"})
+    monkeypatch.setattr(fichas, "completar_com_local", lambda *a, **k: None)   # local ocupado (treino, jogo…)
+    janela = {"exe": "opera.exe", "hwnd": 0, "titulo": ""}
+    fichas._gerar("site:lcsistemas.com.br", janela, "lcsistemas.com.br", "", None)
+    f = fichas.buscar("opera.exe", "lcsistemas.com.br")
+    assert (f["nome"], f["o_que_e"], f["origem"]) == ("LC Sistemas", "ERP Web e PIX", "basica")   # a descrição achada já serve
+    fichas._gerar("site:lcsistemas.com.br", janela, "lcsistemas.com.br", "", f)   # tentou de novo mais tarde
+    assert pesquisas == ["lcsistemas.com.br"]

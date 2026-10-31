@@ -25,7 +25,7 @@
   body {
     background: var(--fundo); color: var(--texto);
     font: 14px/1.45 Inter, "Segoe UI", system-ui, sans-serif;
-    display: grid; grid-template-columns: 232px 1fr; overflow: hidden;
+    display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 100%; overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
   ::-webkit-scrollbar { width: 10px; }
@@ -35,8 +35,10 @@
   aside {
     background: var(--lateral); border-right: 1px solid #2f2e2b;
     display: flex; flex-direction: column; padding: 22px 14px; gap: 4px;
+    min-height: 0;   /* o Claudinho em cima e o consumo embaixo ficam fixos: só o menu do meio rola */
   }
-  .marca { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
+  aside nav { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; margin-right: -6px; padding-right: 6px; }
+  .marca { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; flex-shrink: 0; }
   .marca canvas { image-rendering: pixelated; }
   .marca h1 { font: 15px Silkscreen, monospace; margin: 0; letter-spacing: .5px; }
   .marca small { color: var(--apagado); font-size: 11.5px; display: block; margin-top: 2px; }
@@ -57,16 +59,18 @@
   .sub-nav { display: none; margin: 2px 0 6px 18px; padding-left: 8px; border-left: 1px solid #34332f; }
   .aba.ativa + .sub-nav { display: block; }
   .sub-nav a { padding: 6px 10px; font-size: 13px; }
-  .sub-nav a.ativo { background: none; }
-  .rodape-lateral { margin-top: auto; padding: 12px; color: var(--apagado); font-size: 12px; }
-  .rodape-lateral .musica { color: var(--texto); display: block; margin-top: 4px; white-space: nowrap;
-                            overflow: hidden; text-overflow: ellipsis; }
-  .consumo { margin-top: 12px; }
+  .sub-nav a.ativo { background: rgba(217, 119, 87, .14); color: var(--laranja2); }
+  .rodape-lateral { flex-shrink: 0; padding: 10px 12px 0; border-top: 1px solid #2f2e2b; color: var(--apagado);
+                    font-size: 12px; }
+  .consumo .titulo-bloco:first-child { margin-top: 0; }
   .consumo .rotulo { display: flex; justify-content: space-between; margin-top: 6px; }
-  .consumo .rotulo b { color: var(--texto); font-weight: 600; }
+  .consumo .rotulo b { color: var(--texto); font-weight: 600; white-space: nowrap; }
+  .consumo .rotulo span { white-space: nowrap; }
   .consumo .trilho { height: 5px; border-radius: 3px; background: #3a3935; margin-top: 3px; overflow: hidden; }
   .consumo .trilho i { display: block; height: 100%; background: var(--laranja); }
   .consumo .trilho i.alto { background: #e5534b; }
+  .consumo .titulo-bloco { margin-top: 12px; color: var(--apagado); }
+  .consumo .info { cursor: help; opacity: .7; margin-left: 4px; font-size: 11px; }
   .consumo .nota { margin-top: 6px; font-size: 11px; }
 
   /* ---------- conteúdo ---------- */
@@ -210,6 +214,11 @@
   .tirar-pasta { background: none; border: 0; color: var(--apagado); cursor: pointer; margin-left: 4px; font-size: 12px; }
   .tirar-pasta:hover { color: #e8452c; }
   .prog { margin-bottom: 10px; }
+  .ficha { padding: 10px 0; border-bottom: 1px solid #2f2e2b; }
+  .ficha:last-child { border-bottom: 0; }
+  .ficha .prog-topo { padding: 0 0 6px; align-items: center; }
+  .ficha .prog-topo .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ficha select { flex: 0 0 auto; }
   .prog-topo { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 8px; }
   .prog-topo b { font-size: 14px; }
   .prog-topo .tirar-pasta { margin-left: auto; }
@@ -253,23 +262,29 @@
     <div class="sub-nav">
       <a data-alvo="mestre"><span class="ic">👑</span>Meu Mestre</a>
       <a data-alvo="visual"><span class="ic">🎨</span>Visual</a>
+      <a data-alvo="personalidade"><span class="ic">🎭</span>Personalidade</a>
       <a data-alvo="movimento"><span class="ic">🚶</span>Movimento</a>
-      <a data-alvo="voz"><span class="ic">🎤</span>Voz</a>
+    </div>
+    <div class="aba" data-aba="voz"><span class="ic">🎤</span>Voz</div>
+    <div class="sub-nav">
+      <a data-alvo="voz"><span class="ic">👂</span>Ouvir</a>
+      <a data-alvo="voz_conversa"><span class="ic">💬</span>Conversa</a>
     </div>
     <div class="aba" data-aba="diversao"><span class="ic">🎉</span>Diversão</div>
     <div class="sub-nav">
       <a data-alvo="piadas"><span class="ic">😂</span>Piadas</a>
-      <a data-alvo="esquetes"><span class="ic">🎭</span>Esquetes</a>
-      <a data-alvo="extras"><span class="ic">🎵</span>Música e extras</a>
+      <a data-alvo="esquetes"><span class="ic">🎪</span>Esquetes</a>
+      <a data-alvo="extras"><span class="ic">🎵</span>Música e emojis</a>
     </div>
     <div class="aba" data-aba="faz"><span class="ic">🛠️</span>Faz por mim</div>
     <div class="sub-nav">
       <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
+      <a data-alvo="comandos_sec"><span class="ic">🗣️</span>Meus comandos</a>
+      <a data-alvo="tarefas_sec"><span class="ic">⏰</span>Tarefas</a>
       <a data-alvo="atalhos"><span class="ic">⌨️</span>Atalhos</a>
       <a data-alvo="programas_sec"><span class="ic">🧩</span>Programas</a>
       <a data-alvo="rotinas_sec"><span class="ic">🌐</span>Rotinas de sites</a>
-      <a data-alvo="comandos_sec"><span class="ic">🗣️</span>Meus comandos</a>
-      <a data-alvo="tarefas_sec"><span class="ic">⏰</span>Tarefas</a>
+      <a data-alvo="claude_code_sec"><span class="ic">🤖</span>Claude Code</a>
     </div>
     <div class="aba" data-aba="sistema"><span class="ic">🔒</span>Privacidade e sistema</div>
     <div class="sub-nav">
@@ -278,8 +293,7 @@
       <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
     </div>
   </nav>
-  <div class="rodape-lateral">tocando agora<span class="musica" id="musica">—</span>
-    <div class="consumo" id="consumo"></div></div>
+  <div class="rodape-lateral"><div class="consumo" id="consumo"></div></div>
 </aside>
 
 <main id="principal">
@@ -333,51 +347,10 @@
     </div>
   </section>
 
-  <section id="movimento">
-    <h2>🚶 Movimento</h2>
-    <p class="sub">Por onde ele anda.</p>
+  <section id="personalidade">
+    <h2>🎭 Personalidade</h2>
+    <p class="sub">Quem ele é: muda as piadas, o banco de frases e o jeito de falar no chat.</p>
     <div class="cartao">
-      <div class="linha">
-        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda ou só de lado, em cima da barra de tarefas.</div></div>
-        <div class="segmentos" data-cfg="movimento">
-          <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button>
-        </div>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Seguir o mouse entre monitores</div><div class="desc">Se o mouse vai pra outro monitor, ele sai correndo atrás.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="seguir_mouse_entre_monitores"><span></span></label>
-      </div>
-    </div>
-  </section>
-
-  <section id="piadas">
-    <h2>😂 Piadas</h2>
-    <p class="sub">Os comentários sobre o que está na sua tela.</p>
-    <div class="cartao">
-      <div class="linha">
-        <div class="info"><div class="titulo">Comentar o que está na tela</div><div class="desc">Desligado, ele fica quietinho (o Win+Y ainda funciona).</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="comentar_tela"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: quando um chat do Claude Code termina mexendo
-          em arquivo, ele confere se o pedido foi feito mesmo (lê o código e o git diff, sem mudar nada) e, se o projeto
-          tiver testes, pede pra rodar. O veredito vem com o botão <b>corrige</b>, que leva tudo pro chat. Pasta fora das
-          liberadas: ele pede pra liberar o projeto inteiro uma vez.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="modo_junior"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Modo jogo 🎮</div><div class="desc">Com algo em tela cheia (jogo, vídeo) ele vai pro canto de cima
-          à direita, fica parado e, de vez em quando, comenta o que está acontecendo. Saiu da tela cheia, ele volta a passear.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="jogo_canto"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Frequência</div><div class="desc">De quanto em quanto tempo ele solta uma.</div></div>
-        <div class="segmentos" id="frequencias"></div>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Banco de frases ↔ Haiku olhando a tela</div><div class="desc">O banco não gasta nada; o Haiku vê um print e acerta mais.</div></div>
-        <input type="range" min="0" max="100" step="5" id="chance"><span class="valor" id="chanceValor"></span>
-      </div>
       <div class="linha">
         <div class="info"><div class="titulo">Personalidade</div><div class="desc">Muda as piadas, o banco de frases e o jeito
           dele falar no chat. O Claudinho 🐟 tem o jeito do Darwin (O Incrível Mundo de Gumball): doce, ingênuo e
@@ -391,6 +364,47 @@
         <div class="info"><div class="titulo">Modo TDAH 🐿️</div><div class="desc">Começa num assunto e termina em outro.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_tdah"><span></span></label>
       </div>
+    </div>
+  </section>
+
+  <section id="movimento">
+    <h2>🚶 Movimento</h2>
+    <p class="sub">Por onde ele anda e onde fica quando você joga.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda ou só de lado, em cima da barra de tarefas.</div></div>
+        <div class="segmentos" data-cfg="movimento">
+          <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button>
+        </div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Seguir o mouse entre monitores</div><div class="desc">Se o mouse vai pra outro monitor, ele sai correndo atrás.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="seguir_mouse_entre_monitores"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Modo jogo 🎮</div><div class="desc">Com algo em tela cheia (jogo, vídeo) ele vai pro canto de cima
+          à direita, fica parado e, de vez em quando, comenta o que está acontecendo. Saiu da tela cheia, ele volta a passear.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="jogo_canto"><span></span></label>
+      </div>
+    </div>
+  </section>
+
+  <section id="piadas">
+    <h2>😂 Piadas</h2>
+    <p class="sub">Os comentários sobre o que está na sua tela.</p>
+    <div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">Comentar o que está na tela</div><div class="desc">Desligado, ele fica quietinho (o Win+Y ainda funciona).</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="comentar_tela"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Frequência</div><div class="desc">De quanto em quanto tempo ele solta uma.</div></div>
+        <div class="segmentos" id="frequencias"></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Banco de frases ↔ Haiku olhando a tela</div><div class="desc">O banco não gasta nada; o Haiku vê um print e acerta mais.</div></div>
+        <input type="range" min="0" max="100" step="5" id="chance"><span class="valor" id="chanceValor"></span>
+      </div>
       <div class="linha">
         <div class="info"><div class="titulo">Avaliar piadas</div><div class="desc">Botões boa/ruim ao passar o mouse; ele aprende com as notas.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_avaliacao"><span></span></label>
@@ -399,7 +413,7 @@
   </section>
 
   <section id="esquetes">
-    <h2>🎭 Esquetes</h2>
+    <h2>🎪 Esquetes</h2>
     <p class="sub">O que ele apronta quando está à toa. Clique numa pra ver agora.</p>
     <div class="cartao" style="margin-bottom:14px">
       <div class="linha">
@@ -411,8 +425,8 @@
   </section>
 
   <section id="extras">
-    <h2>🎵 Música e extras</h2>
-    <p class="sub">Os detalhes que deixam ele mais vivo.</p>
+    <h2>🎵 Música e emojis</h2>
+    <p class="sub">Os detalhes que deixam ele mais vivo. Tocando agora: <b id="musica">nada</b></p>
     <div class="cartao">
       <div class="linha">
         <div class="info"><div class="titulo">Saber o que estou ouvindo</div><div class="desc">Comenta a música nova e mostra os controles no menu.</div></div>
@@ -431,15 +445,11 @@
         <div class="info"><div class="titulo">Reações com emojis ✨</div><div class="desc">Emojis de pixel que sobem do lado dele.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emojis"><span></span></label>
       </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
-        <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
-      </div>
     </div>
   </section>
 
   <section id="voz">
-    <h2>🎤 Voz</h2>
+    <h2>👂 Ouvir</h2>
     <p class="sub">Chama ele pelo nome, o chat abre e ele escuta. Tudo local (Whisper), nada de áudio sai do PC.</p>
     <div class="cartao">
       <div class="linha">
@@ -493,6 +503,33 @@
         <select id="vozMic" style="max-width:260px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas demora uns 2 s a mais pra enviar.</div></div>
+        <div class="segmentos" data-cfg="voz_modelo_fala"><button data-v="base">Rápido</button><button data-v="small">Melhor</button></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Pausar a música ao ouvir ⏸️</div><div class="desc">Chamou, a música ou o vídeo para
+          (senão o som dele entra no que você fala) e volta a tocar quando a conversa acaba.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_pausar_midia"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Um modelo
+          pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e
+          a TV não acordam ele à toa.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_detector"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_sons"><span></span></label>
+      </div>
+      <p class="sub" style="margin:10px 0 0">Com um jogo em tela cheia ele para de escutar sozinho. Diga "cancela" depois de me chamar pra desistir.</p>
+    </div>
+  </section>
+
+  <section id="voz_conversa">
+    <h2>💬 Conversa</h2>
+    <p class="sub">Depois que ele te ouve: quando envia, como responde e com que voz.</p>
+    <div class="cartao">
+      <div class="linha">
         <div class="info"><div class="titulo">Envia sozinho depois de</div><div class="desc">Quanto tempo calado até ele mandar o que você falou.</div></div>
         <input type="range" min="0.6" max="5" step="0.2" id="vozSilencio"><span class="valor" id="vozSilencioValor"></span>
       </div>
@@ -502,8 +539,19 @@
         <input type="range" min="3" max="30" step="1" id="vozEncerrar"><span class="valor" id="vozEncerrarValor"></span>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas demora uns 2 s a mais pra enviar.</div></div>
-        <div class="segmentos" data-cfg="voz_modelo_fala"><button data-v="base">Rápido</button><button data-v="small">Melhor</button></div>
+        <div class="info"><div class="titulo">Conversa por turnos 🔁</div><div class="desc">Depois de responder, ele abre pra você falar de novo, sem precisar chamar outra vez. Quando você fica um tempo sem falar, ele encerra. Enquanto ele fala, o microfone fica fechado.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_continua"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Cortar a fala dele ✋</div><div class="desc">Enquanto ele fala, diga "para",
+          "chega" ou "espera": ele cala na hora e já escuta você. Ele ignora o eco da própria voz na caixa de som; com fone
+          funciona melhor. Só no modo híbrido.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_interromper"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Quando a conversa por voz abre, ele fala um oi curtinho
+          (com o seu nome, se estiver preenchido em "Meu Mestre") pra você saber que ele já está ouvindo.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_saudacao"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Responder falando 🔊</div><div class="desc">Em toda mensagem do chat: falada, ou digitada (nesse caso só
@@ -528,61 +576,6 @@
           <button class="botao principal" id="vozTestar">▶ Ouvir</button>
         </div>
       </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Conversa por turnos 🔁</div><div class="desc">Depois de responder, ele abre pra você falar de novo, sem precisar chamar outra vez. Quando você fica um tempo sem falar, ele encerra. Enquanto ele fala, o microfone fica fechado.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_continua"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Cortar a fala dele ✋</div><div class="desc">Enquanto ele fala, diga "para",
-          "chega" ou "espera": ele cala na hora e já escuta você. Ele ignora o eco da própria voz na caixa de som; com fone
-          funciona melhor. Só no modo híbrido.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_interromper"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Quando a conversa por voz abre, ele fala um oi curtinho
-          (com o seu nome, se estiver preenchido em "Meu Mestre") pra você saber que ele já está ouvindo.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_saudacao"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Comandos rápidos ⚡</div><div class="desc">"Pausa", "próxima", "toca Legião Urbana",
-          "abre o Spotify", "que horas são", "timer de 5 minutos", "aumenta o volume": ele faz na hora, sem passar pela IA.
-          Frase com mais coisa ("abre o projeto e me diz o que tem") continua indo pro chat.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Roteador de comandos 🧭</div><div class="desc">A frase não bateu com nenhum comando
-          mas parece um pedido ("deixa o vídeo parado")? O modelo barato só diz qual comando é, numa chamada mínima
-          (uns centavos por mil pedidos). Pergunta e conversa vão direto pro chat.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_roteador"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Aprender fluxos 🎓</div><div class="desc">Quando o chat resolve um pedido agindo
-          no PC ("abre o YouTube", "abre o projeto X no IntelliJ"), a resposta vem com <b>deu certo</b>, <b>não deu</b> e
-          <b>tentar de novo</b>. Deu certo: o que ele fez vira um comando seu, e da próxima vez sai direto, sem gastar a IA.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="aprender_fluxos"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Quando não é comando</div><div class="desc">Mandar pro chat (como sempre) ou o modo
-          estrito: ele só faz comandos e diz que ainda não sabe o resto (não gasta nada com conversa).</div></div>
-        <select class="campo" id="vozSemComando" style="flex:0 0 150px"><option value="chat">mandar pro chat</option>
-          <option value="estrito">modo estrito</option></select>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Pausar a música ao ouvir ⏸️</div><div class="desc">Chamou, a música ou o vídeo para
-          (senão o som dele entra no que você fala) e volta a tocar quando a conversa acaba.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_pausar_midia"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Um modelo
-          pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e
-          a TV não acordam ele à toa.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_detector"><span></span></label>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
-        <label class="chave"><input type="checkbox" data-cfg="voz_sons"><span></span></label>
-      </div>
-      <p class="sub" style="margin:10px 0 0">Com um jogo em tela cheia ele para de escutar sozinho. Diga "cancela" depois de me chamar pra desistir.</p>
     </div>
   </section>
 
@@ -657,6 +650,13 @@
         <button class="botao" id="addFato">+ Lembrar</button>
       </div>
     </div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 4px">O que eu sei dos seus programas</h3>
+    <p class="sub" style="margin-top:0">Na primeira vez que você usa um programa (ou um site, no navegador), ele monta uma
+      ficha: o que é e o que você faz nele. Assim o comentário fala do que você está fazendo, não da tela. É feita uma vez só,
+      pelo que o próprio programa diz de si e pelo modelo local leve (de graça); se ficar vago, ele lê uma vez a página
+      inicial do site (ou a Wikipédia, pra programa). Nunca gasta o plano. Corrija o que ele
+      errou e escolha onde ele pode comentar.</p>
+    <div class="cartao"><div id="fichasLista"><div class="desc">Nenhuma ainda: elas aparecem conforme você usa os programas.</div></div></div>
   </section>
 
   <section id="acoes">
@@ -670,10 +670,6 @@
       <div class="linha">
         <div class="info"><div class="titulo">Resumir minhas notificações 🔔</div><div class="desc">Lê a central do Windows e oferece limpar.</div></div>
         <button class="botao" data-acao="notificacoes">Resumir</button>
-      </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">Aviso de teste</div><div class="desc">Mostra como fica quando um chat do Claude Code termina.</div></div>
-        <button class="botao" data-acao="teste">Testar</button>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Limpar a fila de falas</div><div class="desc" id="fila">—</div></div>
@@ -721,6 +717,32 @@
     <p class="sub">Frases que ele resolve na hora, sem conversar com a IA grande: fale uma delas na conversa por voz
       ("modo trabalho", "bora jogar") e ele faz as ações em ordem. Erro de escuta passa; se a frase sair diferente, o
       roteador (modelo barato) ainda reconhece qual comando é.</p>
+    <div class="cartao" style="margin-bottom:14px">
+      <div class="linha">
+        <div class="info"><div class="titulo">Comandos rápidos ⚡</div><div class="desc">"Pausa", "próxima", "toca Legião Urbana",
+          "abre o Spotify", "que horas são", "timer de 5 minutos", "aumenta o volume": ele faz na hora, sem passar pela IA.
+          Frase com mais coisa ("abre o projeto e me diz o que tem") continua indo pro chat.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Roteador de comandos 🧭</div><div class="desc">A frase não bateu com nenhum comando
+          mas parece um pedido ("deixa o vídeo parado")? O modelo barato só diz qual comando é, numa chamada mínima
+          (uns centavos por mil pedidos). Pergunta e conversa vão direto pro chat.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="voz_roteador"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Aprender fluxos 🎓</div><div class="desc">Quando o chat resolve um pedido agindo
+          no PC ("abre o YouTube", "abre o projeto X no IntelliJ"), a resposta vem com <b>deu certo</b>, <b>não deu</b> e
+          <b>tentar de novo</b>. Deu certo: o que ele fez vira um comando seu, e da próxima vez sai direto, sem gastar a IA.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="aprender_fluxos"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Quando não é comando</div><div class="desc">Mandar pro chat (como sempre) ou o modo
+          estrito: ele só faz comandos e diz que ainda não sabe o resto (não gasta nada com conversa).</div></div>
+        <select class="campo" id="vozSemComando" style="flex:0 0 150px"><option value="chat">mandar pro chat</option>
+          <option value="estrito">modo estrito</option></select>
+      </div>
+    </div>
     <div id="meusComandos"></div>
     <div class="cartao" style="margin-top:10px">
       <div class="linha novo-prog">
@@ -761,18 +783,29 @@
       </div>
     </div>
   </section>
-  <section id="sistema">
-    <h2>🖥️ Sistema</h2>
-    <p class="sub">Como ele roda neste PC.</p>
+  <section id="claude_code_sec">
+    <h2>🤖 Claude Code</h2>
+    <p class="sub">O que ele faz com os seus chats do Claude Code: avisa quando terminam, confere o trabalho e mostra o seu limite.</p>
     <div class="cartao">
-      <div class="linha">
-        <div class="info"><div class="titulo">Abrir junto com o Windows</div><div class="desc">Cria um atalho na pasta Inicializar.</div></div>
-        <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
-      </div>
       <div class="linha">
         <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div>
           <div class="desc" id="descAviso">Registra um aviso no ~/.claude/settings.json (com backup antes).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
+        <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Aviso de teste</div><div class="desc">Mostra como fica quando um chat do Claude Code termina.</div></div>
+        <button class="botao" data-acao="teste">Testar</button>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: quando um chat do Claude Code termina mexendo
+          em arquivo, ele confere se o pedido foi feito mesmo (lê o código e o git diff, sem mudar nada) e, se o projeto
+          tiver testes, pede pra rodar. O veredito vem com o botão <b>corrige</b>, que leva tudo pro chat. Pasta fora das
+          liberadas: ele pede pra liberar o projeto inteiro uma vez.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="modo_junior"><span></span></label>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Mostrar meu consumo do Claude 📊</div><div class="desc">Põe a barra de status do
@@ -780,12 +813,12 @@
           enquanto você usa o Claude Code. Registra no ~/.claude/settings.json (com backup antes).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="barra"><span></span></label>
       </div>
-      <div class="linha">
-        <div class="info"><div class="titulo">🧩 Extensão do navegador</div><div class="desc">Deixa ele tocar música no
-          YouTube e repetir rotinas em sites (Chrome, Edge ou Opera).</div></div>
-        <div class="acoes-ext"><span class="status-ext" id="statusExt">—</span>
-          <button class="botao" id="instalarExt">Instalar extensão</button></div>
-      </div>
+    </div>
+  </section>
+  <section id="sistema">
+    <h2>🖥️ Sistema</h2>
+    <p class="sub">Como ele roda neste PC.</p>
+    <div class="cartao">
       <div class="linha" style="flex-wrap:wrap">
         <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
           resumos. Ao trocar, a conversa do chat recomeça (o mini cérebro e as piadas continuam).</div></div>
@@ -794,6 +827,16 @@
           <button data-v="ollama">IA local</button><button data-v="nenhum">Nenhum</button>
         </div>
         <div class="motor-detalhe" id="detalheMotor"></div>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Abrir junto com o Windows</div><div class="desc">Cria um atalho na pasta Inicializar.</div></div>
+        <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">🧩 Extensão do navegador</div><div class="desc">Deixa ele tocar música no
+          YouTube e repetir rotinas em sites (Chrome, Edge ou Opera).</div></div>
+        <div class="acoes-ext"><span class="status-ext" id="statusExt">—</span>
+          <button class="botao" id="instalarExt">Instalar extensão</button></div>
       </div>
       <div class="linha">
         <div class="info"><div class="titulo">Passo a passo inicial 👋</div><div class="desc">O tour do primeiro acesso: quem é
@@ -1463,6 +1506,45 @@ function montarFatos() {
     mudar("fatos", [...(estado.cfg.fatos || []), f]).then(() => avisar("guardei 🧠"));
   };
 }
+const CATEGORIAS_FICHA = {jogo: "🎮 jogo", video: "📺 vídeo", programacao: "💻 programação", trabalho: "💼 trabalho",
+  musica: "🎸 música", conversa: "💬 conversa", criacao: "🎨 criação", navegador: "🌐 navegador", sistema: "🗂️ sistema", outro: "❔ outro"};
+const COMENTAR_FICHA = {sim: "comenta", pouco: "só do que eu faço", nao: "não comenta"};
+function montarFichas() {
+  const caixa = document.getElementById("fichasLista");
+  const lista = estado.fichas || [];
+  const assinatura = JSON.stringify(lista.map(f => [f.chave, f.quando]));
+  if (!caixa || caixa.dataset.assinatura === assinatura || caixa.contains(document.activeElement)) return;
+  caixa.dataset.assinatura = assinatura;
+  if (!lista.length) return;
+  caixa.innerHTML = "";
+  const opcoes = (mapa, atual) => Object.entries(mapa).map(([v, t]) => {
+    const o = document.createElement("option"); o.value = v; o.textContent = t; o.selected = v === atual; return o; });
+  for (const f of lista) {
+    const salvar = campos => api("/api/ficha", {chave: f.chave, campos}).then(() => avisar("corrigido ✓")).catch(() => avisar("não deu pra salvar"));
+    const bloco = document.createElement("div");
+    bloco.className = "ficha";
+    bloco.innerHTML = '<div class="prog-topo"><b></b><span class="desc"></span></div><div class="linha novo-prog" style="padding:0"></div>';
+    bloco.querySelector("b").textContent = f.nome;
+    bloco.querySelector(".desc").textContent = (f.chave.startsWith("site:") ? "site" : f.chave.slice(4)) +
+      (f.o_que_e ? ` · ${f.o_que_e}` : "") +
+      (f.origem === "voce" ? " · corrigida por você" : f.origem === "basica" ? " · só o básico (o local completa depois)" : "");
+    const topo = bloco.querySelector(".prog-topo"), linha = bloco.querySelector(".linha");
+    const categoria = document.createElement("select"), comentar = document.createElement("select");
+    categoria.append(...opcoes(CATEGORIAS_FICHA, f.categoria));
+    comentar.append(...opcoes(COMENTAR_FICHA, f.comentar));
+    categoria.onchange = () => salvar({categoria: categoria.value});
+    comentar.onchange = () => salvar({comentar: comentar.value});
+    const tirar = document.createElement("button");
+    tirar.className = "tirar-pasta"; tirar.textContent = "✕"; tirar.title = "esquecer (ele monta de novo na próxima vez)";
+    tirar.onclick = () => api("/api/ficha", {chave: f.chave, apagar: true}).then(() => avisar("esqueci ✓"));
+    topo.append(categoria, comentar, tirar);
+    const faz = document.createElement("input");
+    faz.maxLength = 120; faz.value = f.faz || ""; faz.placeholder = "o que você faz aqui (ex.: atendo os chamados do sistema)";
+    faz.onchange = () => salvar({faz: faz.value});
+    linha.appendChild(faz);
+    caixa.appendChild(bloco);
+  }
+}
 function montarRotinas(forcar) {
   const caixa = document.getElementById("rotinas");
   const assinatura = JSON.stringify(estado.cfg.rotinas);
@@ -1532,6 +1614,7 @@ function atualizarVivos() {
   montarHibrido();
   montarTarefas();
   montarFatos();
+  montarFichas();
   document.getElementById("musica").textContent = estado.musica || "nada";
   montarConsumo();
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
@@ -1648,11 +1731,30 @@ function montarMotor() {
       vêm do banco de frases; música, YouTube, esquetes, skins e o resto funcionam normal.</p>`;
   }
 }
+// o peso da IA local (Ollama) no PC agora: CPU e RAM dos processos dela; a placa de vídeo é a placa toda
+function iaLocal(l) {
+  if (!l || (!l.rodando && estado.modo_ia !== "local" && estado.modo_ia !== "hibrido")) return "";
+  if (!l.rodando) return `<div class="titulo-bloco">IA local agora</div><div class="nota">Ollama desligado</div>`;
+  const gb = mb => mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB";
+  const linha = (nome, p, texto) => `<div class="rotulo"><span>${nome}</span><b>${texto}</b></div>
+      <div class="trilho"><i class="${p >= 80 ? "alto" : ""}" style="width:${Math.min(100, p)}%"></i></div>`;
+  const g = l.gpu, carregado = l.modelos.length
+    ? l.modelos.map(m => `${m.nome.replace(/[^\w.:\/-]/g, "")}${m.vram_mb ? ` (${gb(m.vram_mb)} na placa)` : ""}`).join(", ") : "nenhum modelo carregado";
+  const dica = "Uso da placa de vídeo inteira: se tiver um jogo aberto, ele entra na conta. O Windows não separa por programa.";
+  return `<div class="titulo-bloco">IA local agora</div>
+    ${linha("CPU", l.cpu || 0, l.cpu == null ? "…" : Math.round(l.cpu) + "%")}
+    <div class="rotulo"><span>RAM</span><b>${gb(l.ram_mb)}</b></div>
+    ${g ? linha(`GPU<span class="info" title="${dica}">ⓘ</span>`, g.uso,
+                `${g.uso}% · ${gb(g.usada_mb)} de ${gb(g.total_mb)}`) : ""}
+    <div class="nota">${carregado}</div>`;
+}
 // debaixo do player: o seu limite do plano (pela barra de status do Claude Code) e o gasto do Claudinho
 function montarConsumo() {
   const c = estado.consumo, caixa = document.getElementById("consumo");
   if (!c || !caixa) return;
-  const janelas = c.janelas || {};   // a conta (porcentagem, já resetou?) vem pronta do consumo.py
+  const janelas = {...(c.janelas || {})};   // a conta (porcentagem, já resetou?) vem pronta do consumo.py
+  // o Claude Code não manda a janela de 5 horas enquanto ela não começou: é 0%
+  if (janelas.seven_day && !janelas.five_hour) janelas.five_hour = {pct: 0, reseta: null, resetou: true};
   const barra = (nome, j) => {
     if (!j) return "";
     const p = j.pct, quando = j.reseta ? new Date(j.reseta * 1000) : null;
@@ -1660,16 +1762,18 @@ function montarConsumo() {
                                               : quando.toLocaleDateString("pt-BR", {day: "2-digit", month: "2-digit"})) : "";
     return `<div class="rotulo"><span>${nome}</span><b>${p}%</b></div>
       <div class="trilho"><i class="${p >= 80 ? "alto" : ""}" style="width:${Math.min(100, p)}%"></i></div>
-      ${reseta ? `<div class="nota">reseta ${nome === "5 horas" ? "às" : "em"} ${reseta}</div>` : ""}`;
+      ${j.resetou ? `<div class="nota">zerado: começa a contar quando você usar</div>`
+        : reseta ? `<div class="nota">reseta ${nome === "5 horas" ? "às" : "em"} ${reseta}</div>` : ""}`;
   };
   const plano = barra("5 horas", janelas.five_hour) + barra("semana", janelas.seven_day);
   const visto = c.plano ? (c.plano.ha_minutos < 1 ? "agora" : `há ${c.plano.ha_minutos} min`) : "";
   const h = c.claudinho.hoje, t = c.claudinho.total;
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + " mi" : n >= 1e3 ? Math.round(n / 1e3) + " mil" : String(n);
-  caixa.innerHTML = `seu plano do Claude${plano ? `<span class="nota" style="display:inline;margin-left:4px">(${visto})</span>${plano}`
-      : `<div class="nota">${estado.sistema && estado.sistema.barra ? "aparece depois que você usar o Claude Code"
+  caixa.innerHTML = `${iaLocal(c.local)}
+    <div class="titulo-bloco">seu plano do Claude${plano ? `<span class="nota" style="display:inline;margin-left:4px">(${visto})</span>` : ""}</div>
+    ${plano || `<div class="nota">${estado.sistema && estado.sistema.barra ? "aparece depois que você usar o Claude Code"
                                                                       : "ligue em Sistema → Mostrar meu consumo"}</div>`}
-    <div style="margin-top:10px">Claudinho gastou</div>
+    <div class="titulo-bloco">Claudinho gastou</div>
     <div class="rotulo"><span>hoje</span><b>${fmt(h.entrada + h.saida)} tokens · US$ ${h.custo.toFixed(2)}</b></div>
     <div class="rotulo"><span>total</span><b>${fmt(t.entrada + t.saida)} tokens · US$ ${t.custo.toFixed(2)}</b></div>`;
 }
@@ -2122,34 +2226,22 @@ document.getElementById("sortear").onclick = () => {
 document.getElementById("limparVisual").onclick = () =>
   salvarVisual({cor: visual.cor, cabeca: null, olhos: null, rosto: null, pescoco: null, bracos: null});
 
-// navegação: cada aba mostra só as suas seções; o link rola até a seção e marca onde você está
+// navegação: uma página por vez. A aba abre a primeira página dela; o link abre aquela página
 const principal = document.getElementById("principal");
 const secoesDa = aba => [...document.querySelector(`.aba[data-aba="${aba}"]`).nextElementSibling.querySelectorAll("a")]
   .map(a => a.dataset.alvo);
-function marcarSecao() {
-  let atual = null;
-  for (const s of document.querySelectorAll("main section"))
-    if (!s.hidden && (!atual || s.offsetTop - principal.scrollTop < 140)) atual = s.id;
-  for (const a of document.querySelectorAll("nav a")) a.classList.toggle("ativo", a.dataset.alvo === atual);
-}
-function abrirAba(aba, alvo) {
-  const secoes = secoesDa(aba);
-  for (const a of document.querySelectorAll(".aba")) a.classList.toggle("ativa", a.dataset.aba === aba);
-  for (const s of document.querySelectorAll("main section")) s.hidden = !secoes.includes(s.id);
-  principal.scrollTo({top: 0, behavior: "instant"});
-  if (alvo && alvo !== secoes[0]) document.getElementById(alvo).scrollIntoView({behavior: "instant"});
-  marcarSecao();
-  try { localStorage.setItem("claudinho_aba", aba); } catch {}
-}
 const abaDe = id => document.querySelector(`nav a[data-alvo="${id}"]`).closest(".sub-nav").previousElementSibling.dataset.aba;
-for (const aba of document.querySelectorAll(".aba")) aba.onclick = () => abrirAba(aba.dataset.aba);
-for (const a of document.querySelectorAll("nav a"))
-  a.onclick = () => {
-    if (document.querySelector(".aba.ativa")?.dataset.aba === abaDe(a.dataset.alvo))
-      document.getElementById(a.dataset.alvo).scrollIntoView();
-    else abrirAba(abaDe(a.dataset.alvo), a.dataset.alvo);
-  };
-principal.addEventListener("scroll", marcarSecao);
+function abrirSecao(id) {
+  const link = document.querySelector(`nav a[data-alvo="${id}"]`) || document.querySelector("nav a");
+  const aba = abaDe(link.dataset.alvo);
+  for (const a of document.querySelectorAll(".aba")) a.classList.toggle("ativa", a.dataset.aba === aba);
+  for (const a of document.querySelectorAll("nav a")) a.classList.toggle("ativo", a === link);
+  for (const sec of document.querySelectorAll("main section")) sec.hidden = sec.id !== link.dataset.alvo;
+  principal.scrollTo({top: 0, behavior: "instant"});
+  try { localStorage.setItem("claudinho_secao", link.dataset.alvo); } catch {}
+}
+for (const aba of document.querySelectorAll(".aba")) aba.onclick = () => abrirSecao(secoesDa(aba.dataset.aba)[0]);
+for (const a of document.querySelectorAll("nav a")) a.onclick = () => abrirSecao(a.dataset.alvo);
 
 // ---------- animação: piscar, olhar pros lados, pulinho ----------
 let t = 0;
@@ -2179,9 +2271,9 @@ async function carregar(primeira) {
       montarVisual(); montarResto(); montarMestre(); montarSistema(); animar();
       if (location.search.includes("bemvindo") && !estado.cfg.tour_feito) abrirTour();
       else if (location.search.includes("novidades")) abrirNovidades();
-      let aba = "jeito";
-      try { aba = localStorage.getItem("claudinho_aba") || aba; } catch {}
-      abrirAba(document.querySelector(`.aba[data-aba="${aba}"]`) ? aba : "jeito");
+      let secao = "mestre";
+      try { secao = localStorage.getItem("claudinho_secao") || secao; } catch {}
+      abrirSecao(secao);
     } else {
       // mudou lá no Claudinho (atalho da faixa, por exemplo): só atualiza os interruptores e o que está vivo
       for (const el of document.querySelectorAll("input[data-cfg]")) el.checked = !!estado.cfg[el.dataset.cfg];

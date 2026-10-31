@@ -149,14 +149,17 @@ def janela(j):
 
 
 def janelas_do_plano(plano=None):
-    """As janelas que ainda valem, prontas pro painel: {"five_hour": {"pct": 40, "reseta": timestamp ou None}, …}."""
+    """As janelas prontas pro painel: {"five_hour": {"pct": 40, "reseta": timestamp ou None, "resetou": False}, …}.
+    A que já resetou desde a última leitura vem zerada (você ainda não gastou nada nela)."""
     plano = do_plano() if plano is None else plano
     limites = plano.get("rate_limits") if isinstance(plano, dict) else None
     saida = {}
     for chave in ("five_hour", "seven_day"):
         dados = janela((limites or {}).get(chave)) if isinstance(limites, dict) else None
-        if dados and not dados[2]:
-            saida[chave] = {"pct": dados[0], "reseta": dados[1].timestamp() if dados[1] else None}
+        if dados and dados[2]:
+            saida[chave] = {"pct": 0, "reseta": None, "resetou": True}
+        elif dados:
+            saida[chave] = {"pct": dados[0], "reseta": dados[1].timestamp() if dados[1] else None, "resetou": False}
     return saida
 
 

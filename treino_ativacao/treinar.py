@@ -282,6 +282,10 @@ def exportar(modelo, escolhido, d):
 
 
 def main():
+    try:   # o Windows não suspende o PC por inatividade no meio do treino (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+        __import__("ctypes").windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
+    except (AttributeError, OSError):
+        pass
     if not torch.cuda.is_available():
         sys.exit("treinar precisa de placa de vídeo NVIDIA (CUDA)")
     ativacao.baixar_bases()

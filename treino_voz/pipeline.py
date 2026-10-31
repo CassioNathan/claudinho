@@ -9,6 +9,8 @@ Roda no ambiente da clonagem (~/.claudinho/vozes/clonagem/.venv), em estágios q
     python pipeline.py <voz> continuar N    segue o treino de onde parou (last.ckpt) até a época N
     python pipeline.py <voz> treinar_high N [H]  modelo "high" (vocoder maior, mais natural, ~2,5x mais lento): N épocas,
                                             no máximo H horas (o melhor checkpoint até ali vale)
+    python pipeline.py <voz> continuar_high N  segue o "high" de onde parou (last.ckpt) até a época N; pode matar o
+                                            processo a qualquer hora (perde no máximo a época em andamento)
     python pipeline.py <voz> exportar_high  exporta os melhores do treino "high" (saida/<voz>_high_*.onnx)
     python pipeline.py <voz> exportar       exporta os melhores checkpoints pra ONNX e fala uma frase com cada
     python pipeline.py <voz> tudo [N]       os quatro, em sequência
@@ -62,6 +64,15 @@ def prioridade_baixa():
     try:
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), PRIORIDADE_BAIXA)
     except (AttributeError, OSError):   # fora do Windows: segue com a prioridade normal
+        pass
+
+
+def manter_acordado():
+    """O Windows não suspende o PC por inatividade enquanto este processo roda (a tela ainda pode apagar). Sem isso o
+    treino da noite congelou na suspensão de 15 min e só voltou de manhã."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)   # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    except (AttributeError, OSError):
         pass
 
 
@@ -286,8 +297,8 @@ def conferir(t):
 
 
 # ---------------------------------------------------------------------------------------------- estágio 3
-def ultimo_checkpoint(t):
-    cks = sorted((t.pasta / "treino").rglob("last.ckpt"), key=lambda c: c.stat().st_mtime)
+def ultimo_checkpoint(t, pasta="treino"):
+    cks = sorted((t.pasta / pasta).rglob("last.ckpt"), key=lambda c: c.stat().st_mtime)
     if cks:
         print(f"último checkpoint: {cks[-1]} (de {time.strftime('%d/%m %H:%M', time.localtime(cks[-1].stat().st_mtime))})", flush=True)
     return cks[-1] if cks else None
@@ -320,7 +331,7 @@ def treinar(t, epocas=EPOCAS_PADRAO, continuar=False, high=False, horas=None):
             sys.exit(f"falta o checkpoint high convertido: {LESSAC_HIGH}")
         cmd += HIGH + ["--model.vocoder_warmstart_ckpt", str(LESSAC_HIGH)]
     if continuar:   # do último checkpoint desta voz (com o estado do otimizador): as épocas seguem contando
-        ultimo = ultimo_checkpoint(t)
+        ultimo = ultimo_checkpoint(t, "treino_high" if high else "treino")
         if not ultimo:
             sys.exit("não tem last.ckpt pra continuar: rode o estágio 'treinar' antes")
         feita = epoca_do_checkpoint(ultimo)
@@ -385,7 +396,7 @@ def exportar(t, high=False):
 
 
 def main():
-    if len(sys.argv) < 3 or sys.argv[2] not in ("gerar", "conferir", "treinar", "continuar", "treinar_high", "exportar",
+    if len(sys.argv) < 3 or sys.argv[2] not in ("gerar", "conferir", "treinar", "continuar", "treinar_high", "continuar_high", "exportar",
                                                 "exportar_high", "tudo"):
         sys.exit(__doc__)
     epocas = EPOCAS_PADRAO
@@ -397,6 +408,7 @@ def main():
         if not 1 <= epocas <= EPOCAS_MAX:   # -1 no Lightning é treinar pra sempre
             sys.exit(f"épocas tem que estar entre 1 e {EPOCAS_MAX}")
     prioridade_baixa()
+    manter_acordado()
     t, estagio = Trabalho(sys.argv[1]), sys.argv[2]
     t.travar()
     if estagio in ("gerar", "tudo"):
@@ -409,6 +421,8 @@ def main():
         treinar(t, epocas, continuar=True)
     if estagio == "treinar_high":
         treinar(t, epocas, high=True, horas=float(sys.argv[4]) if len(sys.argv) > 4 else None)
+    if estagio == "continuar_high":   # sem limite de horas: o relógio do treino anterior viria junto no checkpoint
+        treinar(t, epocas, continuar=True, high=True)
     if estagio == "exportar_high":
         exportar(t, high=True)
     if estagio in ("exportar", "tudo"):

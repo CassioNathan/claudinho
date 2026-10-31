@@ -68,6 +68,8 @@ import ativacao
 import comandos
 import meus_comandos
 import tarefas
+import uso_local
+import fichas
 import revisao
 from motores import env_limpo
 
@@ -1454,6 +1456,10 @@ def iniciar_servidor(eventos):
                         eventos.put(("painel_cfg", dados["chave"], dados["valor"]))
                     elif self.path == "/api/acao":
                         eventos.put(("menu", str(dados["acao"])))
+                    elif self.path == "/api/ficha":   # painel → Memória: corrigir ou esquecer o que ele sabe de um programa
+                        k = str(dados["chave"])
+                        if not (fichas.apagar(k) if dados.get("apagar") else fichas.corrigir(k, dados.get("campos") or {})):
+                            return self.responder(404)
                     else:
                         return self.responder(404)
                 elif self.path == "/aviso":  # o hook do Claude Code avisando que um chat terminou
@@ -1983,6 +1989,7 @@ class Claudinho:
         self.modo_jogo = False        # tem algo em tela cheia na frente: ele fica no canto de cima à direita, parado
         self.jogo_virar = 0           # leituras seguidas que discordam do estado atual (evita piscar entra/sai)
         self.jogo_titulo, self.jogo_exe, self.jogo_desde = "", "", 0.0
+        self.site_atual = ("", "")    # (navegador, site da aba) da última vez que ele olhou: pra ficha do site
         self.jogo_area = (0, 0, 1920, 1080)
         self.prox_comentario_jogo = 0.0
 
@@ -3060,6 +3067,7 @@ class Claudinho:
         m = self.musica
         return {
             "cfg": {k: self.cfg[k] for k in CHAVES_PAINEL},
+            "fichas": fichas.listar(),
             "frequencias": [{"nome": n, "de": a, "ate": b} for n, a, b in FREQUENCIAS],
             "atalhos": {k: self.cfg[k] for k in ("atalho_comentar", "atalho_venda", "atalho_resumir",
                                                   "atalho_notificacoes")},
@@ -3072,7 +3080,7 @@ class Claudinho:
             "musica": musica.descrever(m) if m else None,
             "fila": len(self.falas),
             "consumo": {"plano": consumo.do_plano(), "janelas": consumo.janelas_do_plano(),
-                        "claudinho": consumo.do_claudinho()},
+                        "claudinho": consumo.do_claudinho(), "local": uso_local.agora()},
             "lembrancas_total": self.mem.total_lembrancas(),
             "modo_ia": motores.modo_ia(),
             "tarefas": [dict(t, texto=tarefas.descrever(t),
@@ -4541,6 +4549,7 @@ class Claudinho:
         exe = ativa["exe"] if ativa else ""
         if exe and exe not in janelas.IGNORAR and exe != self.app_atual:
             self.app_atual, self.app_desde = exe, time.time()
+            fichas.garantir(ativa)   # programa novo: ficha uma vez só (navegador fica pro site, na hora de comentar)
 
     @property
     def modo_maldoso(self):
@@ -4550,11 +4559,41 @@ class Claudinho:
     def minutos_no_app(self):
         return (time.time() - self.app_desde) / 60
 
+    def ficha_da_frente(self):
+        """A ficha do programa na frente; no navegador, a do site da aba (a extensão diz qual). Pode levar uns
+        segundos (pergunta pra extensão): só fora da thread da tela. Sem ficha ainda, encomenda e devolve None."""
+        try:
+            janela = janelas.janela_ativa()
+            if not janela or janela["exe"] in janelas.IGNORAR:
+                janela = next(iter(janelas.listar()), None)
+            if not janela:
+                return None
+            site = titulo = ""
+            if fichas.eh_navegador(janela["exe"]):
+                lista = abas.listar() or []
+                aba = (next((a for a in lista if a.get("ativa") and a.get("titulo") and a["titulo"] in janela["titulo"]), None)
+                       or next((a for a in lista if a.get("ativa")), None))
+                if not aba:
+                    return None
+                site, titulo = aba.get("site", ""), aba.get("titulo", "")
+            self.site_atual = (janela["exe"], site)
+            fichas.garantir(janela, site, titulo)
+            return fichas.buscar(janela["exe"], site)
+        except Exception:
+            return None
+
+    def comentar_aqui(self):
+        """Pode comentar sozinho no programa (ou site) de agora? Você marca "não comenta" no painel, na ficha dele."""
+        exe, site = self.site_atual if self.site_atual[0] == self.app_atual else (self.app_atual, "")
+        return fichas.pode_comentar(fichas.buscar(exe, site)) if exe else True
+
     def talvez_comentar(self):
         """A vez dele de fazer algo à toa: piada ou esquete saem do mesmo timer (mesma fila, tipos diferentes)."""
         self.acompanhar_app_ativo()
         threading.Thread(target=motores.liberar_gpu_se_jogo, daemon=True).start()
         if self.cfg["modo_junior"]:   # Júnior: não comenta a tela; só confere o trabalho do Claude Code (talvez_revisar)
+            return
+        if not self.comentar_aqui():   # ficha desse programa diz "não comenta"
             return
         if self.modo_jogo:   # em jogo não tem piada de banco nem esquete: só o comentário sobre o jogo
             self.comentar_do_jogo()
@@ -4731,6 +4770,7 @@ class Claudinho:
         maldoso, tdah = self.modo_maldoso, self.cfg["modo_tdah"]
         alvo, ponto = ("jogo", None) if jogo else self.sortear_alvo(area_total)
         eu, retrato = tuple(int(v) for v in self.centro()), self.retrato()
+        forcado = self.olhando_forcado   # "comenta agora" do menu: comenta mesmo onde a ficha diz que não
         contexto = (f"Programa em foco: {self.app_atual}, há {int(self.minutos_no_app())} minutos.\n"
                     if self.app_atual else "") + self.resumo_do_gosto() + perfil_curto(self.cfg["mestre"])
         if maldoso or tdah:  # nesses modos a piada é sobre a tela: segundo plano fica de fora
@@ -4746,12 +4786,18 @@ class Claudinho:
                         "assistindo.\n") + contexto
 
         def trabalho():
+            alvo_final = None
             try:
-                r = comentar_tela(area_total, modelo, recentes, lista, contexto, maldoso, tdah, alvo, ponto,
-                                  assuntos, eu=eu, retrato=retrato, personalidade=self.cfg["personalidade"])
+                ficha = self.ficha_da_frente()
+                if ficha and not fichas.pode_comentar(ficha) and not forcado:   # trocou de aba pra um site "não comenta"
+                    r, alvo_final = None, "calado"
+                else:
+                    r = comentar_tela(area_total, modelo, recentes, lista, fichas.contexto(ficha) + contexto, maldoso, tdah,
+                                      alvo, ponto, assuntos, eu=eu, retrato=retrato,
+                                      personalidade=self.cfg["personalidade"])
             except Exception:
                 r = None
-            self.eventos.put(("comentario", r, lista, alvo))
+            self.eventos.put(("comentario", r, lista, alvo_final or alvo))
 
         threading.Thread(target=trabalho, daemon=True).start()
 
@@ -5454,9 +5500,9 @@ class Claudinho:
                 if self.modo != "passeio" and not forcado:
                     continue
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
-                # (em jogo não tem banco: fica quieto até a próxima)
+                # (em jogo não tem banco: fica quieto até a próxima; "calado": a ficha do site diz pra não comentar)
                 if not r or not r[0] or self.parecida(*r):
-                    if alvo != "jogo":
+                    if alvo not in ("jogo", "calado"):
                         self.comentar_do_banco(lista)
                     continue
                 texto, assunto = r

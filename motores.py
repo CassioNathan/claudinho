@@ -152,8 +152,10 @@ def rodar_claude(texto, extra=(), sid=None, timeout=600, stream=False, sem_pensa
     return d
 
 
+# --system-prompt troca o prompt de programador do Claude Code (~2,8 mil tokens por chamada) por uma linha: aqui o
+# pedido inteiro já vem na mensagem (piada, aviso, roteador), sem ferramentas
 ENXUTO = ["--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands",
-          "--no-session-persistence", "--tools", ""]
+          "--no-session-persistence", "--tools", "", "--system-prompt", "Siga exatamente o pedido do usuário."]
 
 
 def _completar_claude_code(prompt, imagens, modelo, timeout, tarefa):

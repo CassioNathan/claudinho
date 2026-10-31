@@ -34,13 +34,20 @@ MODELOS = {
 MODELOS_CLAUDE = {apelido: m["id"] for apelido, m in MODELOS.items()}
 # qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
 TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
-                  "resumo": "sonnet", "avisos": "haiku", "roteador": "haiku"}
+                  "resumo": "sonnet", "avisos": "local", "roteador": "local"}
 OLLAMA = "http://127.0.0.1:11434"
 # modelos locais que o painel oferece: o leve só lê texto; o maior também enxerga o print da tela
 MODELOS_OLLAMA = {
     "qwen3:1.7b": {"nome": "Leve", "tamanho": "~1,4 GB", "visao": False},
     "gemma3:4b": {"nome": "Maior", "tamanho": "~3,3 GB", "visao": True},
 }
+
+# modo híbrido: o chat fica no Claude e o que é simples e toda hora roda no modelo local (Ollama), de graça.
+# Só onde o modelo pequeno dá conta: escolher comando, resumir aviso, piada. Revisão e resumo de tela precisam ler
+# direito (e enxergar o print): ficam na nuvem
+LOCAL = "local"
+TAREFAS_LOCAL = ("piadas", "avisos", "roteador")
+MODELO_HIBRIDO = "qwen3:1.7b"   # o leve (~1,4 GB): o híbrido usa ele mesmo com o "Só local" no modelo maior
 
 CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b", "modelos": dict(TAREFAS_PADRAO)}  # o .pyw atualiza
 
@@ -53,12 +60,60 @@ def configurar(motor, ollama_modelo, modelos=None):
 def modelos_validos(modelos):
     """O "Modelo por ação" do painel, completo e só com modelos que existem."""
     modelos = modelos if isinstance(modelos, dict) else {}
-    return {t: modelos[t] if isinstance(modelos.get(t), str) and modelos[t] in MODELOS_CLAUDE else padrao
-            for t, padrao in TAREFAS_PADRAO.items()}
+    def valido(t, m):
+        return isinstance(m, str) and (m in MODELOS_CLAUDE or (m == LOCAL and t in TAREFAS_LOCAL))
+    return {t: modelos[t] if valido(t, modelos.get(t)) else padrao for t, padrao in TAREFAS_PADRAO.items()}
 
 
 def modelo_da(tarefa):
     return CONFIG["modelos"].get(tarefa) or TAREFAS_PADRAO.get(tarefa, "haiku")
+
+
+def na_nuvem(tarefa):
+    """O modelo do Claude dessa tarefa (a que está no "local" usa o Haiku quando o local não pode)."""
+    modelo = modelo_da(tarefa)
+    return "haiku" if modelo == LOCAL else modelo
+
+
+def usa_local():
+    """Alguma tarefa está no modelo local (ou o motor inteiro é o Ollama)?"""
+    return CONFIG["motor"] == "ollama" or LOCAL in CONFIG["modelos"].values()
+
+
+def modo_ia():
+    """O modo do painel: "hibrido" (tarefas leves no PC, pensar na nuvem), "nuvem", "local" ou "nenhum".
+    Tarefas agendadas, memória, iniciativa e interromper a fala são do híbrido: o que roda o tempo todo fica no PC
+    (de graça) e só o que pensa vai pro plano. Só nuvem estouraria o limite; só local é fraco demais pra isso."""
+    if CONFIG["motor"] == "nenhum":
+        return "nenhum"
+    if CONFIG["motor"] == "ollama":
+        return "local"
+    return "hibrido" if LOCAL in CONFIG["modelos"].values() else "nuvem"
+
+
+def so_local(prompt, max_tokens=300, timeout=60):
+    """Pergunta pro modelo local do híbrido e nunca cai pra nuvem: o que roda sozinho, sem você pedir (tirar fatos da
+    conversa, etc.), não pode gastar o seu plano. None se o local não puder agora (jogo, Ollama fechado…)."""
+    if not local_pode():
+        return None
+    try:
+        return _completar_ollama(prompt, (), max_tokens, timeout, modelo_hibrido())
+    except Exception:
+        return None
+
+
+def modelo_hibrido():
+    """O modelo local das tarefas do híbrido: o leve, se estiver baixado; senão o que tiver escolhido no painel."""
+    return MODELO_HIBRIDO if _tem_modelo(MODELO_HIBRIDO) else CONFIG["ollama_modelo"]
+
+
+def local_pode(imagens=()):
+    """O modelo local do híbrido dá pra usar agora? Ollama rodando, modelo baixado, sem jogo na frente, placa com
+    folga e, se tem print, um modelo que enxerga."""
+    modelo = modelo_hibrido()
+    if imagens and not MODELOS_OLLAMA.get(modelo, {}).get("visao"):
+        return False
+    return ollama_status()["rodando"] and _tem_modelo(modelo) and gpu_livre(modelo)
 
 
 # ---------- Claude Code (o processo `claude -p`) ----------
@@ -130,7 +185,7 @@ class ClaudeAquecido:
         exe = shutil.which("claude")
         if not exe:
             raise RuntimeError("Não achei o comando `claude` no PATH.")
-        modelo = modelo_da(self.tarefa)
+        modelo = na_nuvem(self.tarefa)
         env = env_limpo()
         if modelo != "opus":
             env["MAX_THINKING_TOKENS"] = "0"
@@ -153,7 +208,8 @@ class ClaudeAquecido:
     def aquecer(self):
         """Abre o processo antes de precisar (a primeira pergunta já sai rápida)."""
         with self.trava:
-            if CONFIG["motor"] == "claude_code" and (not self.proc or self.proc.poll() is not None):
+            if (CONFIG["motor"] == "claude_code" and modelo_da(self.tarefa) != LOCAL
+                    and (not self.proc or self.proc.poll() is not None)):
                 try:
                     self._abrir()
                 except Exception:
@@ -163,9 +219,14 @@ class ClaudeAquecido:
         """A resposta em texto (erro vira exceção). Fora do Claude Code, é uma chamada normal (a API já é rápida)."""
         if CONFIG["motor"] != "claude_code":
             return completar(texto, tarefa=self.tarefa, max_tokens=120, timeout=timeout)
+        if modelo_da(self.tarefa) == LOCAL and local_pode():
+            try:
+                return _completar_ollama(texto, (), 120, timeout, modelo_hibrido())
+            except Exception:
+                pass   # o Ollama caiu: o processo do Claude responde (abre agora, se precisar)
         with self.trava:
             if (not self.proc or self.proc.poll() is not None or self.feitas >= self.RECOMECAR
-                    or self.modelo != modelo_da(self.tarefa)):
+                    or self.modelo != na_nuvem(self.tarefa)):
                 self.fechar()
                 self._abrir()
             self.feitas += 1
@@ -318,8 +379,8 @@ def _imagens_ollama(imagens):
     return [b["source"]["data"] for b in imagens if b.get("type") == "image"]
 
 
-def _completar_ollama(prompt, imagens, max_tokens, timeout):
-    modelo = CONFIG["ollama_modelo"]
+def _completar_ollama(prompt, imagens, max_tokens, timeout, modelo=None):
+    modelo = modelo or CONFIG["ollama_modelo"]
     mensagem = {"role": "user", "content": prompt}
     if imagens and MODELOS_OLLAMA.get(modelo, {}).get("visao"):
         mensagem["images"] = _imagens_ollama(imagens)
@@ -352,7 +413,7 @@ _DESCARREGADO = {"em_tela_cheia": False}
 def liberar_gpu_se_jogo():
     """Modo jogo de verdade: ao entrar em tela cheia, manda o Ollama tirar o modelo da placa de vídeo na hora
     (uma vez por vez em tela cheia), em vez de esperar o keep_alive vencer."""
-    if CONFIG["motor"] != "ollama":
+    if not usa_local():
         return
     cheia = tela_cheia()
     if cheia and not _DESCARREGADO["em_tela_cheia"]:
@@ -366,13 +427,13 @@ def liberar_gpu_se_jogo():
         _DESCARREGADO["em_tela_cheia"] = False
 
 
-def gpu_livre():
+def gpu_livre(modelo=None):
     """Modo jogo do modelo local: com algo em tela cheia na frente, ou pouca memória livre na placa de vídeo,
     o Claudinho não roda o modelo (usa o banco de frases)."""
     if tela_cheia():
         return False  # tela cheia (jogo, vídeo): deixa o PC em paz
     livre = _vram_livre_mb()
-    precisa = 4000 if MODELOS_OLLAMA.get(CONFIG["ollama_modelo"], {}).get("visao") else 2000
+    precisa = 4000 if MODELOS_OLLAMA.get(modelo or CONFIG["ollama_modelo"], {}).get("visao") else 2000
     return livre is None or livre >= precisa
 
 
@@ -421,11 +482,17 @@ def completar(prompt, imagens=(), tarefa="piadas", max_tokens=600, timeout=180):
     """Uma pergunta, uma resposta (piadas, comentário de música, resumos). `tarefa` escolhe o modelo
     (TAREFAS_PADRAO, ajustável no painel). Erro vira exceção."""
     motor = CONFIG["motor"]
+    if motor in ("claude_code", "api") and modelo_da(tarefa) == LOCAL:   # híbrido: tenta o local, de graça
+        if local_pode(imagens):
+            try:
+                return _completar_ollama(prompt, list(imagens), max_tokens, timeout, modelo_hibrido())
+            except Exception:
+                pass   # o Ollama caiu no meio: a nuvem resolve (com o Haiku)
     imagens = list(imagens) if ve_imagem() else []
     if motor == "claude_code":
-        return _completar_claude_code(prompt, imagens, modelo_da(tarefa), timeout, tarefa)
+        return _completar_claude_code(prompt, imagens, na_nuvem(tarefa), timeout, tarefa)
     if motor == "api":
-        return _completar_api(prompt, imagens, modelo_da(tarefa), max_tokens, tarefa)
+        return _completar_api(prompt, imagens, na_nuvem(tarefa), max_tokens, tarefa)
     if motor == "ollama":
         return _completar_ollama(prompt, imagens, max_tokens, timeout)
     raise RuntimeError("sem motor de IA")

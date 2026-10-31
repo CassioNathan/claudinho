@@ -6,6 +6,10 @@ Roda no ambiente da clonagem (~/.claudinho/vozes/clonagem/.venv), em estágios q
     python pipeline.py <voz> gerar          gera as frases com a voz de referência (placa de vídeo, ~40 min p/ 350 frases)
     python pipeline.py <voz> conferir       Whisper confere cada frase e joga fora as que não bateram (processador)
     python pipeline.py <voz> treinar [N]    ajuste fino do Faber com as frases (placa de vídeo), N épocas (padrão 150)
+    python pipeline.py <voz> continuar N    segue o treino de onde parou (last.ckpt) até a época N
+    python pipeline.py <voz> treinar_high N [H]  modelo "high" (vocoder maior, mais natural, ~2,5x mais lento): N épocas,
+                                            no máximo H horas (o melhor checkpoint até ali vale)
+    python pipeline.py <voz> exportar_high  exporta os melhores do treino "high" (saida/<voz>_high_*.onnx)
     python pipeline.py <voz> exportar       exporta os melhores checkpoints pra ONNX e fala uma frase com cada
     python pipeline.py <voz> tudo [N]       os quatro, em sequência
 
@@ -38,6 +42,16 @@ MIN_S, MAX_S = 0.8, 16.0          # frase mais curta/longa que isso é descartad
 CONFERENCIA_MINIMA = 0.78         # parecença mínima entre o que o Whisper ouviu e o texto
 MIN_FRASES_TREINO = 50            # com menos frases aprovadas que isso, o treino não aprende a voz
 EPOCAS_PADRAO, EPOCAS_MAX = 150, 2000
+# Chatterbox com mais estabilidade que o padrão (temperatura 0,8 às vezes enrola ou muda a voz no meio da frase)
+LOTE = os.environ.get("PIPER_LOTE", "16")   # frases por passo do treino; menos = menos memória da placa
+LEITORES = os.environ.get("PIPER_LEITORES", "4")   # processos preparando o próximo lote enquanto a placa treina
+QUALIDADE_CHATTERBOX = {"exaggeration": 0.5, "cfg_weight": 0.5, "temperature": 0.7}
+# o "high" do Piper: o mesmo modelo com o vocoder (a parte que gera o áudio) maior. O vocoder vem de um checkpoint
+# "high" de outra língua (vocoder não depende de idioma) e o resto do Faber, em português
+LESSAC_HIGH = CLONAGEM / "base" / "lessac_high_windows.ckpt"
+HIGH = ["--model.resblock", "1", "--model.resblock_kernel_sizes", "(3, 7, 11)",
+        "--model.resblock_dilation_sizes", "((1, 3, 5), (1, 3, 5), (1, 3, 5))", "--model.upsample_rates", "(8, 8, 2, 2)",
+        "--model.upsample_initial_channel", "512", "--model.upsample_kernel_sizes", "(16, 16, 4, 4)"]
 PRIORIDADE_BAIXA = 0x4000         # BELOW_NORMAL_PRIORITY_CLASS: o PC continua leve enquanto treina
 FRASES_TESTE = ["Oi, eu sou o Claudinho. Hoje o dia está lindo, vamos programar juntos?",
                 "Terminei a tarefa e não apareceu nenhum erro. Quer ver o resultado?",
@@ -51,6 +65,29 @@ def prioridade_baixa():
         pass
 
 
+TELAS_DO_WINDOWS = {"lockapp.exe", "logonui.exe"}   # tela de bloqueio e de login ocupam a tela inteira
+
+
+def exe_da_janela(hwnd):
+    """O nome do programa dono da janela ("lockapp.exe"), ou "" se não deu pra saber."""
+    try:
+        import ctypes.wintypes
+        k, u = ctypes.windll.kernel32, ctypes.windll.user32
+        pid = ctypes.wintypes.DWORD()
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        proc = k.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not proc:
+            return ""
+        try:
+            buf, tam = ctypes.create_unicode_buffer(520), ctypes.wintypes.DWORD(520)
+            ok = k.QueryFullProcessImageNameW(proc, 0, buf, ctypes.byref(tam))
+            return Path(buf.value).name.lower() if ok else ""
+        finally:
+            k.CloseHandle(proc)
+    except (AttributeError, OSError, ValueError, ImportError):
+        return ""
+
+
 def tela_cheia():
     """Tem algo em tela cheia na frente (jogo, vídeo)? Versão simplificada do teste do Claudinho (motores.tela_cheia):
     aqui não dá pra importar o app, então não ignora as janelas que ele ignora; na dúvida, pausa a mais."""
@@ -58,6 +95,8 @@ def tela_cheia():
         import ctypes.wintypes   # só existe de verdade no Windows (aqui dentro: o módulo importa em qualquer sistema)
         u = ctypes.windll.user32
         hwnd = u.GetForegroundWindow()
+        if exe_da_janela(hwnd) in TELAS_DO_WINDOWS:   # tela bloqueada não é jogo: com o PC parado o treino segue
+            return False
         r = ctypes.wintypes.RECT()
         u.GetWindowRect(hwnd, ctypes.byref(r))
         return r.left <= 0 and r.top <= 0 and r.right - r.left >= u.GetSystemMetrics(0) \
@@ -195,7 +234,7 @@ def gerar(t):
             t.progresso(estagio="gerar (pausado: tela cheia)")
             time.sleep(10)
         for tentativa in range(3):
-            wav = modelo.generate(frase, language_id="pt", audio_prompt_path=str(t.referencia))
+            wav = modelo.generate(frase, language_id="pt", audio_prompt_path=str(t.referencia), **QUALIDADE_CHATTERBOX)
             duracao = wav.shape[1] / modelo.sr
             if MIN_S <= duracao <= MAX_S:
                 break
@@ -247,7 +286,19 @@ def conferir(t):
 
 
 # ---------------------------------------------------------------------------------------------- estágio 3
-def treinar(t, epocas=EPOCAS_PADRAO):
+def ultimo_checkpoint(t):
+    cks = sorted((t.pasta / "treino").rglob("last.ckpt"), key=lambda c: c.stat().st_mtime)
+    if cks:
+        print(f"último checkpoint: {cks[-1]} (de {time.strftime('%d/%m %H:%M', time.localtime(cks[-1].stat().st_mtime))})", flush=True)
+    return cks[-1] if cks else None
+
+
+def epoca_do_checkpoint(ckpt):
+    import torch
+    return int(torch.load(ckpt, map_location="cpu", weights_only=False).get("epoch", 0))
+
+
+def treinar(t, epocas=EPOCAS_PADRAO, continuar=False, high=False, horas=None):
     metadata = t.pasta / "metadata.csv"
     linhas = [x for x in metadata.read_text(encoding="utf-8").splitlines() if x.strip()] if metadata.exists() else []
     if not metadata.exists():
@@ -258,9 +309,26 @@ def treinar(t, epocas=EPOCAS_PADRAO):
         shutil.copy(FABER_CONFIG, t.pasta / "config.json")
     cmd = [sys.executable, "-m", "piper.train", "fit", "--data.voice_name", t.voz,
            "--data.csv_path", "metadata.csv", "--data.audio_dir", "wavs", "--data.espeak_voice", "pt-br",
-           "--data.config_path", "config.json", "--data.cache_dir", "cache", "--data.batch_size", "16",
-           "--model.sample_rate", str(TAXA), "--model.warmstart_ckpt", str(FABER_CKPT),
-           "--trainer.max_epochs", str(epocas), "--trainer.default_root_dir", "treino"]
+           "--data.config_path", "config.json", "--data.cache_dir", "cache", "--data.batch_size", LOTE, "--data.num_workers", LEITORES,
+           "--model.sample_rate", str(TAXA), "--trainer.max_epochs", str(epocas),
+           "--trainer.default_root_dir", "treino_high" if high else "treino"]
+    if horas:   # para no tempo, mesmo sem chegar nas épocas (o melhor checkpoint até ali é o que vale)
+        h, m = int(horas), int(round((horas - int(horas)) * 60))
+        cmd += ["--trainer.max_time", f"00:{h:02d}:{m:02d}:00"]
+    if high:
+        if not LESSAC_HIGH.exists():
+            sys.exit(f"falta o checkpoint high convertido: {LESSAC_HIGH}")
+        cmd += HIGH + ["--model.vocoder_warmstart_ckpt", str(LESSAC_HIGH)]
+    if continuar:   # do último checkpoint desta voz (com o estado do otimizador): as épocas seguem contando
+        ultimo = ultimo_checkpoint(t)
+        if not ultimo:
+            sys.exit("não tem last.ckpt pra continuar: rode o estágio 'treinar' antes")
+        feita = epoca_do_checkpoint(ultimo)
+        if epocas <= feita:
+            sys.exit(f"o checkpoint já está na época {feita} e o limite é {epocas}: o treino terminaria na hora. Use um número maior")
+        cmd += ["--ckpt_path", str(ultimo)]
+    else:
+        cmd += ["--model.warmstart_ckpt", str(FABER_CKPT)]
     t.progresso(estagio="treinar", epocas=epocas)
     print("treinando:", " ".join(cmd[3:]), flush=True)
     with open(t.pasta / "treino.log", "ab") as log:
@@ -278,9 +346,9 @@ def nota(nome, metrica):
     return float(m.group(1)) if m else None
 
 
-def melhores_checkpoints(t):
+def melhores_checkpoints(t, pasta="treino"):
     """O melhor por val_mel (menor) e o melhor por val_mos (maior), entre os que o Piper guardou."""
-    cks = list((t.pasta / "treino").rglob("*.ckpt"))
+    cks = list((t.pasta / pasta).rglob("*.ckpt"))
     por_mel = [(v, c) for c in cks if (v := nota(c.name, "val_mel")) is not None]
     por_mos = [(v, c) for c in cks if (v := nota(c.name, "val_mos")) is not None]
     achados = {}
@@ -291,16 +359,16 @@ def melhores_checkpoints(t):
     return achados
 
 
-def exportar(t):
+def exportar(t, high=False):
     import numpy as np
     from piper import PiperVoice
     saida = t.pasta / "saida"
-    melhores = melhores_checkpoints(t)
+    melhores = melhores_checkpoints(t, "treino_high" if high else "treino")
     if not melhores:
         sys.exit(f"não tem checkpoint treinado pra voz {t.voz}: rode o estágio 'treinar' antes")
     saida.mkdir(exist_ok=True)
     for nome, ck in melhores.items():
-        onnx = saida / f"{t.voz}_{nome}.onnx"
+        onnx = saida / f"{t.voz}_{'high_' if high else ''}{nome}.onnx"
         print(f"exportando {ck.name} → {onnx.name}", flush=True)
         r = subprocess.run([sys.executable, str(AQUI / "exportar_onnx.py"), "--checkpoint", str(ck),
                             "--output-file", str(onnx)], capture_output=True, creationflags=PRIORIDADE_BAIXA)
@@ -311,13 +379,14 @@ def exportar(t):
         voz = PiperVoice.load(str(onnx))
         for k, frase in enumerate(FRASES_TESTE, 1):
             audio = np.concatenate([c.audio_float_array for c in voz.synthesize(frase)])
-            escrever_wav(saida / f"amostra_{nome}_{k}.wav", audio, voz.config.sample_rate)
-    t.progresso(estagio="exportar: terminou", checkpoints={k: v.name for k, v in melhores_checkpoints(t).items()})
+            escrever_wav(saida / f"amostra_{'high_' if high else ''}{nome}_{k}.wav", audio, voz.config.sample_rate)
+    t.progresso(estagio="exportar: terminou", checkpoints={k: v.name for k, v in melhores.items()})
     print("pronto: ouça as amostras em", saida, flush=True)
 
 
 def main():
-    if len(sys.argv) < 3 or sys.argv[2] not in ("gerar", "conferir", "treinar", "exportar", "tudo"):
+    if len(sys.argv) < 3 or sys.argv[2] not in ("gerar", "conferir", "treinar", "continuar", "treinar_high", "exportar",
+                                                "exportar_high", "tudo"):
         sys.exit(__doc__)
     epocas = EPOCAS_PADRAO
     if len(sys.argv) > 3:   # confere antes de criar qualquer pasta
@@ -336,6 +405,12 @@ def main():
         conferir(t)
     if estagio in ("treinar", "tudo"):
         treinar(t, epocas)
+    if estagio == "continuar":
+        treinar(t, epocas, continuar=True)
+    if estagio == "treinar_high":
+        treinar(t, epocas, high=True, horas=float(sys.argv[4]) if len(sys.argv) > 4 else None)
+    if estagio == "exportar_high":
+        exportar(t, high=True)
     if estagio in ("exportar", "tudo"):
         exportar(t)
 

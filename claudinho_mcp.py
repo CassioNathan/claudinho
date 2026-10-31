@@ -190,5 +190,61 @@ def atalho_confirmado(teclas: str, janela: str = "", vezes: int = 1) -> str:
         return f"não consegui apertar: {e}"
 
 
+def _no_claudinho(acao, **dados):
+    """Pede ao Claudinho aberto (tarefas e memória moram nele) e devolve a resposta em texto."""
+    import json
+    import urllib.request
+    import sistema
+    try:
+        chave = (sistema.DADOS / "ext_token").read_text(encoding="utf-8").strip()
+        pedido = urllib.request.Request("http://127.0.0.1:47821/ext/mcp",
+                                        data=json.dumps({"acao": acao, "dados": dados}).encode(),
+                                        headers={"Content-Type": "application/json", "X-Claudinho-Ext": chave})
+        return json.loads(urllib.request.urlopen(pedido, timeout=20).read()).get("texto") or "ok"
+    except Exception as e:
+        return f"o Claudinho não respondeu ({e})"
+
+
+@servidor.tool()
+def agendar_tarefa(pedido: str, hora: str, repetir: str = "", data: str = "", dia_semana: str = "",
+                   lembrete: bool = False) -> str:
+    """Agenda algo pra uma hora ("às 18h abre o Spotify", "todo dia às 9h me lembra do daily"). Na hora, o Claudinho
+    faz pelo caminho mais barato (comando pronto; senão manda `pedido` pro chat como se ele tivesse pedido agora).
+    pedido: o que fazer, do jeito que ele pediria na hora ("abre o Spotify e toca lo-fi"); num lembrete, do que
+    lembrar ("ligar pro João"). hora: "HH:MM" (24h). repetir: "uma", "diaria", "uteis" (seg a sex) ou "semanal";
+    deixe "" se ele NÃO disse (o Claudinho pergunta com botões). data: "AAAA-MM-DD", só pra "uma" num dia que não é o
+    próximo (hoje ou amanhã). dia_semana: "segunda"…"domingo", pra "semanal". lembrete: true se é só pra avisar."""
+    return _no_claudinho("agendar", pedido=pedido[:300], hora=hora, repetir=repetir, data=data,
+                         dia_semana=dia_semana, lembrete=lembrete)
+
+
+@servidor.tool()
+def tarefas_agendadas() -> str:
+    """As tarefas agendadas dele (o que, quando e a próxima vez). Use quando ele perguntar o que está agendado."""
+    return _no_claudinho("tarefas")
+
+
+@servidor.tool()
+def cancelar_tarefa(qual: str) -> str:
+    """Apaga uma tarefa agendada pelo pedido (aproximado, "spotify") ou pelo id de tarefas_agendadas. Só quando ele
+    pedir pra cancelar/apagar."""
+    return _no_claudinho("cancelar_tarefa", qual=qual[:200])
+
+
+@servidor.tool()
+def lembrar(fato: str) -> str:
+    """Guarda um fato duradouro sobre ele pra lembrar em outras conversas: preferência, rotina, gosto, nome de
+    projeto ou pessoa ("prefere respostas curtas", "o daily é às 9h30", "a Ana é a gerente dele"). Use quando ele
+    pedir ("lembra que…", "guarda isso") ou contar algo dele que vale pra sempre. Uma frase curta, em terceira
+    pessoa. Nada de senha, documento ou dado de cartão."""
+    return _no_claudinho("lembrar", fato=fato[:200])
+
+
+@servidor.tool()
+def esquecer(fato: str) -> str:
+    """Apaga da memória dele o fato parecido com `fato`. Só quando ele pedir ("esquece que…")."""
+    return _no_claudinho("esquecer", fato=fato[:200])
+
+
 if __name__ == "__main__":
     servidor.run()

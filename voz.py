@@ -37,6 +37,9 @@ PALAVRAS_ABERTAS = {"e", "mas", "que", "entao", "tipo", "ne", "ai", "ou", "porqu
                     "da", "dos", "das", "no", "na", "em", "a", "o", "um", "uma", "se", "quando", "como", "tambem",
                     "porem", "so", "ate", "depois", "antes", "sobre", "entre", "pelo", "pela", "por"}
 EXTRA_FRASE_ABERTA = 1.2        # segundos a mais de silêncio quando a frase parece incompleta
+# falou isso enquanto ele fala: ele cala na hora e já escuta o que vem (modo híbrido)
+FRASES_PARAR = {"para", "pare", "parar", "chega", "espera", "perai", "calma", "cala", "silencio", "claudinho",
+                "claudio", "stop"}
 
 
 def frase_aberta(texto):
@@ -99,6 +102,26 @@ def achar_apelido(texto, apelidos, minimo=0.78, inicio_max=None):
                 resto = " ".join(palavras[i + n:]).strip(" ,.;:!?-–…")
                 return True, resto
     return False, ""
+
+
+MAX_CHAMADAS_GUARDADAS = 300   # por pasta: as mais velhas saem
+
+
+def guardar_chamada(audio, tipo):
+    """O áudio de uma chamada que o detector ouviu (acordou ou o Whisper barrou) em ~/.claudinho/ativacao/reais/:
+    amostras de verdade da sua voz e do seu ambiente pro próximo treino da palavra de ativação. Só fica no PC."""
+    try:
+        pasta = ativacao.PASTA / "reais" / tipo
+        pasta.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(pasta / (time.strftime("%Y%m%d-%H%M%S") + ".wav")), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(TAXA)
+            w.writeframes((np.clip(audio[-TAXA * 4:], -1, 1) * 32767).astype("<i2").tobytes())
+        for velho in sorted(pasta.glob("*.wav"))[:-MAX_CHAMADAS_GUARDADAS]:
+            velho.unlink()
+    except Exception:
+        pass
 
 
 def nome_aproximado(texto, nome, ate=4, minimo=PARECIDO_COM_NOTA_ALTA):
@@ -231,7 +254,7 @@ def tocar(nome):
 class Voz:
     def __init__(self, config, ao_acordar, ao_texto, ao_enviar, ao_cancelar, pausado=lambda: False, ao_erro=print,
                  ao_estado=lambda e: None, conversa_viva=lambda: True, fala=None, chave_stt=lambda: None, saudacao=lambda: None,
-                 vocabulario=lambda: ""):
+                 vocabulario=lambda: "", pode_interromper=lambda: False):
         """config(): dict com voz_apelidos, voz_silencio, voz_microfone, voz_modelo_apelido, voz_modelo_fala,
         voz_sons (relido a cada uso: mudar no painel vale na hora)."""
         self.config = config
@@ -242,6 +265,7 @@ class Voz:
         self.saudacao = saudacao     # () -> cumprimento curto que ele fala quando a conversa por voz começa (ou None)
         # () -> nomes que você costuma falar (programas, projetos, artistas): vão de dica pro Whisper escrever certo
         self.vocabulario = vocabulario
+        self.pode_interromper = pode_interromper   # () -> dá pra cortar a fala dele falando "para" (modo híbrido)
         self.chave_stt = chave_stt   # a chave do provedor de reconhecimento na nuvem (guardada criptografada)
         self.nuvem_erro = None       # por que a última tentativa na nuvem caiu pro local (None = deu certo)
         self.ultimo_motor = "local"  # quem fez a última transcrição: "nuvem" ou "local" (vai pro voz.log)
@@ -649,6 +673,8 @@ class Voz:
             return
         if nota is not None and not achou and nota >= NOTA_ALTA:
             achou, resto = nome_aproximado(texto, nome)
+        if nota is not None and self.config().get("voz_guardar_chamadas", True):
+            guardar_chamada(audio, "positivos" if achou else "barradas")
         if nota is not None:
             registrar(f"detector nota={nota:.2f} → {'ACORDOU' if achou else 'Whisper não confirmou'} conf={conf:.2f} "
                       f"pico={pico:.3f} | {texto}")
@@ -732,27 +758,65 @@ class Voz:
             espera = float(self.config().get("voz_encerrar", 8))   # agora vale o contador de encerrar a conversa
             # a resposta pode estar sendo falada (em fluxo, desde a primeira frase): espera acabar, ou você interromper
             falou_resposta = bool(self.fala and self.config().get("voz_fala", True) and self.fala.ocupada)
-            if falou_resposta:
-                self._esperar_fala()
+            if falou_resposta and self._esperar_fala(interromper=bool(self.pode_interromper())):
+                falou_resposta = False   # cortou: o tuk-tuk avisa que ele já está ouvindo
             if not self.config().get("voz_continua", False):   # uma pergunta por chamada: respondeu, acabou
                 uma_so = True
                 break
         self._encerrar(primeira, som=not uma_so)
 
-    def _esperar_fala(self):
-        """Enquanto ele fala o microfone não vai pro Whisper (senão ele se ouve): o que chega é jogado fora."""
+    def _esperar_fala(self, interromper=False):
+        """Enquanto ele fala o microfone não vai pro Whisper do pedido (senão ele se ouve). Com `interromper`, uma
+        fala curta sua ("para", "chega", "espera") corta ele na hora: True se cortou."""
         self.ao_estado("falando")
         self.estado = "falando"
         self._limpar_fila()
+        janela, segmento, silencio = np.zeros(0, dtype="float32"), [], 0
         while self.rodando and self.fala.ocupada:
             if not self.conversa_viva():     # fechou o chat no meio: para de falar
                 self.fala.parar()
-                return
+                return False
             try:
-                self.fila.get(timeout=0.2)
+                bloco = self.fila.get(timeout=0.2)
             except queue.Empty:
                 continue
+            if not interromper:
+                continue
+            janela = np.concatenate([janela, bloco])[-TAXA:]
+            if self._prob_voz(janela) > LIMIAR_VOZ and self._nivel_ok(bloco):
+                segmento.append(bloco)
+                silencio = 0
+            elif segmento:
+                segmento.append(bloco)
+                silencio += 1
+            if segmento and (silencio >= 3 or len(segmento) > 2.5 / SEG_BLOCO):
+                audio = np.concatenate(segmento)
+                segmento, silencio = [], 0
+                if self._mandou_parar(audio):
+                    self.fala.parar()
+                    self._limpar_fila()
+                    return True
         self._limpar_fila()
+        return False
+
+    def _mandou_parar(self, audio):
+        """Esse pedacinho é você mandando ele parar? Curto (até 4 palavras), começando com "para", "chega"… e que
+        não seja o eco do que ele mesmo acabou de falar pela caixa de som."""
+        if len(audio) < 0.25 * TAXA or float(np.max(np.abs(audio))) < PICO_MINIMO:
+            return False
+        try:
+            texto = self.transcrever(audio, self.config()["voz_modelo_apelido"])
+        except Exception:
+            return False
+        palavras = normalizar(texto)
+        if not palavras or len(palavras) > 4 or palavras[0] not in FRASES_PARAR:
+            return False
+        ditas = set(normalizar(" ".join(getattr(self.fala, "ditas", []))))
+        if set(palavras) <= ditas:   # tudo que "ouviu" ele mesmo tinha acabado de falar: é o eco dele
+            registrar(f"interromper IGNORADO (eco da fala dele) | {texto}")
+            return False
+        registrar(f"INTERROMPEU a fala | {texto}")
+        return True
 
     def _encerrar(self, sem_resposta, som=True):
         """Fim da conversa por voz: volta a escutar só o apelido."""

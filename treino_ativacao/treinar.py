@@ -144,8 +144,17 @@ def montar(ext, rnd):
     positivos = sorted((TREINO / "positivos").glob("*.wav"))
     proibidas = {i for i, f in enumerate(gerar.PARECIDAS) if "claudinho" in f.lower()}  # quem diz "Claudinho" o
     negativos = [c for c in sorted((TREINO / "negativos").glob("*.wav"))              # Whisper filtra depois
-                 if not (c.stem.split("__")[2].startswith("p") and int(c.stem.split("__")[2][1:]) in proibidas)]
+                 if not (c.stem.split("__")[2].startswith("p")
+                         and int(c.stem.split("__")[2][1:].split("_")[0]) in proibidas)]
     sua_voz = sorted((CLONAGEM).glob("*/wavs/*.wav"))
+    reais = ativacao.PASTA / "reais"   # o que o Claudinho guardou das chamadas de verdade (voz.guardar_chamada)
+    reais_pos, reais_neg = sorted((reais / "positivos").glob("*.wav")), sorted((reais / "barradas").glob("*.wav"))
+    # as barradas são o que o Whisper barrou: se ele errou, é a sua voz. Só entram como negativos com --com-barradas
+    if "--com-barradas" not in sys.argv:
+        reais_neg_fora, reais_neg = len(reais_neg), []
+        print(f"chamadas reais: {len(reais_pos)} que acordaram; {reais_neg_fora} barradas ficaram de fora (use --com-barradas)", flush=True)
+    else:
+        print(f"chamadas reais: {len(reais_pos)} que acordaram, {len(reais_neg)} barradas ENTRANDO como negativos (--com-barradas)", flush=True)
     print(f"positivos {len(positivos)}, negativos {len(negativos)}, sua voz (fala comum) {len(sua_voz)}", flush=True)
     fala_fundo = [ler(c) for c in rnd.sample(sua_voz + negativos, min(150, len(sua_voz) + len(negativos)))]
     dados = {k: [] for k in ("pos", "pos_conf", "neg", "neg_conf")}
@@ -157,7 +166,11 @@ def montar(ext, rnd):
             dados["pos_conf" if conf else "pos"].append(emb[-ativacao.JANELA:])
         if i % 200 == 0:
             print(f"  positivos {i}/{len(positivos)}", flush=True)
-    for i, c in enumerate(negativos + sua_voz):
+    for c in reais_pos:   # a sua voz de verdade, no seu microfone: vale mais versões que as sintéticas
+        audio = aparar(ler(c))
+        for _ in range(VERSOES_POSITIVO * 2):
+            dados["pos"].append(ext.embeddings(versao(audio, rnd, fala_fundo))[-ativacao.JANELA:])
+    for i, c in enumerate(negativos + sua_voz + reais_neg):
         conf = c in negativos and separada(voz_do_arquivo(c))
         audio = aparar(ler(c))
         for _ in range(1 if conf else VERSOES_NEGATIVO):

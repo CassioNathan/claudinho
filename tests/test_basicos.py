@@ -167,6 +167,45 @@ def test_nota_do_checkpoint():
     assert pipeline.nota("last.ckpt", "val_mel") is None
 
 
+def _treino_falso(tmp_path, monkeypatch, com_ckpt, epoca_feita=100):
+    import pipeline
+    pasta = tmp_path / "voz"
+    (pasta / "treino").mkdir(parents=True)
+    (pasta / "metadata.csv").write_text("\n".join(f"a{i}|frase" for i in range(pipeline.MIN_FRASES_TREINO)), encoding="utf-8")
+    (pasta / "config.json").write_text("{}")
+    if com_ckpt:
+        (pasta / "treino" / "last.ckpt").write_bytes(b"")
+    chamadas = []
+    monkeypatch.setattr(pipeline, "epoca_do_checkpoint", lambda c: epoca_feita)
+    monkeypatch.setattr(pipeline.subprocess, "run", lambda cmd, **kw: chamadas.append(cmd) or type("R", (), {"returncode": 0})())
+
+    class T:
+        voz = "teste"
+        def progresso(self, **kw): pass
+    T.pasta = pasta
+    return pipeline, T(), chamadas
+
+
+def test_continuar_sem_checkpoint(tmp_path, monkeypatch):
+    pipeline, t, chamadas = _treino_falso(tmp_path, monkeypatch, com_ckpt=False)
+    with pytest.raises(SystemExit):
+        pipeline.treinar(t, 500, continuar=True)
+    assert not chamadas
+
+
+def test_continuar_com_limite_menor_que_a_epoca(tmp_path, monkeypatch):
+    pipeline, t, chamadas = _treino_falso(tmp_path, monkeypatch, com_ckpt=True, epoca_feita=149)
+    with pytest.raises(SystemExit):
+        pipeline.treinar(t, 149, continuar=True)
+    assert not chamadas
+
+
+def test_continuar_normal(tmp_path, monkeypatch):
+    pipeline, t, chamadas = _treino_falso(tmp_path, monkeypatch, com_ckpt=True, epoca_feita=149)
+    pipeline.treinar(t, 500, continuar=True)
+    assert "--ckpt_path" in chamadas[0] and "500" in chamadas[0]
+
+
 def test_normalizar_frase():
     import pipeline
     assert pipeline.normalizar("Ação, João!  Ñ") == "acao joao n"
@@ -296,3 +335,137 @@ def test_nome_aproximado_com_detector_seguro():
     assert voz.nome_aproximado("Acrojinho.", "Claudinho") == (True, "")
     assert voz.nome_aproximado("E Claudim, toca algo", "Claudinho") == (True, "toca algo")
     assert not voz.nome_aproximado("Tem nada de ver o que está acontecendo.", "Claudinho")[0]
+
+
+def test_fluxo_aprendido():
+    import meus_comandos as m
+    passos = [{"nome": "mcp__claudinho__abas_navegador", "entrada": {}},                       # só olhou: fica de fora
+              {"nome": "mcp__claudinho__abrir_programa", "entrada": {"nome": "intelij"}, "ok": False},   # falhou
+              {"nome": "mcp__claudinho__abrir_programa", "entrada": {"nome": "IntelliJ"}},
+              {"nome": "mcp__claudinho__esperar_janela", "entrada": {"janela": "intellij"}},
+              {"nome": "mcp__claudinho__atalho", "entrada": {"teclas": "shift+f10", "janela": "intellij"}}]
+    acoes = m.fluxo_de_passos(passos)
+    assert [a["tipo"] for a in acoes] == ["programa", "esperar", "atalho"] and acoes[0]["valor"] == "IntelliJ"
+    assert m.fluxo_de_passos([{"nome": "Bash", "entrada": {"command": 'python abrir.py pesquisa "lo fi" youtube'}}])[0][
+        "valor"] == "https://www.youtube.com/results?search_query=lo+fi"
+    # passo que não dá pra repetir sem a IA (comando qualquer, tecla confirmada, arquivo): não aprende
+    assert m.fluxo_de_passos(passos + [{"nome": "Bash", "entrada": {"command": "dir"}}]) is None
+    assert m.fluxo_de_passos([{"nome": "mcp__claudinho__atalho_confirmado", "entrada": {"teclas": "enter"}}]) is None
+    assert m.fluxo_de_passos([{"nome": "mcp__claudinho__ver_tela", "entrada": {}}]) is None   # nada feito
+    assert m.vale_aprender("Ei Claudinho, abre o IntelliJ e roda") and not m.vale_aprender("como funciona o hook?")
+    lista, motivo = m.aprender([], "Ei Claudinho, roda o projeto.", acoes)
+    assert motivo is None and lista[0]["nome"] == "Roda o projeto" and lista[0]["acoes"][-1]["tipo"] == "falar"
+    assert m.achar("roda o projeto", lista)["nome"] == "Roda o projeto"
+    lista, _ = m.aprender(lista, "roda o projeto", acoes[:1])   # a mesma frase troca o que tinha
+    assert len(lista) == 1 and len(lista[0]["acoes"]) == 2
+
+
+def test_fluxo_sem_ruido():
+    import meus_comandos as m
+    tela = {"nome": "mcp__claudinho__ver_tela", "entrada": {}}
+    tecla = lambda t, v=1: {"nome": "mcp__claudinho__atalho", "entrada": {"teclas": t, "vezes": v}}  # noqa: E731
+    # o caso de ontem: Ctrl+número várias vezes, olhando a tela, até achar o YouTube
+    procura = m.fluxo_de_passos([tela, tecla("ctrl+2"), tela, tecla("ctrl+5"), tela, tecla("ctrl+tab", 3), tela])
+    assert procura and m.limpar_fluxo(procura) == ([], True)
+    assert m.enxugar("vai pro youtube", procura) is None                     # sem a revisão: não grava pela metade
+    revisor = lambda prompt: '{"manter": [0, 1], "aba": "youtube"}'           # noqa: E731  (0 e 1 são procura)
+    assert m.enxugar("vai pro youtube", procura, revisor) == [{"tipo": "aba", "valor": "youtube", "janela": ""}]
+    assert m.enxugar("vai pro youtube", procura, lambda p: "não sei") is None
+    # o revisor não inventa: número que não existe some, e sem aba nem passo bom não sobra nada
+    assert m.ler_enxugar('{"manter": [99, "x"], "aba": ""}', procura) is None
+    # repetição boba e abas seguidas: só as regras locais resolvem (sem chamar ninguém)
+    sujo = m.fluxo_de_passos([{"nome": "mcp__claudinho__abrir_programa", "entrada": {"nome": "Spotify"}},
+                              {"nome": "mcp__claudinho__abrir_programa", "entrada": {"nome": "Spotify"}},
+                              {"nome": "mcp__claudinho__ir_para_aba", "entrada": {"nome": "gmail"}},
+                              {"nome": "mcp__claudinho__ir_para_aba", "entrada": {"nome": "youtube"}},
+                              tecla("down", 3)])
+    chamou = []
+    limpo = m.enxugar("x", sujo, lambda p: chamou.append(p))
+    assert not chamou and [(a["tipo"], a["valor"]) for a in limpo] == [
+        ("programa", "Spotify"), ("aba", "youtube"), ("atalho", "down"), ("atalho", "down"), ("atalho", "down")]
+    assert m.descrever(limpo[:2]) == "abrir Spotify → ir pra aba youtube"
+
+
+def test_hibrido_local():
+    import motores
+    import meus_comandos as m
+    # "local" só vale onde o modelo pequeno dá conta; na revisão volta pro padrão
+    v = motores.modelos_validos({"roteador": "local", "revisao": "local", "piadas": "sonnet"})
+    assert v["roteador"] == "local" and v["revisao"] == "sonnet" and v["piadas"] == "sonnet"
+    motores.configurar("claude_code", "qwen3:1.7b", {"avisos": "local"})
+    try:
+        assert motores.na_nuvem("avisos") == "haiku" and motores.usa_local()
+        assert not motores.local_pode([{"type": "image"}])   # print com modelo que não enxerga: vai pra nuvem
+    finally:
+        motores.configurar("claude_code", "qwen3:1.7b", None)
+    assert motores.usa_local()   # o híbrido é o padrão (sem Ollama, vai pro Haiku sozinho)
+    motores.configurar("claude_code", "qwen3:1.7b", {"avisos": "haiku", "roteador": "haiku"})
+    assert not motores.usa_local()
+    motores.configurar("claude_code", "qwen3:1.7b", None)
+    lista = [{"nome": "Modo trabalho", "frases": ["modo trabalho"], "acoes": []}]
+    assert m.ler_roteador('{"id": "meu", "arg": "modo trabalho"}', lista)[0] == "meu"
+
+
+# ---------- modo híbrido: tarefas na hora marcada ----------
+def test_modo_ia():
+    import motores
+    try:
+        motores.configurar("claude_code", "qwen3:1.7b", None)
+        assert motores.modo_ia() == "hibrido"   # o padrão
+        motores.configurar("claude_code", "qwen3:1.7b", {"avisos": "haiku", "roteador": "haiku"})
+        assert motores.modo_ia() == "nuvem"
+        motores.configurar("ollama", "qwen3:1.7b", None)
+        assert motores.modo_ia() == "local"
+    finally:
+        motores.configurar("claude_code", "qwen3:1.7b", None)
+
+
+@pytest.mark.parametrize("frase, pedido, hora, repetir", [
+    ("Claudinho, às 18h abre o Spotify e toca lo-fi", "abre o Spotify e toca lo-fi", "18:00", None),
+    ("abre o IntelliJ às 18:30", "abre o IntelliJ", "18:30", None),
+    ("todo dia às 8h toca lo-fi", "toca lo-fi", "08:00", "diaria"),
+    ("dias úteis às 9 abre o Teams pra mim", "abre o Teams", "09:00", "uteis"),
+    ("às 7 da noite fecha o jogo", "fecha o jogo", "19:00", None),
+    ("me lembra amanhã às 9 de pagar a conta", "pagar a conta", "09:00", "uma"),
+    ("ei claudinho me avisa ao meio dia de almoçar", "almoçar", "12:00", None),
+])
+def test_tarefa_entendida(frase, pedido, hora, repetir):
+    import tarefas
+    e = tarefas.entender(frase)
+    assert e and (e["pedido"], e["hora"], e["repetir"]) == (pedido, hora, repetir)
+
+
+@pytest.mark.parametrize("frase", ["o que eu fiz às 18h ontem?", "abre as 3 abas", "toca as 10", "abre o spotify"])
+def test_nao_e_tarefa(frase):
+    import tarefas
+    assert tarefas.entender(frase) is None
+
+
+def test_tarefa_proxima_e_perdida():
+    import datetime as dt
+    import tarefas
+    sexta_17h = dt.datetime(2026, 10, 30, 17, 0).timestamp()   # 30/10/2026 é sexta
+    t, erro = tarefas.nova("abre o teams", "09:00", "uteis", agora=sexta_17h)
+    assert not erro and dt.datetime.fromtimestamp(t["proxima"]) == dt.datetime(2026, 11, 2, 9, 0)   # pula o fim de semana
+    s, _ = tarefas.nova("toca rock", "17:30", "semanal", agora=sexta_17h)
+    assert s["dia"] == 4 and dt.datetime.fromtimestamp(s["proxima"]) == dt.datetime(2026, 10, 30, 17, 30)
+    u, _ = tarefas.nova("x y", "08:00", "uma", agora=sexta_17h)
+    assert u["data"] == "2026-10-31"   # 8h já passou hoje: amanhã
+    # venceu às 17:30; o Claudinho abriu 18:20 (PC desligado na hora): perdida. Aberto desde antes: faz
+    assert tarefas.vencidas([s], s["proxima"] + 50 * 60, aberto_em=s["proxima"] + 49 * 60)[0][1] == "perdida"
+    assert tarefas.vencidas([s], s["proxima"] + 50 * 60, aberto_em=sexta_17h)[0][1] == "fazer"
+    assert tarefas.vencidas([s], s["proxima"] + 10 * 60, aberto_em=s["proxima"] + 5 * 60)[0][1] == "fazer"
+    tarefas.avancar(u, u["proxima"] + 1)
+    assert not u["ativa"] and u["proxima"] is None   # uma vez: rodou, parou
+    tarefas.avancar(s, s["proxima"] + 1)
+    assert dt.datetime.fromtimestamp(s["proxima"]) == dt.datetime(2026, 11, 6, 17, 30)
+
+
+def test_tarefas_do_painel():
+    import tarefas
+    lista = tarefas.validar_lista([{"pedido": "abre o spotify", "hora": "18:00", "repetir": "diaria"},
+                                   {"pedido": "", "hora": "18:00"}, {"pedido": "x", "hora": "25:00"}, "lixo"])
+    assert len(lista) == 1 and lista[0]["id"] and lista[0]["proxima"]
+    assert tarefas.repeticao_da_resposta("uma vez por semana") == "semanal"
+    assert tarefas.repeticao_da_resposta("só hoje") == "uma"
+    assert tarefas.repeticao_da_resposta("dias úteis") == "uteis"

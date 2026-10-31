@@ -7,6 +7,7 @@
 
 As vozes (~60 MB cada) ficam em ~/.claudinho/vozes; a escolhida carrega em segundo plano (uns 5 s, uma vez só).
 """
+import collections
 import json
 import os
 import queue
@@ -212,6 +213,7 @@ class Fala:
         self.versao = 0              # sobe a cada parar(): descarta o que estava sendo preparado
         self.pendentes = 0           # frases que ainda não terminaram de tocar (da versão atual)
         self.trava = threading.Lock()
+        self.ditas = collections.deque(maxlen=12)   # as últimas frases que ele falou (o eco dele no microfone)
         self._fios = False
         self.ajudante = None         # o processo do Chatterbox (voz própria), aberto só quando ela é a escolhida
         self.linhas_ajudante = queue.Queue()   # o que o ajudante escreve (lido por uma thread: dá pra esperar com limite)
@@ -451,6 +453,7 @@ class Fala:
         self.carregar()
         self._iniciar_fios()
         for frase in dividir_em_frases(texto):
+            self.ditas.append(frase)
             with self.trava:
                 self.pendentes += 1
                 versao = self.versao

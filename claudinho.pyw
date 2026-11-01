@@ -1678,10 +1678,10 @@ class Balao:
             self.mostrar_faixa(barras)
         self.botoes = botoes or []
         self.linha_botoes = None
-        self.botoes_no_hover = botoes_no_hover
+        self.botoes_no_hover = botoes_no_hover and bool(texto)   # sem texto, botão escondido = balão vazio na tela
         if self.botoes:  # ex.: confirmação "Pode" / "Não"; avaliação "boa" / "ruim"
             linha = self.linha_botoes = ctk.CTkFrame(self.frame, fg_color=FUNDO)
-            if not botoes_no_hover:  # avaliação só aparece com o mouse em cima
+            if not self.botoes_no_hover:  # avaliação só aparece com o mouse em cima
                 linha.pack(fill="x", padx=12, pady=(4, 12))
             if botao_largo:  # um botão discreto ocupando a linha toda (o ⏹ parar do "digitando…")
                 rotulo, acao, _ = self.botoes[0]
@@ -1881,10 +1881,27 @@ class Balao:
                 pass
         return not self.app.mouse_no_mascote
 
-    def aparecer(self):
+    def aparecer(self, tentativa=0, estavel=0):
+        """Só fica visível quando a janela já está no tamanho final e com tudo desenhado. Um tempo fixo não bastava:
+        com o PC ocupado (a voz sendo gerada enquanto ele fala) o CTk atrasava e o balão aparecia grande, encolhia
+        e só depois desenhava os botões."""
         try:
             self.win.update_idletasks()
             self.posicionar()
+            pronto = (self.win.winfo_width(), self.win.winfo_height()) == (self.win.winfo_reqwidth(),
+                                                                         self.win.winfo_reqheight())
+            pronto = pronto and all(b.winfo_ismapped() for b in self.win.winfo_children() if b.winfo_manager())
+            estavel = estavel + 1 if pronto else 0
+            if estavel < 2 and tentativa < 125:   # duas olhadas seguidas iguais (no máximo ~5 s esperando)
+                if tentativa == 25:   # 1 s e não montou (ainda 200x200, vazio): registra e força o Tk a desenhar tudo
+                    print(f"balão demorando pra montar: {self.tipo} {sorted((self.dados or {}).keys())} "
+                          f"{self.win.winfo_width()}x{self.win.winfo_height()} pedido "
+                          f"{self.win.winfo_reqwidth()}x{self.win.winfo_reqheight()} "
+                          f"{[(str(b), b.winfo_manager(), b.winfo_ismapped()) for b in self.win.winfo_children()]}",
+                          file=sys.stderr)
+                    self.win.update()
+                self.win.after(40, lambda: self.aparecer(tentativa + 1, estavel))
+                return
             self.win.attributes("-alpha", 1.0)
         except tk.TclError:  # fechou antes de aparecer
             pass
@@ -1930,6 +1947,11 @@ class Balao:
         # o DPI, inclusive travando min/max nele, e cortava o texto; aqui o tamanho segue o conteúdo.
         tk.Wm.wm_minsize(self.win, 1, 1)
         tk.Wm.wm_maxsize(self.win, 4000, 4000)
+        try:   # o CTk guarda o tamanho com que a janela nasceu (200x200) e às vezes reaplica sozinho: o balão abria
+            escala = self.win._get_window_scaling()   # grande e depois encolhia. Com o tamanho certo guardado, não volta
+            self.win._current_width, self.win._current_height = round(w / escala), round(h / escala)
+        except (AttributeError, ZeroDivisionError):
+            pass
         tk.Wm.wm_geometry(self.win, f"{w}x{h}+{x}+{y}")
 
     def destruir(self):
@@ -3398,6 +3420,8 @@ class Claudinho:
             self.lembrar_fala(fala)
             if fala["tipo"] == "aviso":   # chat do Claude Code terminou: nunca tem botão, nem cria o balão
                 self.soltar_emoji("check")
+                return
+            if self.especie(fala) == "piada":   # avaliar piada (boa/ruim) não é confirmação: no só fala, só a voz
                 return
             if not montar:
                 return
@@ -5693,7 +5717,7 @@ class Claudinho:
                                     IMPORTANTE, na_frente=True)
             elif ev[0] == "atalho_ocupado":
                 self.comentar(prioridade=IMPORTANTE, texto=f"O atalho {ev[1]} já é usado por outro programa. "
-                              "Troca o \"atalho_comentar\" no config.json.")
+                              "Troca esse atalho no config.json.")
             elif ev[0] == "aviso" and ev[1].get("evento") == "espera":
                 self.sessao_esperando(ev[1])
             elif ev[0] == "aviso":

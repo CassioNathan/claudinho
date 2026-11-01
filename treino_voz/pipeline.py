@@ -329,8 +329,11 @@ def treinar(t, epocas=EPOCAS_PADRAO, continuar=False, high=False, horas=None):
     if high:
         if not LESSAC_HIGH.exists():
             sys.exit(f"falta o checkpoint high convertido: {LESSAC_HIGH}")
-        cmd += HIGH + ["--model.vocoder_warmstart_ckpt", str(LESSAC_HIGH)]
+        cmd += HIGH + ([] if continuar else ["--model.vocoder_warmstart_ckpt", str(LESSAC_HIGH)])
     if continuar:   # do último checkpoint desta voz (com o estado do otimizador): as épocas seguem contando
+        # o Lightning recarrega as configurações salvas no checkpoint, e lá estão os "aquecimentos" do começo (faber e
+        # lessac). Eles rodam DEPOIS de restaurar os pesos e apagavam o treino: a cada retomada a voz voltava pro zero
+        cmd += ["--model.warmstart_ckpt", "null", "--model.vocoder_warmstart_ckpt", "null"]
         ultimo = ultimo_checkpoint(t, "treino_high" if high else "treino")
         if not ultimo:
             sys.exit("não tem last.ckpt pra continuar: rode o estágio 'treinar' antes")
@@ -342,9 +345,14 @@ def treinar(t, epocas=EPOCAS_PADRAO, continuar=False, high=False, horas=None):
         cmd += ["--model.warmstart_ckpt", str(FABER_CKPT)]
     t.progresso(estagio="treinar", epocas=epocas)
     print("treinando:", " ".join(cmd[3:]), flush=True)
+    # o checkpoint (~1 GB) é escrito primeiro num temporário e depois movido: com o TEMP no C: (quase cheio) o
+    # treino morria com "No space left on device" mesmo com o D vazio. O temporário fica junto do treino
+    temporaria = t.pasta / "tmp"
+    temporaria.mkdir(exist_ok=True)
     with open(t.pasta / "treino.log", "ab") as log:
-        r = subprocess.run(cmd, cwd=t.pasta, stdout=log, stderr=subprocess.STDOUT,
-                           env={**os.environ, "PYTHONIOENCODING": "utf-8"}, creationflags=PRIORIDADE_BAIXA)
+        r = subprocess.run(cmd, cwd=t.pasta, stdout=log, stderr=subprocess.STDOUT, creationflags=PRIORIDADE_BAIXA,
+                           env={**os.environ, "PYTHONIOENCODING": "utf-8", "TMP": str(temporaria),
+                                "TEMP": str(temporaria), "TMPDIR": str(temporaria)})
     t.progresso(estagio="treinar: terminou" if r.returncode == 0 else f"treinar: ERRO {r.returncode}")
     if r.returncode:
         sys.exit(f"o treino terminou com erro {r.returncode} (veja treino.log)")

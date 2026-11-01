@@ -65,6 +65,16 @@
   .offline { position: fixed; inset: 0; background: rgba(20,19,18,.88); display: none; place-items: center;
              text-align: center; color: var(--apagado); }
   .offline b { color: var(--texto); display: block; font-size: 17px; margin-bottom: 4px; }
+  /* campo pra mandar mensagem daqui (a janela fica num lugar fixo; não precisa clicar nele) */
+  footer { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px 14px; background: var(--topo);
+           border-top: 1px solid #2f2e2b; }
+  footer textarea { flex: 1; resize: none; max-height: 140px; min-height: 40px; background: #2c2b28; color: var(--texto);
+                    border: 1px solid #45443f; border-radius: 12px; padding: 9px 12px; font: inherit; outline: none; }
+  footer textarea:focus { border-color: var(--meu); }
+  footer button { height: 40px; min-width: 44px; border: 0; border-radius: 12px; background: var(--meu); color: #fff;
+                  font-size: 17px; cursor: pointer; }
+  footer button:disabled { opacity: .45; cursor: default; }
+  .msg.whats .balao { border-left: 3px solid #25d366; }
 </style>
 </head>
 <body>
@@ -73,6 +83,10 @@
   <div><h1>Claudinho</h1><small id="sub">conversa</small></div>
 </header>
 <div id="lista"></div>
+<footer>
+  <textarea id="campo" rows="1" maxlength="4000" placeholder="manda uma pro Claudinho… (Enter envia, Shift+Enter pula linha)"></textarea>
+  <button id="enviar" title="enviar">➤</button>
+</footer>
 <div class="offline" id="offline"><div><b>O Claudinho não respondeu</b>Ele está aberto?</div></div>
 
 <script>
@@ -137,7 +151,9 @@ function bolha(m, anterior) {
   const print = texto.match(/^\[print(?: da janela)?: ([^\]]+)\]\s*/);
   if (print) { chip = `<span class="chip">📷 print: ${esc(print[1])}</span><br>`; texto = texto.slice(print[0].length); }
   const mesmo = anterior && anterior.quem === m.quem && anterior.numero === m.numero;
-  return `<div class="msg ${eu ? "eu" : "dele"}${mesmo ? " mesmo" : ""}">
+  const whats = texto.match(/^\[WhatsApp → ([^\]]+)\]\s*/);   // sugestão usada no WhatsApp (habilidade)
+  if (whats) { chip = `<span class="chip">💬 WhatsApp → ${esc(whats[1])}</span><br>`; texto = texto.slice(whats[0].length); }
+  return `<div class="msg ${eu ? "eu" : "dele"}${mesmo ? " mesmo" : ""}${whats ? " whats" : ""}">
             <div class="balao">${chip}${markdown(texto)}</div>
             <div class="hora">${m.criado_em.slice(11, 16)}</div></div>`;
 }
@@ -189,6 +205,33 @@ async function atualizar() {
   c.fillStyle = "#1f1e1d";
   [3, 7].forEach(x => { c.fillRect((x + 3) * S, 2 * S, S, S); c.fillRect((x + 3) * S, 3 * S, S, S); });
 })();
+
+// ---------- mandar daqui ----------
+const campo = document.getElementById("campo"), botao = document.getElementById("enviar");
+let pensandoAgora = false;
+function crescer() { campo.style.height = "auto"; campo.style.height = Math.min(campo.scrollHeight, 140) + "px"; }
+async function mandar() {
+  const texto = campo.value.trim();
+  if (!texto || pensandoAgora) return;
+  botao.disabled = true;
+  try {
+    const r = await fetch("/api/conversa/enviar", {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"},
+                                                    body: JSON.stringify({texto})});
+    if (r.status === 403) return location.reload();
+    if (r.ok) { campo.value = ""; crescer(); setTimeout(atualizar, 300); }
+  } finally { botao.disabled = false; campo.focus(); }
+}
+campo.addEventListener("input", crescer);
+campo.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); mandar(); } });
+botao.onclick = mandar;
+const atualizarAntes = atualizar;
+atualizar = async () => {   // enquanto ele pensa, o botão espera (ele faz uma por vez)
+  await atualizarAntes();
+  pensandoAgora = assinatura.endsWith("|true");
+  botao.disabled = pensandoAgora;
+  campo.placeholder = pensandoAgora ? "calma, ele tá pensando…" : "manda uma pro Claudinho… (Enter envia, Shift+Enter pula linha)";
+};
+campo.focus();
 
 atualizar();
 setInterval(atualizar, 1500);

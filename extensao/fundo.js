@@ -38,6 +38,72 @@ async function listarAbas() {
     janela: a.windowId}));
 }
 
+// ---------- WhatsApp Web (habilidade de vendedor): lê a conversa aberta como texto e escreve no campo, sem enviar ----------
+// as duas funções rodam DENTRO da página do WhatsApp (chrome.scripting): não enxergam nada daqui de fora
+function lerWhatsapp(n) {
+  const main = document.querySelector("#main");
+  if (!main) {   // sem conversa aberta (ou o WhatsApp mudou a página): devolve só a estrutura, nada de texto
+    const conta = sel => document.querySelectorAll(sel).length;
+    return {aberta: false, contato: "", mensagens: [], estrutura: {
+      main: conta("#main"), app: conta("#app"), pre: conta("[data-pre-plain-text]"), dataId: conta("[data-id]"),
+      editaveis: conta("div[contenteditable='true']"), footer: conta("footer"), header: conta("header"),
+      msgIn: conta(".message-in"), msgOut: conta(".message-out"), mainIds: [...document.querySelectorAll("[id]")]
+        .map(e => e.id).filter(i => /^(main|pane|app|side)/i.test(i)).slice(0, 10)}};
+  }
+  const nome = main.querySelector("header span[dir='auto']");
+  const contato = ((nome && (nome.getAttribute("title") || nome.textContent)) || "").trim().slice(0, 80);
+  // cada mensagem de texto tem o data-pre-plain-text ("[10:32, 31/10/2026] Fulano: "); a linha dela, o data-id.
+  // Quem mandou: o id antigo ("true_…"), a classe antiga (.message-out) ou, hoje, a cauda do balão: "tail-out" (sua) /
+  // "tail-in" (dele) aparece só na primeira de cada bloco; as seguintes herdam do remetente ou da anterior
+  const lados = {};   // remetente (do data-pre-plain-text) -> "eu" | "cliente", aprendido pelas que têm sinal
+  let anterior = "cliente";
+  const mensagens = [...main.querySelectorAll("[data-pre-plain-text]")].map(el => {
+    const linha = el.closest("[data-id]");
+    const id = linha ? linha.getAttribute("data-id") : "";
+    const icone = sel => !!(linha && linha.querySelector(`[data-icon${sel}]`));
+    const pre = el.getAttribute("data-pre-plain-text") || "";
+    const remetente = ((pre.match(/\]\s*([^:]+):/) || [])[1] || "").trim();
+    let lado = id.startsWith("true_") || el.closest(".message-out") || icone('="tail-out"') ? "eu"
+      : id.startsWith("false_") || el.closest(".message-in") || icone('="tail-in"') ? "cliente" : null;
+    if (lado && remetente) lados[remetente] = lado;
+    lado = lado || lados[remetente] || anterior;
+    anterior = lado;
+    const hora = (pre.match(/\[([^\]]+)\]/) || [])[1] || "";
+    const texto = (el.querySelector(".selectable-text") || el).innerText || "";
+    return {de: lado, texto: texto.trim().slice(0, 1000), hora, id};
+  }).filter(m => m.texto).slice(-n);
+  return {aberta: true, contato, mensagens};
+}
+
+async function escreverWhatsapp(texto, enviar) {
+  const caixa = document.querySelector("#main footer div[contenteditable='true']");
+  if (!caixa) return {ok: false, erro: "nenhuma conversa aberta no WhatsApp"};
+  if ((caixa.innerText || "").trim()) return {ok: false, erro: "o campo já tem texto seu", ocupado: true};
+  caixa.focus();
+  document.execCommand("insertText", false, texto);   // o WhatsApp só "vê" o texto se vier como digitação
+  if (!enviar) return {ok: true, enviada: false};
+  await new Promise(r => setTimeout(r, 300));   // o botão de enviar aparece depois que o campo tem texto
+  const icone = document.querySelector("#main footer [data-icon='send'], #main footer [data-icon='wds-ic-send-filled']");
+  const botao = (icone && icone.closest("button")) ||
+    document.querySelector("#main footer button[aria-label='Enviar'], #main footer button[aria-label='Send']");
+  if (botao) botao.click();
+  else caixa.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true}));
+  await new Promise(r => setTimeout(r, 600));
+  const foi = !(caixa.innerText || "").trim();   // enviada: o campo esvazia
+  return foi ? {ok: true, enviada: true} : {ok: false, erro: "preenchi, mas o envio não foi: aperta Enter você"};
+}
+
+async function whatsapp(c) {
+  const abas = await chrome.tabs.query({url: "https://web.whatsapp.com/*"});
+  const aba = abas.find(a => a.active) || abas[0];
+  if (!aba) throw new Error("o WhatsApp Web não está aberto no navegador");
+  const ler = c.modo === "whatsapp_ler";
+  const [r] = await chrome.scripting.executeScript({target: {tabId: aba.id}, func: ler ? lerWhatsapp : escreverWhatsapp,
+                                                   args: ler ? [Number(c.n) || 20] : [String(c.texto || ""), !!c.enviar]});
+  if (!ler && r.result && r.result.ok) await trazerPraFrente(aba);
+  return r.result;
+}
+
 async function executar(c) {
   if (c.acao === "aba") {   // trocar pra uma aba ou fechar (o Claudinho escolheu pelo título)
     const [ativa] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
@@ -76,6 +142,10 @@ async function consultar(c) {
     const rotina = c.acao === "rotina";
     if (c.modo === "abas") {   // não abre nem mexe em nada: só a lista
       await responder(c, {ok: true, dados: await listarAbas()});
+      return;
+    }
+    if (c.modo === "whatsapp_ler" || c.modo === "whatsapp_escrever") {   // habilidade de vendedor
+      await responder(c, {ok: true, dados: await whatsapp(c)});
       return;
     }
     const limite = new Promise((_, falhou) => setTimeout(() => falhou(new Error(rotina ? "a rotina passou de 3 minutos" :

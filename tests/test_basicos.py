@@ -546,3 +546,42 @@ def test_ficha_pesquisa_uma_vez_so(monkeypatch, tmp_path):
     assert (f["nome"], f["o_que_e"], f["origem"]) == ("LC Sistemas", "ERP Web e PIX", "basica")   # a descrição achada já serve
     fichas._gerar("site:lcsistemas.com.br", janela, "lcsistemas.com.br", "", f)   # tentou de novo mais tarde
     assert pesquisas == ["lcsistemas.com.br"]
+
+
+# ---------- habilidade de vendedor ----------
+def test_habilidades_validas():
+    import habilidades as h
+    assert h.validar(["vendedor", "hacker", "vendedor", 3]) == ["vendedor"] and h.validar("lixo") == []
+    v = h.validar_vendedor({"loja": "  Bike Center ", "so_local": 1, "x": 2})
+    assert v == {"loja": "Bike Center", "tom": "", "so_local": True, "avisar": True, "enviar": False}
+    assert h.validar_vendedor({"enviar": "sim"})["enviar"] is True
+
+
+def test_vendedor_so_manda_o_que_tem_a_ver(monkeypatch, tmp_path):
+    import habilidades as h
+    loja = "\n\n".join(["Bicicleta aro 29 Caloi: R$ 2.400 a vista", "Capacete Giro: R$ 350",
+                        "Entrega em Curitiba: 2 dias uteis"] + [f"Produto {i} qualquer coisa sem relacao" * 3 for i in range(80)])
+    trecho = h.trechos(loja, "Cliente: qual o valor da bicicleta caloi? entrega pra curitiba?", limite=300)
+    assert "Caloi" in trecho and "Curitiba" in trecho and "Produto 5" not in trecho and len(trecho) <= 300
+    assert h.trechos("curto", "qualquer") == "curto"
+    monkeypatch.setattr(h, "PASTA", tmp_path)
+    assert h.gravar_conhecimento("vendedor", loja) and h.conhecimento("vendedor") == loja
+    assert not h.gravar_conhecimento("../fora", "x")
+
+
+def test_vendedor_conversa_e_resposta():
+    import habilidades as h
+    conversa = {"contato": "João", "mensagens": [{"de": "eu", "texto": "Oi!", "id": "true_1"},
+                                                 {"de": "cliente", "texto": "Tem a bike aro 29?", "id": "false_2"}]}
+    assert h.esperando_resposta(conversa)["id"] == "false_2"
+    assert h.esperando_resposta({"mensagens": conversa["mensagens"][:1]}) is None
+    prompt = h.prompt_sugestao(conversa, {"loja": "Bike Center", "tom": ""}, "Bike aro 29: R$ 2.400", eu="Cassio")
+    assert "Cassio: Oi!" in prompt and "Tem a bike aro 29?" in prompt and "R$ 2.400" in prompt and "Bike Center" in prompt
+    assert "Responda ao que ficou pendente" in prompt
+    minha = dict(conversa, mensagens=conversa["mensagens"] + [{"de": "eu", "texto": "Temos sim!"}])
+    assert "A última mensagem é de Cassio" in h.prompt_sugestao(minha, {}, "", eu="Cassio")   # atalho com a última sua
+    usadas = h.prompt_sugestao(conversa, {}, "", eu="Cassio", usadas=["Temos sim, quer ver as cores?"])
+    assert "Temos sim, quer ver as cores?" in usadas and "repita" in usadas   # o que ele usou no WhatsApp não volta
+    pessoal = h.prompt_sugestao(conversa, {"loja": "", "tom": ""}, "", eu="Cassio")   # sem loja: conversa qualquer
+    assert "venda" not in pessoal.split("Conversa (")[0].split("ignore.")[-1]
+    assert h.limpar('Sugestão: "Temos sim! Sai por R$ 2.400."') == "Temos sim! Sai por R$ 2.400."

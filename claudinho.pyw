@@ -70,6 +70,7 @@ import meus_comandos
 import tarefas
 import uso_local
 import fichas
+import habilidades
 import revisao
 from motores import env_limpo
 
@@ -113,6 +114,7 @@ CONFIG_PADRAO = {
     "voz_guardar_chamadas": True,        # guarda o áudio das chamadas que o detector ouviu (pro próximo treino; só no PC)
     "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
+    "so_fala": False,                    # só fala: nada de balão de texto; balão só com os botões quando precisa de você
     "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
     "voz_limpar": True,                  # ganho automático (na faixa) + filtro de ruído no microfone
     "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
@@ -139,6 +141,7 @@ CONFIG_PADRAO = {
     "atalho_venda": "Win+Shift+Y",       # atalho global: põe/tira a faixa nos olhos
     "atalho_resumir": "Win+Shift+E",     # atalho global: resume/explica a janela da frente
     "atalho_notificacoes": "Win+Shift+N",  # atalho global: resume as notificações do Windows
+    "atalho_whatsapp": "Win+Shift+Z",    # atalho global ("zap"): lê a conversa do WhatsApp Web e sugere a resposta
     # onde o chat lê arquivos sem perguntar; fora daqui (e qualquer comando ou edição) pede confirmação
     "pastas_leitura": [],
     # atalhos ensinados por programa (painel): o chat aperta eles sem perguntar, só na janela daquele programa
@@ -154,6 +157,8 @@ CONFIG_PADRAO = {
     "fatos": [],                         # o que ele sabe de você, de outras conversas (painel → Memória)
     "memoria_auto": True,                # no fim de uma conversa o modelo local anota fatos novos seus
     "iniciativa": True,                  # ele puxa assunto quando importa (resumo do dia, hora da pausa)
+    "habilidades": [],                   # pacotes de profissão ligados (habilidades.CATALOGO): ex. "vendedor"
+    "vendedor": dict(habilidades.VENDEDOR_PADRAO),   # loja, tom, só local, avisar de mensagem nova
     "voz_interromper": True,             # "para"/"chega" enquanto ele fala: ele cala e já escuta
     "mestre": {"nome": "", "sobre": ""},  # "Meu Mestre" no painel: quem usa o Claudinho (vira o CLAUDE.md do chat)
 }
@@ -164,12 +169,14 @@ FREQUENCIAS = [("Bastante", 1, 3), ("Normal", 4, 10), ("De vez em quando", 15, 3
 ESTADO, FALA, IMPORTANTE, FIXO = 0, 1, 2, 3   # FIXO: a revisão do Júnior; só sai pelos botões dela
 # falas com balão próprio (botões, título): a chave que a fala traz → método balao_<chave> do Claudinho. Na ordem:
 # se uma fala trouxer duas, vale a primeira. "aviso" e "notificacoes" vêm do tipo da fala; "piada", do modo avaliação
-BALOES_ESPECIAIS = ("login", "espera", "revisar_pasta", "revisao", "atualizacao", "novidades")
+BALOES_ESPECIAIS = ("login", "espera", "revisar_pasta", "revisao", "atualizacao", "novidades", "vendas", "rapido",
+                    "so_botoes")
 # o que veio numa atualização e precisa de você escolher (cada uma tem a tela dela no painel, NOVIDADES de lá).
 # Coisa nova sem aviso ninguém usa: quem atualiza ganha um balão "tenho novidade"; quem instala do zero vê no tour
 NOVIDADES = {"modo_hibrido": "o modo híbrido de IA (gasta bem menos do seu plano)",
              "aprender_fluxos": "aprender o que você me pede (da próxima vez, faço sem gastar IA)",
-             "jarvis": "tarefas na hora marcada, memória e iniciativa (no modo híbrido)"}
+             "jarvis": "tarefas na hora marcada, memória e iniciativa (no modo híbrido)",
+             "habilidades": "habilidades (WhatsApp: leio a conversa e sugiro a sua resposta, de cliente ou não)"}
 MAX_FATOS = 40
 INICIATIVA_INTERVALO_S = 20 * 60   # entre uma iniciativa e outra (ele puxa assunto pouco, senão vira chato)
 PAUSA_MINUTOS = 120                # tanto tempo direto no mesmo programa: sugere uma pausa (uma vez a cada 2 h)
@@ -194,8 +201,8 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "novidades_vistas", "navegador_claude", "emojis", "borda", "borda_forca",
-                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "memoria_auto", "iniciativa", "voz_interromper", "voz_roteador", "voz_sem_comando",
-                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
+                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -671,8 +678,12 @@ def carregar_config():
     cfg["modelos_acao"] = motores.modelos_validos(cfg.get("modelos_acao"))
     cfg["tarefas"] = tarefas.validar_lista(cfg.get("tarefas"))
     cfg["fatos"] = validar_fatos(cfg.get("fatos"))
+    cfg["habilidades"] = habilidades.validar(cfg.get("habilidades"))
+    cfg["vendedor"] = habilidades.validar_vendedor(cfg.get("vendedor"))   # completa chave nova (ex.: "enviar")
     if cfg["atalho_comentar"] == "Ctrl+Shift+Alt+C":  # padrão antigo, complicado demais
         cfg["atalho_comentar"] = CONFIG_PADRAO["atalho_comentar"]
+    if cfg["atalho_whatsapp"] == "Win+Shift+W":  # padrão de um dia: o Windows já usa
+        cfg["atalho_whatsapp"] = CONFIG_PADRAO["atalho_whatsapp"]
     gravar_json(CONFIG, cfg)
     escrever_perfil(cfg["mestre"])
     motores.configurar(cfg["motor"], cfg["ollama_modelo"], cfg["modelos_acao"])
@@ -1421,6 +1432,10 @@ def iniciar_servidor(eventos):
                 lista = [{"pasta": str(p), "nome": p.name, "liberada": projetos.dentro(p, liberadas)}
                          for p in projetos.do_claude()]
                 self.responder(200, json.dumps(lista, ensure_ascii=False).encode("utf-8"))
+            elif self.path.startswith("/api/conhecimento?nome=") and self.token_ok():   # painel → Habilidades
+                nome = self.path.split("=", 1)[1]
+                corpo = {"texto": habilidades.conhecimento(nome) if nome in habilidades.CATALOGO else ""}
+                self.responder(200, json.dumps(corpo, ensure_ascii=False).encode("utf-8"))
             elif self.path == "/api/conversa" and self.token_ok() and APP:
                 corpo = {"mensagens": APP.mem.historico(200), "pensando": APP.ocupado}
                 self.responder(200, json.dumps(corpo, ensure_ascii=False).encode("utf-8"))
@@ -1497,6 +1512,14 @@ def iniciar_servidor(eventos):
                         eventos.put(("painel_cfg", dados["chave"], dados["valor"]))
                     elif self.path == "/api/acao":
                         eventos.put(("menu", str(dados["acao"])))
+                    elif self.path == "/api/conversa/enviar":   # campo da janela da conversa
+                        texto = str(dados.get("texto") or "").strip()[:4000]
+                        if not texto:
+                            return self.responder(400)
+                        eventos.put(("conversa_texto", texto))
+                    elif self.path == "/api/conhecimento":   # o que você escreveu sobre a loja (habilidades.py)
+                        if not habilidades.gravar_conhecimento(str(dados.get("nome")), dados.get("texto")):
+                            return self.responder(404)
                     elif self.path == "/api/ficha":   # painel → Memória: corrigir ou esquecer o que ele sabe de um programa
                         k = str(dados["chave"])
                         if not (fichas.apagar(k) if dados.get("apagar") else fichas.corrigir(k, dados.get("campos") or {})):
@@ -1610,8 +1633,9 @@ class Balao:
             self.texto = ctk.CTkLabel(self.frame, text=self.paginas[0], wraplength=340, justify="left",
                                       anchor="w", text_color=TEXTO, font=f(13))
             margem_dir = 42 if len(self.paginas) > 1 else 16  # espaço pro ✕ no canto
-            self.texto.pack(fill="x", padx=(16, margem_dir),
-                            pady=(2 if titulo or entrada else 10, 2 if tem_rodape or entrada else 10))
+            if texto or not botoes:   # só botões (modo só fala): sem a linha vazia em cima deles
+                self.texto.pack(fill="x", padx=(16, margem_dir),
+                                pady=(2 if titulo or entrada else 10, 2 if tem_rodape or entrada else 10))
         self.rodape = None
         if rodape is not None or len(self.paginas) > 1:
             self.rodape = ctk.CTkLabel(self.frame, text="", font=f(11), text_color=APAGADO,
@@ -2031,6 +2055,10 @@ class Claudinho:
         self.jogo_virar = 0           # leituras seguidas que discordam do estado atual (evita piscar entra/sai)
         self.jogo_titulo, self.jogo_exe, self.jogo_desde = "", "", 0.0
         self.site_atual = ("", "")    # (navegador, site da aba) da última vez que ele olhou: pra ficha do site
+        # vendedor: lendo o WhatsApp agora, quando lê de novo, mensagens já oferecidas, sugestão em andamento
+        self.vendas_lendo, self.vendas_proxima, self.vendas_vistas, self.vendas_pensando = False, 0.0, set(), False
+        self.sugestao_copiar = ""
+        self.vendas_usadas = {}   # contato -> as últimas sugestões que você usou (a próxima não repete)
         self.jogo_area = (0, 0, 1920, 1080)
         self.prox_comentario_jogo = 0.0
 
@@ -2048,6 +2076,7 @@ class Claudinho:
         iniciar_atalho(self.cfg["atalho_venda"], self.eventos, "venda", 2)
         iniciar_atalho(self.cfg["atalho_resumir"], self.eventos, "resumir", 3)
         iniciar_atalho(self.cfg["atalho_notificacoes"], self.eventos, "notificacoes", 4)
+        iniciar_atalho(self.cfg["atalho_whatsapp"], self.eventos, "sugerir_resposta", 5)
         self.root.after(70, self.tick)
         self.root.after(15_000, self.cuidar_das_tarefas)
         self.root.after(90_000, self.cuidar_da_iniciativa)
@@ -2500,6 +2529,16 @@ class Claudinho:
                     lado = meio + n * 2
                     c.create_rectangle(x0, y0, x0 + lado, y0 + lado, fill=POEIRA, width=0)
 
+        if self.fala.ocupada:  # falando: ondinhas de som do lado da cabeça, pulsando (o "emoji" de falando)
+            lado = self.frente if self.frente in (-1, 1) else 1
+            meio = S // 2
+            for n, altura in enumerate((1, 2)):
+                if (self.t // 3) % 3 > n:
+                    col = (11 + n) if lado == 1 else (-1 - n)
+                    x0 = (col + MARGEM) * S + (0 if lado == 1 else meio)
+                    c.create_rectangle(x0, oy + (2.5 - altura) * S, x0 + meio, oy + (2.5 + altura) * S,
+                                       fill=POEIRA, width=0)   # a mesma cor clara das bolinhas de "pensando"
+
         if esq:
             self.desenhar_esquete(esq, fase, oy)
 
@@ -2649,6 +2688,12 @@ class Claudinho:
         if moveu:
             self.modo, self.alvo, self.comentario_pendente = "passeio", None, None
             self.pausa_ate = time.time() + 2
+        elif self.cfg["so_fala"] and not self.entrada:   # só fala: sem o campo; o balãozinho leva pra conversa
+            if self.balao and (self.balao.dados or {}).get("rapido"):   # clicou de novo: fecha (liga/desliga)
+                self.fechar_balao()
+            elif not any(f.get("rapido") for f in self.falas):   # vários cliques seguidos: um balãozinho só
+                self.enfileirar({"tipo": "comentario", "texto": "", "duracao": 8, "rapido": True}, IMPORTANTE,
+                                na_frente=True)
         else:
             self.alternar_entrada()
 
@@ -2755,6 +2800,7 @@ class Claudinho:
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
             (f"Resumir minhas notificações 🔔 ({self.cfg['atalho_notificacoes']})", "notificacoes", None),
+            *([(f"Sugerir resposta no WhatsApp 💬 ({self.cfg['atalho_whatsapp']})", "sugerir_resposta", None)] if "vendedor" in self.cfg["habilidades"] else []),
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             None,
             ("Configurações e skins ⚙️", "painel", None),
@@ -2900,6 +2946,22 @@ class Claudinho:
             self.comentar_agora()
         elif acao == "resumir":
             self.resumir_tela()
+        elif acao == "sugerir_resposta":
+            self.sugerir_resposta()
+        elif acao.startswith("vendas_escrita:"):   # a sugestão foi (ou não) pro campo do WhatsApp
+            situacao = acao.split(":", 1)[1]
+            if situacao == "ok":
+                self.comentar("Tá no campo! Confere e envia você. 😉", duracao=4, prioridade=ESTADO)
+            elif situacao == "enviada":
+                self.comentar("Enviada! ✓", duracao=3, prioridade=ESTADO)
+            elif situacao == "ocupado" and self.sugestao_copiar:
+                self.root.clipboard_clear()
+                self.root.clipboard_append(self.sugestao_copiar)
+                self.comentar("O campo já tinha texto seu, então não mexi: copiei a sugestão, é só colar (Ctrl+V).",
+                              duracao=7, prioridade=IMPORTANTE)
+            else:
+                self.comentar(f"Não consegui pôr no WhatsApp: {situacao.removeprefix('erro:')}", duracao=7,
+                              prioridade=IMPORTANTE)
         elif acao == "notificacoes":
             self.ver_notificacoes()
         elif acao == "nova":
@@ -2986,6 +3048,10 @@ class Claudinho:
             valor = str(valor).strip()[:60] or "qwen3:1.7b"
         elif chave == "borda_forca":
             valor = max(10, min(100, int(valor)))
+        elif chave == "habilidades":
+            valor = habilidades.validar(valor)
+        elif chave == "vendedor":
+            valor = habilidades.validar_vendedor(valor)
         elif chave == "atalhos_programas":
             valor = teclas.validar_lista(valor)
         elif chave == "comandos_meus":
@@ -3065,6 +3131,8 @@ class Claudinho:
             self.chat.trocar_personalidade(self.cfg["personalidade"])   # reabre a mesma conversa já com eles
         elif chave == "voz_microfone":
             self.voz.reiniciar()
+        elif chave == "so_fala" and valor:
+            self.fala.carregar()
         elif chave == "voz_fala":
             if valor:
                 self.fala.carregar()
@@ -3109,9 +3177,10 @@ class Claudinho:
         return {
             "cfg": {k: self.cfg[k] for k in CHAVES_PAINEL},
             "fichas": fichas.listar(),
+            "habilidades_catalogo": habilidades.CATALOGO,
             "frequencias": [{"nome": n, "de": a, "ate": b} for n, a, b in FREQUENCIAS],
             "atalhos": {k: self.cfg[k] for k in ("atalho_comentar", "atalho_venda", "atalho_resumir",
-                                                  "atalho_notificacoes")},
+                                                  "atalho_notificacoes", "atalho_whatsapp")},
             "pastas": self.cfg["pastas_leitura"],
             "skins": skins.catalogo(),
             "sprite": {"corpo": CORPO, "pernas": PERNAS, "margem": MARGEM, "folga": FOLGA,
@@ -3322,8 +3391,23 @@ class Claudinho:
     def mostrar(self, fala):
         self.fechar_balao()
         montar = getattr(self, f"balao_{self.especie(fala)}", None)
+        if self.cfg["so_fala"]:   # só fala: o texto sai na voz; balão só se tem botão (e sem o texto)
+            if fala["tipo"] == "pensando":   # as bolinhas na cabeça dele já mostram
+                return
+            self.falar_balao(fala, forcar=True)
+            self.lembrar_fala(fala)
+            if fala["tipo"] == "aviso":   # chat do Claude Code terminou: nunca tem botão, nem cria o balão
+                self.soltar_emoji("check")
+                return
+            if not montar:
+                return
+            fala = dict(fala, texto="")
         if montar:
             self.balao = montar(fala)
+            if self.cfg["so_fala"] and not getattr(self.balao, "botoes", None):   # só fala: balão sem botão (ex.: aviso
+                self.balao.destruir()                                          # do Claude Code) não aparece: já falou
+                self.balao = None
+                return
         else:
             self.balao = Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"])
         self.balao.dados = fala
@@ -3388,9 +3472,11 @@ class Claudinho:
                      botoes=[("boa", lambda: self.avaliar(fala, 1), True), ("ruim", lambda: self.avaliar(fala, -1), False)],
                      botoes_no_hover=True)
 
-    def falar_balao(self, fala):
-        """Tudo o que ele solta em balão (piada, comentário, aviso, resumo) também sai em voz, se a voz (🔊) está ligada."""
-        if not self.cfg["voz_fala"] or fala["tipo"] == "resposta" or motores.tela_cheia() or fala.get("falado"):
+    def falar_balao(self, fala, forcar=False):
+        """Tudo o que ele solta em balão (piada, comentário, aviso, resumo) também sai em voz, se a voz (🔊) está ligada.
+        `forcar`: modo só fala (aí a voz é o único jeito de ele se comunicar, até em tela cheia)."""
+        if (not (self.cfg["voz_fala"] or forcar) or fala["tipo"] == "resposta" or fala.get("falado")
+                or (motores.tela_cheia() and not forcar)):
             return   # resposta de chat já é falada em fluxo; em jogo/tela cheia ele fica quieto; balão que saiu da
                      # frente e voltou pra fila não repete
         d = fala.get("dados") or {}
@@ -3514,6 +3600,8 @@ class Claudinho:
                            titulo="posso fazer isso?",
                            botoes=[("Pode", lambda: responder(True), True),
                                    ("Não", lambda: responder(False), False)])
+        if self.cfg["so_fala"]:   # só fala: o pedido também é falado (o texto fica: é o que você está autorizando)
+            self.fala.falar("Posso fazer isso? " + self.descrever_acao(pedido["ferramenta"], pedido["entrada"])[:160])
         try:
             import winsound
             winsound.MessageBeep(0x30)
@@ -3575,7 +3663,8 @@ class Claudinho:
         rotulo = (self.usou_ferramenta if isinstance(self.usou_ferramenta, str) else
                   "fazendo" if self.usou_ferramenta else "digitando") if self.ocupado else \
             "lendo as notificações" if self.lendo_notificacoes else "deixa eu ver"
-        if pensando and self.balao is None and not self.entrada:
+        if pensando and self.balao is None and not self.entrada and not self.cfg["so_fala"]:   # só fala: as
+            # bolinhas na cabeça dele já mostram (o balão mudando de tamanho com os pontinhos era só ruído)
             # respondendo/fazendo algo pelo chat: dá pra mandar parar (ele pode se enrolar numa tarefa)
             self.balao = Balao(self, "pensando", rotulo,
                                botoes=[("⏹ parar", self.interromper, False)] if self.ocupado else None,
@@ -3584,7 +3673,8 @@ class Claudinho:
             if not pensando:
                 self.fechar_balao()
             else:
-                self.balao.mudar_texto(rotulo + "." * (self.t // 5 % 4) + " " * 3)
+                pontos = self.t // 5 % 4   # o que os pontinhos crescem, o espaço encolhe: o balão não pulsa
+                self.balao.mudar_texto(rotulo + "." * pontos + " " * (2 * (3 - pontos) + 3))
         if self.balao and self.balao.tipo == "aviso":
             self.balao.mudar_rodape(self.rodape_aviso(self.balao.dados["dados"]))
         self.reposicionar_baloes()
@@ -4139,7 +4229,7 @@ class Claudinho:
         self.mem.registrar_mensagem("claudinho", resposta)
         self.fechar_conversa()
         self.abrir_conversa(resposta, botoes=botoes)
-        if self.cfg["voz_fala"]:
+        if self.cfg["voz_fala"] or self.cfg["so_fala"]:
             self.fala.falar(resposta)
         if self.conversa_voz:   # a voz espera isso pra falar/ouvir a próxima
             self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
@@ -4178,6 +4268,11 @@ class Claudinho:
 
     def abrir_conversa(self, texto, por_clique=False, botoes=None):
         """Um balão só: a última resposta dele em cima e o campo pra continuar a conversa embaixo."""
+        if self.cfg["so_fala"] and not por_clique and not self.conversa_voz:   # só fala: a resposta foi falada (e
+            if botoes:                                                         # está na janela da conversa)
+                self.enfileirar({"tipo": "comentario", "texto": "", "duracao": None, "falado": True,
+                                 "so_botoes": botoes}, IMPORTANTE)
+            return
         texto = formatar.limpar(texto)  # o balão não entende markdown
         if texto.startswith("[aviso] "):
             texto = "✓ " + texto[len("[aviso] "):]
@@ -4259,8 +4354,8 @@ class Claudinho:
             pergunta += f"\n\n(Contexto automático, só use se fizer sentido: ele está ouvindo {musica.descrever(self.musica)}.)"
         imagem = anexado["imagem"] if anexado else None
         ao_frase, self.fala_em_fluxo = None, False
-        if self.cfg["voz_fala"]:  # ele responde falando, em qualquer mensagem (o botão 🔊 do balão liga e desliga)
-            if self.conversa_voz:  # conversa por voz: resposta curta, de conversa
+        if self.cfg["voz_fala"] or self.cfg["so_fala"]:  # ele responde falando (o botão 🔊 do balão liga e desliga)
+            if self.conversa_voz or self.cfg["so_fala"]:  # conversa por voz (ou só fala): resposta curta, de conversa
                 pergunta += ("\n\n(Sua resposta vai ser lida em voz alta: responda em UMA frase curta (duas no máximo), "
                              "direto ao ponto, sem rodeio, sem explicar o que entendeu, sem emoji, listas, markdown ou links.)")
                 self.fala_orcamento = None
@@ -4588,6 +4683,7 @@ class Claudinho:
         except Exception:
             return
         exe = ativa["exe"] if ativa else ""
+        self.vigiar_whatsapp(ativa)
         if exe and exe not in janelas.IGNORAR and exe != self.app_atual:
             self.app_atual, self.app_desde = exe, time.time()
             fichas.garantir(ativa)   # programa novo: ficha uma vez só (navegador fica pro site, na hora de comentar)
@@ -4599,6 +4695,128 @@ class Claudinho:
 
     def minutos_no_app(self):
         return (time.time() - self.app_desde) / 60
+
+    # ---------- habilidade de vendedor (habilidades.py) ----------
+    @staticmethod
+    def no_whatsapp(janela):
+        return bool(janela) and "whatsapp" in (janela.get("titulo") or "").lower() and (
+            fichas.eh_navegador(janela.get("exe", "")))
+
+    def vigiar_whatsapp(self, janela):
+        """Com o WhatsApp Web na frente, de vez em quando a extensão lê a conversa aberta (sem IA): mensagem nova de
+        cliente esperando resposta → balão oferecendo a sugestão. A IA só roda se você aceitar."""
+        if ("vendedor" not in self.cfg["habilidades"] or not self.cfg["vendedor"]["avisar"] or self.vendas_lendo
+                or time.time() < self.vendas_proxima or not self.no_whatsapp(janela)):
+            return
+        if self.ocupado or self.entrada or (self.balao and self.balao.tipo != "comentario"):
+            return
+        self.vendas_lendo, self.vendas_proxima = True, time.time() + 8
+
+        def trabalho():
+            try:
+                conversa = habilidades.ler_conversa(12)
+                msg = habilidades.esperando_resposta(conversa)
+                if msg and msg.get("id") and msg["id"] not in self.vendas_vistas:
+                    self.eventos.put(("vendas", {"etapa": "oferta", "contato": conversa.get("contato") or "cliente",
+                                                 "id": msg["id"], "texto": msg.get("texto", "")}))
+            finally:
+                self.vendas_lendo = False
+        threading.Thread(target=trabalho, daemon=True).start()
+
+    def sugerir_resposta(self, anterior=""):
+        """Lê a conversa aberta no WhatsApp Web e sugere a próxima mensagem pro cliente (quem envia é você)."""
+        if "vendedor" not in self.cfg["habilidades"]:
+            self.comentar("Liga a habilidade de WhatsApp no painel (Faz por mim → Habilidades) que eu ajudo! 💬",
+                          duracao=6, prioridade=IMPORTANTE)
+            return
+        cfg = self.cfg["vendedor"]
+        if not cfg["so_local"] and not tem_ia():
+            self.comentar(sem_ia(), prioridade=IMPORTANTE)
+            return
+        if self.vendas_pensando:
+            return
+        self.vendas_pensando = True
+        self.comentar("Lendo a conversa… ✍️", duracao=4, prioridade=ESTADO)
+
+        def trabalho():
+            erro = sugestao = None
+            conversa = habilidades.ler_conversa(40)   # 40 pra entender do que estão falando (texto: barato)
+            try:
+                if conversa.get("erro"):
+                    erro = f"Não consegui ler o WhatsApp: {conversa['erro']}."
+                elif not conversa.get("aberta") or not conversa.get("mensagens"):
+                    erro = "Abre a conversa no WhatsApp Web que eu leio e sugiro. 💬"
+                else:
+                    prompt = habilidades.prompt_sugestao(conversa, cfg, habilidades.conhecimento("vendedor"), anterior,
+                                                          eu=(self.cfg["mestre"] or {}).get("nome", ""),
+                                                          usadas=self.vendas_usadas.get(conversa.get("contato") or "", []))
+                    if cfg["so_local"]:
+                        resposta = motores.so_local(prompt, max_tokens=300, timeout=90)
+                        if resposta is None:
+                            erro = "O modelo local não pode agora (Ollama fechado, jogo ou placa ocupada). Tenta já já!"
+                    else:
+                        resposta = motores.completar(prompt, tarefa="vendas", max_tokens=300, timeout=90)
+                    sugestao = habilidades.limpar(resposta) if not erro else None
+                    if not erro and not sugestao:
+                        erro = "Não saiu nada que preste dessa vez. Tenta de novo?"
+            except Exception as e:
+                erro = f"Não consegui sugerir: {e}"
+            self.eventos.put(("vendas", {"etapa": "erro" if erro else "sugestao", "texto": erro or sugestao,
+                                         "contato": conversa.get("contato") or "cliente"}))
+        threading.Thread(target=trabalho, daemon=True).start()
+
+    def receber_vendas(self, dados):
+        if dados["etapa"] == "oferta":
+            self.vendas_vistas.add(dados["id"])
+            trecho = " ".join(dados["texto"].split())[:120]
+            self.enfileirar({"tipo": "comentario", "duracao": 25, "vendas": dados,
+                             "texto": f"“{trecho}”\nQuer uma sugestão de resposta?"}, FALA)
+            return
+        self.vendas_pensando = False
+        if dados["etapa"] == "erro":
+            self.comentar(dados["texto"], duracao=8, prioridade=IMPORTANTE)
+        else:
+            self.enfileirar({"tipo": "comentario", "duracao": None, "vendas": dados, "texto": dados["texto"]}, IMPORTANTE)
+
+    def balao_vendas(self, fala):
+        dados = fala["vendas"]
+        if dados["etapa"] == "oferta":
+            def aceitar():
+                self.fechar_balao()
+                self.sugerir_resposta()
+            return Balao(self, fala["tipo"], fala["texto"], titulo=f"💬 {dados['contato']}", duracao=fala["duracao"],
+                         botoes=[("sugerir", aceitar, True), ("agora não", self.fechar_balao, False)])
+
+        def outra():
+            self.fechar_balao()
+            self.sugerir_resposta(dados["texto"])
+        usar = lambda: self.usar_sugestao(dados["texto"], contato=dados["contato"])   # noqa: E731
+        if self.cfg["vendedor"]["enviar"]:   # painel liberou o envio: o clique em "enviar" é a sua confirmação
+            botoes = [("enviar", lambda: self.usar_sugestao(dados["texto"], enviar=True, contato=dados["contato"]), True),
+                      ("preencher", usar, False), ("outra", outra, False), ("fechar", self.fechar_balao, False)]
+        else:
+            botoes = [("usar", usar, True), ("outra", outra, False), ("fechar", self.fechar_balao, False)]
+        return Balao(self, fala["tipo"], fala["texto"], titulo=f"💬 sugestão pra {dados['contato']}", duracao=None,
+                     botoes=botoes, botoes_estreitos=True)
+
+    def usar_sugestao(self, texto, enviar=False, contato=""):
+        """Põe a sugestão no campo de mensagem do WhatsApp; `enviar` (botão que só aparece se o painel liberou) também
+        manda. Campo com texto seu: não mexe, copia pra você colar."""
+        self.fechar_balao()
+
+        def trabalho():
+            r = habilidades.escrever(texto, enviar=enviar and self.cfg["vendedor"]["enviar"])
+            ok = "enviada" if r.get("enviada") else "ok"
+            if r.get("ok") or r.get("ocupado"):   # usou: vai pro histórico e a próxima sugestão não repete
+                self.mem.registrar_mensagem("claudinho", f"[WhatsApp → {contato or 'contato'}"
+                                                         f"{', enviada' if r.get('enviada') else ''}] {texto}")
+                self.vendas_usadas.setdefault(contato, []).append(texto)
+                self.vendas_usadas[contato] = self.vendas_usadas[contato][-5:]
+            self.eventos.put(("menu", "vendas_escrita:" + (ok if r.get("ok") else "ocupado" if r.get("ocupado")
+                                                            else "erro:" + str(r.get("erro") or "?"))))
+            if r.get("ocupado"):
+                self.sugestao_copiar = texto
+        threading.Thread(target=trabalho, daemon=True).start()
 
     def ficha_da_frente(self):
         """A ficha do programa na frente; no navegador, a do site da aba (a extensão diz qual). Pode levar uns
@@ -4636,6 +4854,8 @@ class Claudinho:
             return
         if not self.comentar_aqui():   # ficha desse programa diz "não comenta"
             return
+        if "vendedor" in self.cfg["habilidades"] and self.no_whatsapp(janelas.janela_ativa()):
+            return   # conversa de cliente não é assunto de piada (nem vai pro Claude sem ele pedir)
         if self.modo_jogo:   # em jogo não tem piada de banco nem esquete: só o comentário sobre o jogo
             self.comentar_do_jogo()
             return
@@ -5456,6 +5676,10 @@ class Claudinho:
                     self.soltar_emoji("nota")
                 else:
                     self.comentar(f"Não achei \"{termo}\" no YouTube Music. 🤔", duracao=5, prioridade=ESTADO)
+            elif ev[0] == "vendas":
+                self.receber_vendas(ev[1])
+            elif ev[0] == "conversa_texto":   # mandou pela janela da conversa
+                self.enviar(texto=ev[1])
             elif ev[0] == "notificacoes":
                 self.lendo_notificacoes = False
                 _, resumo, ids, erro = ev
@@ -5516,8 +5740,16 @@ class Claudinho:
                     if self.tarefa_do_chat and self.tarefa_pendente:
                         botoes = self.botoes_da_tarefa()
                     self.tarefa_do_chat = False
-                    self.abrir_conversa(texto, botoes=botoes)
-                if self.cfg["voz_fala"] and not erro and not self.fala_em_fluxo:  # o motor não entrega em fluxo: fala agora
+                    if self.cfg["so_fala"]:   # a resposta é falada (e fica na janela da conversa); balão só com botões
+                        if botoes:
+                            self.enfileirar({"tipo": "comentario", "texto": "", "duracao": None, "falado": True,
+                                             "so_botoes": botoes}, IMPORTANTE)
+                    else:
+                        self.abrir_conversa(texto, botoes=botoes)
+                if self.cfg["so_fala"] and erro:
+                    self.fala.falar(texto)
+                if ((self.cfg["voz_fala"] or self.cfg["so_fala"]) and not erro
+                        and not self.fala_em_fluxo):  # o motor não entrega em fluxo: fala agora
                     self.fala.falar(texto if self.fala_orcamento is None else fala.so_o_comeco(texto, self.fala_orcamento))
                 if self.conversa_voz:  # a voz espera isso pra falar/ouvir a próxima
                     self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
@@ -5559,6 +5791,16 @@ class Claudinho:
         self.enfileirar({"tipo": "comentario", "duracao": 60, "novidades": novas,
                          "texto": f"Tenho novidade! 🎉 Agora tem {lista}. Quer ver e configurar? É rapidinho."},
                         IMPORTANTE)
+
+    def balao_rapido(self, fala):  # só fala: clicou nele. Sem campo de texto: a conversa fica na janela dela
+        def ver():
+            self.fechar_balao()
+            self.ver_conversa()
+        return Balao(self, fala["tipo"], "", duracao=fala["duracao"],
+                     botoes=[("ver conversa", ver, True), ("fechar", self.fechar_balao, False)])
+
+    def balao_so_botoes(self, fala):  # só fala: a resposta foi falada; ficam só os botões dela (deu certo, etc.)
+        return Balao(self, fala["tipo"], "", duracao=None, botoes=fala["so_botoes"], botoes_estreitos=True)
 
     def balao_novidades(self, fala):  # atualizou com coisa nova pra configurar: "ver" abre as telas dela no painel
         return Balao(self, fala["tipo"], fala["texto"], titulo="🆕 novidade", duracao=fala["duracao"],

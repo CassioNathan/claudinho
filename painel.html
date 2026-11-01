@@ -214,6 +214,7 @@
   .tirar-pasta { background: none; border: 0; color: var(--apagado); cursor: pointer; margin-left: 4px; font-size: 12px; }
   .tirar-pasta:hover { color: #e8452c; }
   .prog { margin-bottom: 10px; }
+  .hab-detalhes[hidden] { display: none; }
   .ficha { padding: 10px 0; border-bottom: 1px solid #2f2e2b; }
   .ficha:last-child { border-bottom: 0; }
   .ficha .prog-topo { padding: 0 0 6px; align-items: center; }
@@ -278,6 +279,7 @@
     </div>
     <div class="aba" data-aba="faz"><span class="ic">🛠️</span>Faz por mim</div>
     <div class="sub-nav">
+      <a data-alvo="habilidades_sec"><span class="ic">🧑‍💼</span>Habilidades</a>
       <a data-alvo="acoes"><span class="ic">🧰</span>Ações</a>
       <a data-alvo="comandos_sec"><span class="ic">🗣️</span>Meus comandos</a>
       <a data-alvo="tarefas_sec"><span class="ic">⏰</span>Tarefas</a>
@@ -559,6 +561,13 @@
         <label class="chave"><input type="checkbox" data-cfg="voz_fala"><span></span></label>
       </div>
       <div class="linha">
+        <div class="info"><div class="titulo">Só fala 🗣️</div><div class="desc">Sem balão de texto: tudo o que eu digo sai na
+          voz (com as ondinhas do meu lado enquanto falo). Balão só aparece quando preciso de você, e só com os botões.
+          Clicando em mim, abre um balãozinho com <b>ver conversa</b>: a janela da conversa mostra tudo e tem o campo
+          pra você me mandar mensagem de lá.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="so_fala"><span></span></label>
+      </div>
+      <div class="linha">
         <div class="info"><div class="titulo">Voz dele</div><div class="desc" id="vozVozInfo">Escolha uma. As que ainda não estão no PC baixam
           na hora (o tamanho aparece ao lado).</div></div>
         <select id="vozVoz" style="max-width:240px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
@@ -657,6 +666,12 @@
       inicial do site (ou a Wikipédia, pra programa). Nunca gasta o plano. Corrija o que ele
       errou e escolha onde ele pode comentar.</p>
     <div class="cartao"><div id="fichasLista"><div class="desc">Nenhuma ainda: elas aparecem conforme você usa os programas.</div></div></div>
+  </section>
+
+  <section id="habilidades_sec">
+    <h2>🧑‍💼 Habilidades</h2>
+    <p class="sub">Pacotes da sua profissão. Cada um só funciona no programa dele (fora dele não existe nem gasta nada).</p>
+    <div id="habilidadesLista"></div>
   </section>
 
   <section id="acoes">
@@ -1069,7 +1084,8 @@ function montarResto() {
     lista.appendChild(b);
   }
   const nomesAtalhos = {atalho_comentar: "Comentar a tela agora", atalho_venda: "Pôr/tirar a faixa nos olhos",
-                        atalho_resumir: "Resumir/explicar a janela da frente", atalho_notificacoes: "Resumir as notificações"};
+                        atalho_resumir: "Resumir/explicar a janela da frente", atalho_notificacoes: "Resumir as notificações",
+                        atalho_whatsapp: "Sugerir resposta no WhatsApp Web"};
   document.getElementById("listaAtalhos").innerHTML = Object.entries(estado.atalhos).map(([k, v]) =>
     `<div class="linha"><div class="info"><div class="titulo">${nomesAtalhos[k] || k}</div></div>` +
     v.split("+").map(p => `<kbd>${p}</kbd>`).join(" + ") + `</div>`).join("");
@@ -1545,6 +1561,74 @@ function montarFichas() {
     caixa.appendChild(bloco);
   }
 }
+// ---------- habilidades (habilidades.py): a tela do painel e a do tour/novidade usam a mesma montagem ----------
+function montarHabilidade(caixa, completo) {
+  const ligadas = estado.cfg.habilidades || [];
+  const v = estado.cfg.vendedor || {loja: "", tom: "", so_local: false, avisar: true};
+  const ligado = ligadas.includes("vendedor");
+  caixa.innerHTML = `<div class="cartao">
+      <div class="linha">
+        <div class="info"><div class="titulo">💬 WhatsApp</div><div class="desc">No <b>WhatsApp Web</b>: quando chega mensagem
+          eu pergunto se você quer uma sugestão de resposta, ou é só pedir no meu menu. Eu leio a conversa pra entender o assunto
+          e escrevo do seu jeito; se for cliente, uso o que você me contou da loja. Atalho: <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>. A sugestão vai pro campo de mensagem e
+          <b>quem envia é sempre você</b>. Perceber a mensagem nova é de graça; a IA só roda quando você aceita.</div></div>
+        <label class="chave"><input type="checkbox" id="habVendedor" ${ligado ? "checked" : ""}><span></span></label>
+      </div>
+      <div class="hab-detalhes" ${ligado ? "" : "hidden"}>
+        <div class="linha novo-prog"><input id="habLoja" maxlength="80" placeholder="nome da loja (ex.: Bike Center)"></div>
+        <div class="linha novo-prog"><input id="habTom" maxlength="200" placeholder="jeito de falar (ex.: simpático, usa emoji, chama de você)"></div>
+        <div class="linha">
+          <div class="info"><div class="titulo">Avisar quando chegar mensagem</div><div class="desc">sem IA: só leio a conversa aberta</div></div>
+          <label class="chave"><input type="checkbox" id="habAvisar" ${v.avisar ? "checked" : ""}><span></span></label>
+        </div>
+        <div class="linha">
+          <div class="info"><div class="titulo">Deixar eu enviar 📤</div><div class="desc">a sugestão ganha o botão
+            <b>enviar</b>, que preenche e manda na hora (o clique é a sua confirmação). Desligado, eu só preencho o campo</div></div>
+          <label class="chave"><input type="checkbox" id="habEnviar" ${v.enviar ? "checked" : ""}><span></span></label>
+        </div>
+        <div class="linha">
+          <div class="info"><div class="titulo">Só no meu PC 🏠</div><div class="desc">a conversa do cliente não sai do PC (modelo
+            local: de graça, mas a resposta sai bem mais fraca)</div></div>
+          <label class="chave"><input type="checkbox" id="habLocal" ${v.so_local ? "checked" : ""}><span></span></label>
+        </div>
+        ${completo ? `<div class="info" style="margin-top:8px"><div class="titulo">Sobre a sua loja (se você vende)</div><div class="desc">Catálogo, preços,
+          prazos, formas de pagamento, perguntas que sempre chegam. Eu só uso o que estiver aqui (o resto deixo [entre colchetes]
+          pra você completar). Vão pra IA só os pedaços que têm a ver com a conversa.</div></div>
+          <textarea id="habConhecimento" class="campo" rows="10" maxlength="30000" style="width:100%;margin-top:8px;resize:vertical"
+            placeholder="Ex.:\n- Bike aro 29 Caloi: R$ 2.400 à vista, 10x sem juros no cartão\n- Entrega em Curitiba: 2 dias úteis, frete grátis acima de R$ 300\n- Troca em até 7 dias com nota"></textarea>
+          <div class="linha novo-prog"><span class="desc" id="habConta"></span><button class="botao" id="habSalvar">Salvar</button></div>`
+          : `<p class="desc" style="margin-top:8px">O catálogo, os preços e o resto da loja você escreve em <b>Faz por mim → Habilidades</b>.</p>`}
+        <p class="desc">Por enquanto é o WhatsApp Web (no navegador com a extensão do Claudinho).</p>
+      </div>
+    </div>`;
+  const salvarV = campos => mudar("vendedor", Object.assign({}, estado.cfg.vendedor || {}, campos));
+  caixa.querySelector("#habLoja").value = v.loja || "";
+  caixa.querySelector("#habTom").value = v.tom || "";
+  caixa.querySelector("#habVendedor").onchange = e => {
+    const lista = ligadas.filter(h => h !== "vendedor").concat(e.target.checked ? ["vendedor"] : []);
+    mudar("habilidades", lista).then(() => { estado.cfg.habilidades = lista; montarHabilidade(caixa, completo); });
+  };
+  caixa.querySelector("#habLoja").onchange = e => salvarV({loja: e.target.value});
+  caixa.querySelector("#habTom").onchange = e => salvarV({tom: e.target.value});
+  caixa.querySelector("#habAvisar").onchange = e => salvarV({avisar: e.target.checked});
+  caixa.querySelector("#habLocal").onchange = e => salvarV({so_local: e.target.checked});
+  caixa.querySelector("#habEnviar").onchange = e => salvarV({enviar: e.target.checked});
+  const area = caixa.querySelector("#habConhecimento");
+  if (area) {
+    const contar = () => caixa.querySelector("#habConta").textContent = `${area.value.length.toLocaleString("pt-BR")} de 30.000 letras`;
+    api("/api/conhecimento?nome=vendedor").then(r => { area.value = r.texto || ""; contar(); }).catch(() => {});
+    area.oninput = contar;
+    caixa.querySelector("#habSalvar").onclick = () => api("/api/conhecimento", {nome: "vendedor", texto: area.value})
+      .then(() => avisar("guardei 💬")).catch(() => avisar("não deu pra salvar"));
+  }
+}
+function montarHabilidades() {
+  const caixa = document.getElementById("habilidadesLista");
+  const assinatura = JSON.stringify([estado.cfg.habilidades, estado.cfg.vendedor]);
+  if (!caixa || caixa.dataset.assinatura === assinatura || caixa.contains(document.activeElement)) return;
+  caixa.dataset.assinatura = assinatura;
+  montarHabilidade(caixa, true);
+}
 function montarRotinas(forcar) {
   const caixa = document.getElementById("rotinas");
   const assinatura = JSON.stringify(estado.cfg.rotinas);
@@ -1615,6 +1699,7 @@ function atualizarVivos() {
   montarTarefas();
   montarFatos();
   montarFichas();
+  montarHabilidades();
   document.getElementById("musica").textContent = estado.musica || "nada";
   montarConsumo();
   document.getElementById("fila").textContent = estado.fila ? `${estado.fila} esperando pra aparecer` : "Nada na fila agora.";
@@ -2058,6 +2143,13 @@ const PASSOS = [
     }
   }},
   {montar: corpo => {
+    corpo.innerHTML = `<h3>🧑‍💼 Habilidades do seu trabalho</h3>
+      <p>Eu posso ganhar habilidades. Se você usa o WhatsApp Web, ligue a do <b>WhatsApp</b>: eu leio a conversa e sugiro a
+      sua resposta (com cliente, uso o que você me contar da loja), e você confere e envia. Não usa? É só seguir. Dá pra mudar depois em
+      <b>Faz por mim → Habilidades</b>.</p><div id="tourHab"></div>`;
+    montarHabilidade(corpo.querySelector("#tourHab"), false);
+  }},
+  {montar: corpo => {
     corpo.innerHTML = `<h3>🗣️ Como eu fico enquanto você trabalha?</h3><p>Dá pra trocar quando quiser.</p>`;
     const jeito = () => !estado.cfg.comentar_tela ? "quieto" : estado.cfg.modo_junior ? "junior" : "piadas";
     opcoes(corpo, [
@@ -2130,6 +2222,14 @@ const NOVIDADES = {
     ligarChaves(corpo);
   }},
 };
+NOVIDADES.habilidades = {montar: corpo => {
+  corpo.innerHTML = `<h3>🆕 Habilidades da sua profissão</h3>
+    <p>Agora eu posso ganhar habilidades. A primeira é a do <b>WhatsApp</b>: no WhatsApp Web eu leio a conversa, entendo o
+    assunto e sugiro a sua resposta, do seu jeito. Se você vende, uso o que me contar da sua loja. Você confere e envia.
+    Quer ligar?</p>
+    <div id="tourHab"></div>`;
+  montarHabilidade(corpo.querySelector("#tourHab"), false);
+}};
 NOVIDADES.jarvis = {montar: corpo => {
   const hibrido = estado.modo_ia === "hibrido";
   corpo.innerHTML = `<h3>🆕 Mais Jarvis, menos chatbot</h3>

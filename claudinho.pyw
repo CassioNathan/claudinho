@@ -2710,6 +2710,8 @@ class Claudinho:
         if moveu:
             self.modo, self.alvo, self.comentario_pendente = "passeio", None, None
             self.pausa_ate = time.time() + 2
+        elif self.cfg["so_fala"] and self.fala.ocupada:   # só fala: clicou nele falando = cala a boca
+            self.calar()
         elif self.cfg["so_fala"] and not self.entrada:   # só fala: sem o campo; o balãozinho leva pra conversa
             if self.balao and (self.balao.dados or {}).get("rapido"):   # clicou de novo: fecha (liga/desliga)
                 self.fechar_balao()
@@ -2823,6 +2825,7 @@ class Claudinho:
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
             (f"Resumir minhas notificações 🔔 ({self.cfg['atalho_notificacoes']})", "notificacoes", None),
             *([(f"Sugerir resposta no WhatsApp 💬 ({self.cfg['atalho_whatsapp']})", "sugerir_resposta", None)] if "vendedor" in self.cfg["habilidades"] else []),
+            ("Calar 🤫 (para de falar)", "calar", None),
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             None,
             ("Configurações e skins ⚙️", "painel", None),
@@ -2970,6 +2973,8 @@ class Claudinho:
             self.resumir_tela()
         elif acao == "sugerir_resposta":
             self.sugerir_resposta()
+        elif acao == "calar":
+            self.calar()
         elif acao.startswith("vendas_escrita:"):   # a sugestão foi (ou não) pro campo do WhatsApp
             situacao = acao.split(":", 1)[1]
             if situacao == "ok":
@@ -5772,8 +5777,8 @@ class Claudinho:
                         self.abrir_conversa(texto, botoes=botoes)
                 if self.cfg["so_fala"] and erro:
                     self.fala.falar(texto)
-                if ((self.cfg["voz_fala"] or self.cfg["so_fala"]) and not erro
-                        and not self.fala_em_fluxo):  # o motor não entrega em fluxo: fala agora
+                if ((self.cfg["voz_fala"] or self.cfg["so_fala"]) and not erro and not self.fala_em_fluxo
+                        and getattr(self, "fala_orcamento", None) != 0):  # sem fluxo: fala agora (0 = mandou calar)
                     self.fala.falar(texto if self.fala_orcamento is None else fala.so_o_comeco(texto, self.fala_orcamento))
                 if self.conversa_voz:  # a voz espera isso pra falar/ouvir a próxima
                     self.voz_status = "falando" if self.fala.ocupada else "ouvindo"
@@ -5815,6 +5820,11 @@ class Claudinho:
         self.enfileirar({"tipo": "comentario", "duracao": 60, "novidades": novas,
                          "texto": f"Tenho novidade! 🎉 Agora tem {lista}. Quer ver e configurar? É rapidinho."},
                         IMPORTANTE)
+
+    def calar(self):
+        """Para de falar na hora (clique nele no só fala, ou "Calar" no menu): corta a frase e joga fora o resto."""
+        self.fala.parar()
+        self.fala_orcamento = 0   # resposta do chat ainda chegando em fluxo: o resto dela também não é falado
 
     def balao_rapido(self, fala):  # só fala: clicou nele. Sem campo de texto: a conversa fica na janela dela
         def ver():

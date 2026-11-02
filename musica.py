@@ -37,10 +37,13 @@ from pathlib import Path
 
 import sistema
 
-from winrt.windows.media.control import (
-    GlobalSystemMediaTransportControlsSessionManager as Gerenciador,
-    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-)
+try:   # só existe no Windows; fora dele (o CI roda em Linux) o resto do módulo, como a ponte com a extensão, ainda serve
+    from winrt.windows.media.control import (
+        GlobalSystemMediaTransportControlsSessionManager as Gerenciador,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+    )
+except ImportError:
+    Gerenciador = Status = None
 
 APPS = {"spotify": "Spotify", "opera": "Opera", "chrome": "Chrome", "msedge": "Edge",
         "firefox": "Firefox", "brave": "Brave", "deezer": "Deezer", "zunemusic": "Media Player"}

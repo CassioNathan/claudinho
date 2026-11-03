@@ -52,27 +52,81 @@ function lerWhatsapp(n) {
   }
   const nome = main.querySelector("header span[dir='auto']");
   const contato = ((nome && (nome.getAttribute("title") || nome.textContent)) || "").trim().slice(0, 80);
-  // cada mensagem de texto tem o data-pre-plain-text ("[10:32, 31/10/2026] Fulano: "); a linha dela, o data-id.
-  // Quem mandou: o id antigo ("true_…"), a classe antiga (.message-out) ou, hoje, a cauda do balão: "tail-out" (sua) /
-  // "tail-in" (dele) aparece só na primeira de cada bloco; as seguintes herdam do remetente ou da anterior
+  // cada linha de mensagem tem o data-id; a de texto tem, dentro, o data-pre-plain-text ("[10:32, 31/10/2026] Fulano: ").
+  // Foto, vídeo, áudio e figurinha sem legenda não têm texto: entram como "[foto]", "[vídeo]"… pra ele saber que existem.
+  // Quem mandou: o rótulo "Você:" / "Fulano:" da própria mensagem, o id antigo ("true_…"), a classe antiga
+  // (.message-out) ou a cauda do balão ("tail-out" / "tail-in", só na primeira de cada bloco); o resto herda do
+  // remetente ou da anterior
   const lados = {};   // remetente (do data-pre-plain-text) -> "eu" | "cliente", aprendido pelas que têm sinal
   let anterior = "cliente";
-  const mensagens = [...main.querySelectorAll("[data-pre-plain-text]")].map(el => {
-    const linha = el.closest("[data-id]");
-    const id = linha ? linha.getAttribute("data-id") : "";
-    const icone = sel => !!(linha && linha.querySelector(`[data-icon${sel}]`));
-    const pre = el.getAttribute("data-pre-plain-text") || "";
+  const quemPeloRotulo = linha => {
+    const r = linha.querySelector("[aria-label$=':']");
+    const t = r ? (r.getAttribute("aria-label") || "").trim() : "";
+    return !t ? null : /^(você|voce|you):$/i.test(t) ? "eu" : "cliente";
+  };
+  const midiaDe = linha => {
+    const rotulos = [...linha.querySelectorAll("[aria-label]")].map(e => (e.getAttribute("aria-label") || "").toLowerCase()).join("|");
+    const icones = [...linha.querySelectorAll("[data-icon]")].map(e => e.getAttribute("data-icon")).join("|");
+    const tudo = rotulos + "|" + icones;
+    if (/vídeo|video|media-play|video-pip/.test(tudo)) return "[vídeo]";
+    if (/mensagem de voz|voice message|audio-play|ptt/.test(tudo)) return "[áudio]";
+    if (/figurinha|sticker/.test(rotulos)) return "[figurinha]";
+    if (/abrir imagem|open image|open photo|abrir foto/.test(rotulos)) return "[foto]";
+    if (/documento|document|doc-/.test(tudo)) return "[arquivo]";
+    return "";
+  };
+  const mensagens = [...main.querySelectorAll("[data-id]")].map(linha => {
+    const id = linha.getAttribute("data-id") || "";
+    const el = linha.querySelector("[data-pre-plain-text]");
+    const pre = el ? el.getAttribute("data-pre-plain-text") || "" : "";
     const remetente = ((pre.match(/\]\s*([^:]+):/) || [])[1] || "").trim();
-    let lado = id.startsWith("true_") || el.closest(".message-out") || icone('="tail-out"') ? "eu"
-      : id.startsWith("false_") || el.closest(".message-in") || icone('="tail-in"') ? "cliente" : null;
+    const icone = sel => !!linha.querySelector(`[data-icon${sel}]`);
+    let lado = quemPeloRotulo(linha) || (id.startsWith("true_") || linha.querySelector(".message-out") || icone('="tail-out"') ? "eu"
+      : id.startsWith("false_") || linha.querySelector(".message-in") || icone('="tail-in"') ? "cliente" : null);
     if (lado && remetente) lados[remetente] = lado;
     lado = lado || lados[remetente] || anterior;
-    anterior = lado;
-    const hora = (pre.match(/\[([^\]]+)\]/) || [])[1] || "";
-    const texto = (el.querySelector(".selectable-text") || el).innerText || "";
+    const hora = (pre.match(/\[([^\]]+)\]/) || [])[1] || ((linha.innerText || "").match(/\d{1,2}:\d{2}/) || [""])[0];
+    let texto = "";
+    if (el) {   // blocos de texto sem repetir nem vazios; a citação de uma resposta fica num botão (role=button)
+      const blocos = [...new Set([...el.querySelectorAll(".selectable-text")].map(b => (b.innerText || "").trim()).filter(Boolean))];
+      const cita = el.querySelector("[role='button'] .selectable-text");
+      const citada = cita ? (cita.innerText || "").trim() : "";
+      const propria = blocos.filter(b => b !== citada);
+      texto = citada && propria.length ? `(respondendo a "${citada.slice(0, 80)}") ${propria.join(" ")}`
+        : blocos.join(" ") || (el.innerText || "");
+    }
+    if (!texto.trim()) texto = midiaDe(linha);
+    if (texto.trim()) anterior = lado;
     return {de: lado, texto: texto.trim().slice(0, 1000), hora, id};
   }).filter(m => m.texto).slice(-n);
   return {aberta: true, contato, mensagens};
+}
+
+// a lista de conversas (painel da esquerda): quem tem mensagem não lida e a prévia da última, sem abrir (nem marcar como
+// lida) nenhuma conversa. Olha as `n` primeiras linhas (as mais recentes, o WhatsApp ordena assim)
+function lerListaWhatsapp(n, todas) {   // todas: também as já lidas (as recentes, do jeito que a lista mostra)
+  const lado = document.querySelector("#pane-side");
+  if (!lado) return {ok: false, erro: "não achei a lista de conversas (o WhatsApp ainda está carregando, pede o QR code ou mudou a página)"};
+  let linhas = [...lado.querySelectorAll("[role='row']")];
+  if (!linhas.length) linhas = [...lado.querySelectorAll("[role='listitem']")];
+  if (!linhas.length) linhas = [...lado.querySelectorAll("[data-testid='cell-frame-container']")];
+  if (!linhas.length) return {ok: false, erro: "a lista de conversas veio vazia (o WhatsApp mudou a página?)"};
+  const quando = /^\d{1,2}:\d{2}(\s?[ap]m)?$|^(hoje|ontem|today|yesterday)$|^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/i;
+  const conversas = [];
+  for (const el of linhas.slice(0, n)) {
+    const nomeEl = el.querySelector("span[title]");
+    const nome = ((nomeEl && (nomeEl.getAttribute("title") || nomeEl.textContent)) || "").trim();
+    const badge = el.querySelector("[aria-label*='não lida' i], [aria-label*='unread' i]");
+    if (!nome || (!badge && !todas)) continue;   // sem bolinha de não lida: nem entra na conta (a não ser em "todas")
+    const rotulo = (badge && badge.getAttribute("aria-label")) || "";
+    const num = badge ? (parseInt(rotulo, 10) || parseInt((badge.textContent || "").trim(), 10) || 1) : 0;
+    const textos = (el.innerText || "").split("\n").map(t => t.trim()).filter(Boolean);
+    const hora = textos.find(t => quando.test(t)) || "";
+    const previa = textos.filter(t => t !== nome && t !== hora && !/^\d{1,3}$/.test(t)).pop() || "";
+    const silenciada = !!el.querySelector("[data-icon='muted'], [data-icon='mute']");
+    conversas.push({nome: nome.slice(0, 80), previa: previa.slice(0, 200), hora, n: num, silenciada});
+  }
+  return {ok: true, vistas: Math.min(linhas.length, n), conversas};
 }
 
 async function escreverWhatsapp(texto, enviar) {
@@ -97,10 +151,11 @@ async function whatsapp(c) {
   const abas = await chrome.tabs.query({url: "https://web.whatsapp.com/*"});
   const aba = abas.find(a => a.active) || abas[0];
   if (!aba) throw new Error("o WhatsApp Web não está aberto no navegador");
-  const ler = c.modo === "whatsapp_ler";
-  const [r] = await chrome.scripting.executeScript({target: {tabId: aba.id}, func: ler ? lerWhatsapp : escreverWhatsapp,
-                                                   args: ler ? [Number(c.n) || 20] : [String(c.texto || ""), !!c.enviar]});
-  if (!ler && r.result && r.result.ok) await trazerPraFrente(aba);
+  const ler = c.modo === "whatsapp_ler", lista = c.modo === "whatsapp_lista";
+  const [r] = await chrome.scripting.executeScript({target: {tabId: aba.id},
+    func: lista ? lerListaWhatsapp : ler ? lerWhatsapp : escreverWhatsapp,
+    args: lista ? [Number(c.n) || 30, !!c.todas] : ler ? [Number(c.n) || 20] : [String(c.texto || ""), !!c.enviar]});
+  if (!ler && !lista && r.result && r.result.ok) await trazerPraFrente(aba);
   return r.result;
 }
 
@@ -144,7 +199,7 @@ async function consultar(c) {
       await responder(c, {ok: true, dados: await listarAbas()});
       return;
     }
-    if (c.modo === "whatsapp_ler" || c.modo === "whatsapp_escrever") {   // habilidade de vendedor
+    if (["whatsapp_ler", "whatsapp_escrever", "whatsapp_lista"].includes(c.modo)) {   // habilidade de vendedor
       await responder(c, {ok: true, dados: await whatsapp(c)});
       return;
     }

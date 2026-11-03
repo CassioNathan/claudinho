@@ -24,7 +24,10 @@ CATALOGO = {
                               "o que você me contou da sua loja. Quem envia é sempre você"},
 }
 # enviar: a sugestão ganha o botão "enviar" (preenche e manda). Desligado, só preenche e quem envia é você
-VENDEDOR_PADRAO = {"loja": "", "tom": "", "so_local": False, "avisar": True, "enviar": False}
+# varrer: de tempos em tempos olha a lista de conversas (sem IA) e avisa das não lidas; varrer_min = de quantos em quantos minutos
+# proprio: usa o WhatsApp Web do próprio Claudinho (navegador à parte, aparelho conectado) em vez da aba do seu navegador
+VENDEDOR_PADRAO = {"loja": "", "tom": "", "so_local": False, "avisar": True, "enviar": False, "varrer": False,
+                   "varrer_min": 3, "proprio": False}
 
 
 def validar(valor):
@@ -35,7 +38,15 @@ def validar(valor):
 def validar_vendedor(valor):
     v = valor if isinstance(valor, dict) else {}
     return {"loja": str(v.get("loja") or "").strip()[:80], "tom": str(v.get("tom") or "").strip()[:200],
-            "so_local": bool(v.get("so_local")), "avisar": bool(v.get("avisar", True)), "enviar": bool(v.get("enviar"))}
+            "so_local": bool(v.get("so_local")), "avisar": bool(v.get("avisar", True)), "enviar": bool(v.get("enviar")),
+            "varrer": bool(v.get("varrer")), "proprio": bool(v.get("proprio")), "varrer_min": _inteiro(v.get("varrer_min"), 3, 1, 30)}
+
+
+def _inteiro(valor, padrao, menor, maior):
+    try:
+        return max(menor, min(maior, int(valor)))
+    except (TypeError, ValueError):
+        return padrao
 
 
 # ---------- o que você escreveu sobre a loja ----------
@@ -77,9 +88,32 @@ def trechos(texto, conversa, limite=MAX_TRECHOS):
     return "\n\n".join(b for _, b in sorted(escolhidos))   # na ordem em que você escreveu
 
 
-# ---------- WhatsApp Web (pela extensão) ----------
+# ---------- WhatsApp Web (pela extensão, ou pelo WhatsApp próprio dele quando ligado) ----------
+PROPRIO = None   # o WhatsAppProprio, quando ligado e conectado (o Claudinho põe aqui): aí tudo passa por ele
+
+
+def _proprio():
+    return PROPRIO if PROPRIO is not None and PROPRIO.pronto() else None
+
+
+def _via_proprio(funcao, *args):
+    try:
+        r = funcao(*args)
+    except Exception as e:
+        return {"erro": f"o WhatsApp do Claudinho não respondeu ({e})", "ok": False}
+    return r if isinstance(r, dict) else {"erro": "resposta estranha do WhatsApp do Claudinho", "ok": False}
+
+
+def abrir_conversa(contato):
+    """No WhatsApp próprio, abre a conversa com `contato` (na extensão, a conversa aberta é a que você abriu: nada a fazer)."""
+    p = _proprio()
+    return _via_proprio(p.abrir_conversa, contato) if p else {"ok": True}
+
+
 def ler_conversa(n=20):
     """{aberta, contato, mensagens: [{de: "eu"|"cliente", texto, hora, id}]} da conversa aberta, ou {"erro"}."""
+    if _proprio():
+        return _via_proprio(_proprio().ler_conversa, n)
     import musica
     r = musica.consultar_ext("navegador", {"modo": "whatsapp_ler", "n": n}, espera=10)
     if not r.get("ok"):
@@ -88,9 +122,93 @@ def ler_conversa(n=20):
     return dados if isinstance(dados, dict) else {"erro": "resposta estranha da extensão"}
 
 
+def ler_lista(n=30, todas=False):
+    """{ok, conversas: [{nome, previa, hora, n, silenciada}]} das conversas com mensagem não lida entre as `n` mais
+    recentes da lista do WhatsApp Web (`todas`: também as lidas), sem abrir nenhuma, então nada é marcado como lido;
+    ou {"erro"}."""
+    if _proprio():
+        r = _via_proprio(_proprio().ler_lista, n, todas)
+        return r if r.get("ok") else {"erro": r.get("erro") or "não consegui ler a lista"}
+    import musica
+    r = musica.consultar_ext("navegador", {"modo": "whatsapp_lista", "n": n, "todas": bool(todas)}, espera=10)
+    if not r.get("ok"):
+        return {"erro": r.get("erro") or "a extensão não respondeu"}
+    dados = r.get("dados")
+    if not isinstance(dados, dict):
+        return {"erro": "resposta estranha da extensão"}
+    return dados if dados.get("ok") else {"erro": dados.get("erro") or "não consegui ler a lista"}
+
+
+def lista_em_texto(conversas):
+    """As conversas da lista, uma por linha, pro chat: nome, quantas não lidas, hora e a prévia da última mensagem."""
+    linhas = []
+    for i, c in enumerate(conversas or [], 1):
+        nao_lidas = f", {c['n']} não lida(s)" if c.get("n") else ""
+        mudo = ", silenciada" if c.get("silenciada") else ""
+        hora = f", {c['hora']}" if c.get("hora") else ""
+        previa = " ".join(str(c.get("previa") or "").split())[:140]
+        linhas.append(f"{i}. {c['nome']}{nao_lidas}{hora}{mudo}: {previa}")
+    return "\n".join(linhas) or "nenhuma conversa na lista"
+
+
+def resumo_nao_lidas(conversas, max_linhas=6):
+    """Texto do balão: uma linha por conversa, "Nome (3): prévia"; o que passar do limite vira "+N". Silenciadas ficam de fora."""
+    itens = [c for c in conversas or [] if not c.get("silenciada")]
+    linhas = []
+    for c in itens[:max_linhas]:
+        previa = " ".join(str(c.get("previa") or "").split())[:90]
+        n = f" ({c['n']})" if c.get("n", 1) > 1 else ""
+        linhas.append(f"{c['nome']}{n}: {previa}" if previa else f"{c['nome']}{n}")
+    if len(itens) > max_linhas:
+        linhas.append(f"…e mais {len(itens) - max_linhas}")
+    return "\n".join(linhas)
+
+
+def mesmo_contato(a, b):
+    """Mesmo nome de contato? Ignora maiúsculas, espaços, emoji e símbolos: a lista mostra "Meu Amorzinho 💕" e o
+    cabeçalho da conversa "Meu Amorzinho " (o emoji vira imagem)."""
+    def chave(s):
+        return re.sub(r"[\W_]+", "", str(s or "").casefold())
+    return bool(chave(a)) and chave(a) == chave(b)
+
+
+def pode_enviar_para(conversa, contato=""):
+    """Só envia pra conversa que VOCÊ já começou (tem mensagem sua) e que ainda é a da sugestão (você pode ter trocado de
+    conversa depois do balão). Nunca é disparo: sem isso, só preenche o campo. (True, "") ou (False, motivo)."""
+    conversa = conversa or {}
+    if conversa.get("erro") or not conversa.get("aberta"):
+        return False, "não consegui conferir a conversa aberta"
+    atual = (conversa.get("contato") or "").strip()
+    if contato and atual and not mesmo_contato(atual, contato):
+        return False, f"a conversa aberta agora é com {atual}, não com {contato}"
+    if not any(m.get("de") == "eu" for m in conversa.get("mensagens") or []):
+        return False, "você ainda não tinha escrito nessa conversa (eu só respondo quem você já falou)"
+    return True, ""
+
+
+# Limite de envios pelo botão "enviar": ele age como uma pessoa, uma mensagem aqui, outra ali, nunca em rajada
+ENVIO_INTERVALO_S = 25
+ENVIO_POR_HORA = 15
+ENVIO_POR_DIA = 100
+
+
+def pode_enviar(envios, agora):
+    """`envios`: horários (time.time) dos que ele já enviou. (True, "") ou (False, motivo em português)."""
+    recentes = sorted(t for t in envios or [] if agora - t < 86400)
+    if len(recentes) >= ENVIO_POR_DIA:
+        return False, f"já enviei {ENVIO_POR_DIA} mensagens hoje (esse é o meu limite)"
+    if len([t for t in recentes if agora - t < 3600]) >= ENVIO_POR_HORA:
+        return False, f"já enviei {ENVIO_POR_HORA} mensagens na última hora (esse é o meu limite)"
+    if recentes and agora - recentes[-1] < ENVIO_INTERVALO_S:
+        return False, f"enviei outra há menos de {ENVIO_INTERVALO_S} segundos"
+    return True, ""
+
+
 def escrever(texto, enviar=False):
     """Põe o texto no campo de mensagem da conversa aberta e, com `enviar` (você apertou "enviar"), manda.
     {"ok", "enviada"} ou {"ok": False, "erro"}."""
+    if _proprio():
+        return _via_proprio(_proprio().escrever, texto, enviar)
     import musica
     r = musica.consultar_ext("navegador", {"modo": "whatsapp_escrever", "texto": texto, "enviar": bool(enviar)},
                              espera=10)

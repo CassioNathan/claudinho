@@ -717,11 +717,13 @@ class Voz:
             self.ao_estado("fim")
             return
         if not self.ao_acordar():  # o Claudinho não pode agora (pensando, vendo outra coisa)
+            registrar("conversa NÃO abriu: o Claudinho estava ocupado (pensando em outro pedido)")
             self.estado = "ouvindo_apelido"
             self.ao_estado("fim")
             return
         espera, primeira = ESPERA_INICIAL, True
         falou_resposta, uma_so = False, False
+        motivo = "o balão da conversa fechou (clique fora, Esc ou sumiu)"   # o que acabar o laço sem outro motivo
         # conversa por voz começando (e você não já veio com a pergunta): ele cumprimenta, pra você saber que abriu
         oi = self.saudacao() if (not inicio and self.fala and cfg.get("voz_fala", True)
                                  and cfg.get("voz_saudacao", True)) else None
@@ -746,6 +748,7 @@ class Voz:
                 time.sleep(0.5)
                 continue
             if texto is None:       # silêncio ou "cancela": fim
+                motivo = f"sem fala em {espera:.0f} s, fala baixa demais ou você disse \"cancela\""
                 break
             self.resposta.clear()
             self.ao_estado("enviando")
@@ -753,6 +756,7 @@ class Voz:
             self._limpar_fila()
             self.estado = "esperando_resposta"
             if not self.resposta.wait(180):
+                motivo = "o chat não respondeu em 180 s"
                 break
             primeira = False
             espera = float(self.config().get("voz_encerrar", 8))   # agora vale o contador de encerrar a conversa
@@ -762,7 +766,9 @@ class Voz:
                 falou_resposta = False   # cortou: o tuk-tuk avisa que ele já está ouvindo
             if not self.config().get("voz_continua", False):   # uma pergunta por chamada: respondeu, acabou
                 uma_so = True
+                motivo = "uma pergunta por chamada (conversa contínua desligada)"
                 break
+        registrar(f"conversa por voz terminou ({'sem nenhuma pergunta' if primeira else 'depois de responder'}): {motivo}")
         self._encerrar(primeira, som=not uma_so)
 
     def _esperar_fala(self, interromper=False):
@@ -774,6 +780,7 @@ class Voz:
         janela, segmento, silencio = np.zeros(0, dtype="float32"), [], 0
         while self.rodando and self.fala.ocupada:
             if not self.conversa_viva():     # fechou o chat no meio: para de falar
+                registrar("fala dele CORTADA: o balão da conversa sumiu enquanto ele falava")
                 self.fala.parar()
                 return False
             try:

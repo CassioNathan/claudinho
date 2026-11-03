@@ -553,7 +553,8 @@ def test_habilidades_validas():
     import habilidades as h
     assert h.validar(["vendedor", "hacker", "vendedor", 3]) == ["vendedor"] and h.validar("lixo") == []
     v = h.validar_vendedor({"loja": "  Bike Center ", "so_local": 1, "x": 2})
-    assert v == {"loja": "Bike Center", "tom": "", "so_local": True, "avisar": True, "enviar": False}
+    assert v == {"loja": "Bike Center", "tom": "", "so_local": True, "avisar": True, "enviar": False, "varrer": False,
+                 "varrer_min": 3, "proprio": False}
     assert h.validar_vendedor({"enviar": "sim"})["enviar"] is True
 
 

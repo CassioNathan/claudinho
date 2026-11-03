@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claudinho",
-  "version": "1.24",
+  "version": "1.29",
   "description": "Deixa o Claudinho tocar mÃºsica e vÃ­deo no YouTube Music e no YouTube, consultar o que tem lÃ¡ e repetir rotinas que vocÃª grava nos sites que liberar, e ajudar a responder clientes no WhatsApp Web (sem enviar nada sozinho).",
   "icons": {"128": "icone.png"},
   "permissions": ["alarms", "scripting", "storage", "activeTab", "tabs"],

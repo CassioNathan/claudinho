@@ -339,6 +339,10 @@
           <div class="info" style="flex-basis:100%"><div class="titulo">Força da bordinha</div><div class="desc">Menos = mais discreto, quase transparente.</div></div>
           <input type="range" min="10" max="100" step="5" id="bordaForca" style="flex:1"><span class="valor" id="bordaForcaValor"></span>
         </div>
+        <div class="linha" style="flex-wrap:wrap;row-gap:8px">
+          <div class="info" style="flex-basis:100%"><div class="titulo">Tamanho 📏</div><div class="desc">Quanto ele ocupa na tela. Menos = menorzinho e mais discreto.</div></div>
+          <input type="range" min="30" max="100" step="5" id="tamanho" style="flex:1"><span class="valor" id="tamanhoValor"></span>
+        </div>
       </div>
       </div>
       <div>
@@ -374,9 +378,9 @@
     <p class="sub">Por onde ele anda e onde fica quando você joga.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda ou só de lado, em cima da barra de tarefas.</div></div>
+        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda, só de lado em cima da barra de tarefas, ou parado onde você deixar (arraste ele pro lugar).</div></div>
         <div class="segmentos" data-cfg="movimento">
-          <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button>
+          <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button><button data-v="parado">Parado</button>
         </div>
       </div>
       <div class="linha">
@@ -1070,6 +1074,10 @@ function montarResto() {
   bf.value = estado.cfg.borda_forca; bv.textContent = `${bf.value}%`;
   bf.oninput = () => bv.textContent = `${bf.value}%`;
   bf.onchange = () => mudar("borda_forca", +bf.value);
+  const tm = document.getElementById("tamanho"), tv = document.getElementById("tamanhoValor");
+  tm.value = estado.cfg.tamanho; tv.textContent = `${tm.value}%`;
+  tm.oninput = () => tv.textContent = `${tm.value}%`;
+  tm.onchange = () => mudar("tamanho", +tm.value);
   montarVoz();
   const lista = document.getElementById("listaEsquetes");
   lista.innerHTML = "";
@@ -1582,8 +1590,30 @@ function montarHabilidade(caixa, completo) {
           <label class="chave"><input type="checkbox" id="habAvisar" ${v.avisar ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
+          <div class="info"><div class="titulo">WhatsApp só meu 📱</div><div class="desc">Abro um navegador à parte (Edge, minimizado)
+            com o <b>meu</b> WhatsApp Web, como um aparelho conectado: você escaneia o QR code uma vez (celular → WhatsApp → Aparelhos
+            conectados). Aí eu leio, abro conversas e preparo respostas sem mexer no seu navegador nem na sua tela.
+            <b>Cuidados:</b> ele ocupa uma vaga de aparelho conectado; abrir uma conversa ali marca como lida e quem escreveu vê o tique azul
+            (dá para desligar a confirmação de leitura no WhatsApp); a sessão fica guardada neste PC; e vale o mesmo risco do WhatsApp
+            não gostar de automação. Para fechar a sessão, desconecte o aparelho no celular.</div></div>
+          <label class="chave"><input type="checkbox" id="habProprio" ${v.proprio ? "checked" : ""}><span></span></label>
+        </div>
+        <div class="linha">
+          <div class="info"><div class="titulo">Olhar as conversas não lidas 📥</div><div class="desc">de tempos em tempos olho a lista de
+            conversas e te aviso de quem mandou mensagem (nome e prévia), sem abrir nenhuma conversa, então nada é marcado como lido.
+            Sem IA. O WhatsApp Web precisa estar aberto no navegador (pode ser em outra aba).</div></div>
+          <label class="chave"><input type="checkbox" id="habVarrer" ${v.varrer ? "checked" : ""}><span></span></label>
+        </div>
+        <div class="linha">
+          <div class="info"><div class="titulo">A cada quantos minutos</div></div>
+          <input type="number" id="habVarrerMin" min="1" max="30" value="${v.varrer_min || 3}" style="width:70px">
+        </div>
+        <div class="linha">
           <div class="info"><div class="titulo">Deixar eu enviar 📤</div><div class="desc">a sugestão ganha o botão
-            <b>enviar</b>, que preenche e manda na hora (o clique é a sua confirmação). Desligado, eu só preencho o campo</div></div>
+            <b>enviar</b>, que preenche e manda na hora (o clique é a sua confirmação). Desligado, eu só preencho o campo.
+            Eu nunca mando nada sozinho, só respondo conversas em que <b>você já escreveu</b> (nunca puxo assunto) e tenho limite próprio: no máximo 1 a cada 25 s, 15 por hora e 100 por dia.
+            <b>⚠️ Ainda há risco:</b> o WhatsApp não gosta de automação e pode restringir o número, mesmo com pouco uso. O risco é baixo
+            nesse ritmo, mas existe; você assume.</div></div>
           <label class="chave"><input type="checkbox" id="habEnviar" ${v.enviar ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
@@ -1611,8 +1641,26 @@ function montarHabilidade(caixa, completo) {
   caixa.querySelector("#habLoja").onchange = e => salvarV({loja: e.target.value});
   caixa.querySelector("#habTom").onchange = e => salvarV({tom: e.target.value});
   caixa.querySelector("#habAvisar").onchange = e => salvarV({avisar: e.target.checked});
+  caixa.querySelector("#habProprio").onchange = e => {
+    if (e.target.checked && !confirm("Vou abrir um Edge à parte com o WhatsApp Web, como um aparelho conectado (ocupa uma vaga). " +
+        "Abrir conversas ali marca como lida e quem escreveu vê o tique azul. A sessão fica guardada neste PC, e o WhatsApp pode não " +
+        "gostar de automação (risco baixo, mas existe).\n\nLigar mesmo assim?")) {
+      e.target.checked = false;
+      return;
+    }
+    salvarV({proprio: e.target.checked});
+  };
+  caixa.querySelector("#habVarrer").onchange = e => salvarV({varrer: e.target.checked});
+  caixa.querySelector("#habVarrerMin").onchange = e => salvarV({varrer_min: Math.max(1, Math.min(30, +e.target.value || 3))});
   caixa.querySelector("#habLocal").onchange = e => salvarV({so_local: e.target.checked});
-  caixa.querySelector("#habEnviar").onchange = e => salvarV({enviar: e.target.checked});
+  caixa.querySelector("#habEnviar").onchange = e => {
+    if (e.target.checked && !confirm("Atenção: o WhatsApp não aprova automação e pode restringir o seu número, mesmo com pouco uso. " +
+        "Com o botão enviar eu só mando o que você aprovar, no máximo 1 a cada 25 s, 15 por hora e 100 por dia. O risco é baixo, mas existe.\n\nLiberar mesmo assim?")) {
+      e.target.checked = false;
+      return;
+    }
+    salvarV({enviar: e.target.checked});
+  };
   const area = caixa.querySelector("#habConhecimento");
   if (area) {
     const contar = () => caixa.querySelector("#habConta").textContent = `${area.value.length.toLocaleString("pt-BR")} de 30.000 letras`;

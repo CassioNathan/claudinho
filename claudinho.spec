@@ -5,7 +5,7 @@
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 ocultos = collect_submodules("winrt") + ["pystray._win32", "tela", "teclas", "projetos", "rotinas", "programas",
-                                         "claudinho_mcp"]  # importados só na hora (ver_tela da API, MCP)
+                                         "claudinho_mcp", "whatsapp_proprio", "websocket"]  # importados só na hora (ver_tela da API, MCP)
 dados = (collect_data_files("customtkinter") + collect_data_files("ytmusicapi")
          + [("painel.html", "."), ("conversa.html", "."), ("extensao", "extensao"), ("voz_propria.py", ".")])
 binarios = []

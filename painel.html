@@ -72,6 +72,11 @@
   .consumo .titulo-bloco { margin-top: 12px; color: var(--apagado); }
   .consumo .info { cursor: help; opacity: .7; margin-left: 4px; font-size: 11px; }
   .consumo .nota { margin-top: 6px; font-size: 11px; }
+  #consumo { cursor: pointer; border-radius: 8px; margin: 0 -6px; padding: 2px 6px 6px; }
+  #consumo:hover { background: #2a2927; }
+  #consumo .mais { margin-top: 8px; font-size: 11px; color: var(--laranja); }
+  #consumoModal .modal { width: min(380px, 90vw); }
+  #consumoModal .consumo { font-size: 12.5px; }
 
   /* ---------- conteúdo ---------- */
   main { overflow-y: auto; padding: 30px 38px 60px; scroll-behavior: smooth; }
@@ -839,6 +844,11 @@
     <p class="sub">Como ele roda neste PC.</p>
     <div class="cartao">
       <div class="linha" style="flex-wrap:wrap">
+        <div class="info"><div class="titulo">⚡ Modo de IA</div><div class="desc">Onde ele pensa: no seu PC, no Claude ou
+          nos dois. Tarefas na hora marcada, memória, iniciativa e cortar a fala são do híbrido.</div></div>
+        <div id="modoIASistema" style="flex-basis:100%"></div>
+      </div>
+      <div class="linha" style="flex-wrap:wrap">
         <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
           resumos. Ao trocar, a conversa do chat recomeça (o mini cérebro e as piadas continuam).</div></div>
         <div class="segmentos" id="motores">
@@ -889,6 +899,13 @@
   </div>
 </div>
 
+<div class="fundo-modal" id="consumoModal" hidden>
+  <div class="modal">
+    <h3>📊 Consumo</h3>
+    <div class="consumo" id="consumoDetalhe"></div>
+    <div style="text-align:right;margin-top:14px"><button class="botao principal" id="fecharConsumo">Fechar</button></div>
+  </div>
+</div>
 <div class="fundo-modal" id="instrucoes" hidden>
   <div class="modal">
     <h3>🧩 Extensão do navegador</h3>
@@ -1744,6 +1761,7 @@ function atualizarVivos() {
   montarRotinas();
   montarMeusComandos();
   montarHibrido();
+  montarModoSistema();
   montarTarefas();
   montarFatos();
   montarFichas();
@@ -1805,7 +1823,7 @@ function montarMotor() {
   const [pronto, motivo] = m.pronto;
   const situacao = pronto ? '<span class="status-ext ok">pronto ✓</span>' : `<span class="status-ext">${motivo}</span>`;
   const caixa = document.getElementById("detalheMotor");
-  const assinatura = JSON.stringify([m.atual, m.api_chave, m.ollama, m.ollama_modelo, m.pronto, m.chat_modelo, m.chat_esforco, m.modelos_acao]);
+  const assinatura = JSON.stringify([m.atual, m.api_chave, m.ollama, m.ollama_modelo, m.ollama_pensar, m.pronto, m.chat_modelo, m.chat_esforco, m.modelos_acao]);
   if (assinatura === motorMontado) return;  // não apaga o que você está digitando (o painel atualiza a cada 3 s)
   motorMontado = assinatura;
   if (m.atual === "claude_code") {
@@ -1851,10 +1869,15 @@ function montarMotor() {
     caixa.innerHTML = `<div class="aviso-pc">⚠️ Usar um modelo local consome o desempenho do seu PC (processador, memória e placa de vídeo).
       Escolha com responsabilidade — em jogo ou tela cheia ele não roda e usa o banco de frases.</div>${situacao}
       <div class="modelos-locais">${cartoes}</div>${progresso}
+      <div class="linha" style="padding:10px 0 4px"><div class="info"><div class="titulo">Pensar antes de responder 🤔</div>
+        <div class="desc">No chat, ele raciocina antes: segue melhor as instruções e erra menos, mas demora bem mais
+        (às vezes o dobro ou mais). As tarefas rápidas do híbrido continuam sem pensar.</div></div>
+        <label class="chave"><input type="checkbox" id="ollamaPensar"${m.ollama_pensar ? " checked" : ""}><span></span></label></div>
       ${o.rodando ? `<button class="botao" id="baixarModelo"${b.modelo ? " disabled" : ""}>Baixar o modelo escolhido</button>`
                   : `O Ollama ${o.instalado ? "está instalado mas fechado: abra ele" : "não está instalado"}.
                      <button class="botao" id="siteOllama" style="margin-left:6px">Baixar o Ollama</button>`}`;
     for (const c of caixa.querySelectorAll(".modelo-local")) c.onclick = () => mudar("ollama_modelo", c.dataset.modelo);
+    document.getElementById("ollamaPensar").onchange = e => mudar("ollama_pensar", e.target.checked);
     const baixar = document.getElementById("baixarModelo");
     if (baixar) baixar.onclick = () => acao("ollama_baixar:" + m.ollama_modelo, "baixando… ⏬");
     const site = document.getElementById("siteOllama");
@@ -1902,13 +1925,23 @@ function montarConsumo() {
   const visto = c.plano ? (c.plano.ha_minutos < 1 ? "agora" : `há ${c.plano.ha_minutos} min`) : "";
   const h = c.claudinho.hoje, t = c.claudinho.total;
   const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + " mi" : n >= 1e3 ? Math.round(n / 1e3) + " mil" : String(n);
-  caixa.innerHTML = `${iaLocal(c.local)}
+  document.getElementById("consumoDetalhe").innerHTML = `${iaLocal(c.local)}
     <div class="titulo-bloco">seu plano do Claude${plano ? `<span class="nota" style="display:inline;margin-left:4px">(${visto})</span>` : ""}</div>
     ${plano || `<div class="nota">${estado.sistema && estado.sistema.barra ? "aparece depois que você usar o Claude Code"
                                                                       : "ligue em Sistema → Mostrar meu consumo"}</div>`}
     <div class="titulo-bloco">Claudinho gastou</div>
     <div class="rotulo"><span>hoje</span><b>${fmt(h.entrada + h.saida)} tokens · US$ ${h.custo.toFixed(2)}</b></div>
     <div class="rotulo"><span>total</span><b>${fmt(t.entrada + t.saida)} tokens · US$ ${t.custo.toFixed(2)}</b></div>`;
+  // na lateral, só o resumo: o detalhe abre no clique
+  const l = c.local, mostraLocal = iaLocal(l) !== "";
+  const local = !mostraLocal ? "" : `<div class="rotulo"><span>IA local</span><b>${
+    !l.rodando ? "desligada" : l.gpu ? `GPU ${l.gpu.uso}%` : `CPU ${Math.round(l.cpu || 0)}%`}</b></div>`;
+  const pct = j => j ? j.pct + "%" : "—";
+  const claude = janelas.seven_day || janelas.five_hour
+    ? `<div class="rotulo"><span>Claude 5h · semana</span><b>${pct(janelas.five_hour)} · ${pct(janelas.seven_day)}</b></div>` : "";
+  caixa.innerHTML = `<div class="titulo-bloco">consumo</div>${local}${claude}
+    <div class="rotulo"><span>Claudinho hoje</span><b>US$ ${h.custo.toFixed(2)}</b></div>
+    <div class="mais">ver detalhes ›</div>`;
 }
 function montarSistema() {
   montarMotor();
@@ -2100,6 +2133,22 @@ async function escolherModoIA(id) {
   }
   situacaoCerebro();
 }
+function montarModoSistema() {   // a mesma escolha do passo a passo, em Sistema, com a situação do modelo local embaixo
+  const caixa = document.getElementById("modoIASistema"), atual = modoIA();
+  if (!caixa) return;
+  if (caixa.dataset.modo !== atual) {
+    caixa.dataset.modo = atual;
+    caixa.innerHTML = "";
+    opcoes(caixa, MODOS_IA, modoIA, async id => {
+      await escolherModoIA(id);
+      caixa.dataset.modo = id;
+      avisar(id === "hibrido" ? "modo híbrido ✓" : id === "local" ? "só local ✓" : "só nuvem ✓");
+      carregar();
+    });
+    caixa.insertAdjacentHTML("beforeend", `<div class="cartao" id="cerebroSistema" style="margin-top:6px"></div>`);
+  }
+  situacaoCerebro();   // o Ollama abrindo, o modelo baixando: a cada volta do painel (3 s)
+}
 function montarModoIA(corpo, titulo, texto) {
   corpo.innerHTML = `<h3>${titulo}</h3><p>${texto}</p>`;
   opcoes(corpo, MODOS_IA, modoIA, escolherModoIA);
@@ -2108,9 +2157,15 @@ function montarModoIA(corpo, titulo, texto) {
   clearInterval(tourVigia);   // o Ollama abrindo, o modelo baixando: a situação se atualiza sozinha
   tourVigia = setInterval(() => document.getElementById("tourCerebro") ? situacaoCerebro() : clearInterval(tourVigia), 2000);
 }
-function situacaoCerebro() {
-  const caixa = document.getElementById("tourCerebro");
-  if (!caixa) return;
+function situacaoCerebro() {   // no passo a passo e em Sistema (lá só com o local no meio: a nuvem já aparece em Motor de IA)
+  const tour = document.getElementById("tourCerebro"), sistema = document.getElementById("cerebroSistema");
+  if (tour) desenharCerebro(tour);
+  if (sistema) {
+    sistema.hidden = modoIA() === "nuvem";
+    if (!sistema.hidden) desenharCerebro(sistema);
+  }
+}
+function desenharCerebro(caixa) {
   const m = estado.motor, o = m.ollama || {modelos: [], baixando: {}}, modo = modoIA();
   // o híbrido usa sempre o leve; o "Só local" usa o escolhido em Motor de IA
   const modelo = modo === "hibrido" ? "qwen3:1.7b" : (m.ollama_modelo || "qwen3:1.7b"), b = o.baixando || {};
@@ -2131,6 +2186,9 @@ function situacaoCerebro() {
     linhas.push(parte);
     if (modo === "hibrido" && !(o.rodando && tem))
       linhas.push('<span class="desc">Enquanto o local não fica pronto, eu uso o Claude no lugar dele: nada deixa de funcionar.</span>');
+    linhas.push(modo === "hibrido"
+      ? '<span class="desc">No híbrido o local é sempre o leve (qwen3:1.7b): ele só entende os comandos e resume os avisos.</span>'
+      : '<span class="desc">Outro modelo (mais esperto ou que enxerga a tela): <b>Sistema → Motor de IA → IA local</b>.</span>');
     linhas.push('<span class="desc">Em jogo ou tela cheia eu tiro o modelo da placa de vídeo na hora.</span>');
   }
   const html = linhas.map(l => `<div style="margin:4px 0">${l}</div>`).join("");
@@ -2352,6 +2410,9 @@ document.getElementById("instalarExt").onclick = () => {
   acao("instalar_extensao", "preparei a extensão ✓");
   document.getElementById("instrucoes").hidden = false;
 };
+document.getElementById("consumo").onclick = () => document.getElementById("consumoModal").hidden = false;
+document.getElementById("fecharConsumo").onclick = () => document.getElementById("consumoModal").hidden = true;
+document.getElementById("consumoModal").onclick = e => { if (e.target.id === "consumoModal") e.target.hidden = true; };
 document.getElementById("fecharModal").onclick = () => document.getElementById("instrucoes").hidden = true;
 document.getElementById("copiarPasta").onclick = async () => {
   await navigator.clipboard.writeText(document.getElementById("pastaExt").textContent);

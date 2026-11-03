@@ -104,6 +104,7 @@ CONFIG_PADRAO = {
     "personalidade": "claudinho",        # "claudinho" ou "ultron" (piadas, banco de frases e chat)
     "motor": "claude_code",              # quem pensa: claude_code, api (chave da Anthropic), ollama (local), nenhum
     "ollama_modelo": "qwen3:1.7b",       # modelo local (o leve, ou o gemma3:4b que enxerga a tela)
+    "ollama_pensar": False,              # chat local pensa antes de responder (mais certo, bem mais lento)
     "voz": False,                        # comando por voz: chamou o apelido, o chat abre e ele escuta
     "voz_apelidos": ["Ei Claudinho", "Fala Claudinho", "Olá Claudinho", "Oi Claudinho"],  # frases de chamada (só texto)
     "voz_silencio": 2.5,                 # segundos calado até ele enviar sozinho
@@ -204,7 +205,7 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "novidades_vistas", "navegador_claude", "emojis", "borda", "borda_forca", "tamanho",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
-                 "ollama_modelo", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "ollama_pensar", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -690,6 +691,7 @@ def carregar_config():
     gravar_json(CONFIG, cfg)
     escrever_perfil(cfg["mestre"])
     motores.configurar(cfg["motor"], cfg["ollama_modelo"], cfg["modelos_acao"])
+    motores.CONFIG["pensar"] = cfg["ollama_pensar"]
     return cfg
 
 
@@ -3108,6 +3110,8 @@ class Claudinho:
             valor = valor if valor in motores.MOTORES else "claude_code"
         elif chave == "ollama_modelo":
             valor = str(valor).strip()[:60] or "qwen3:1.7b"
+        elif chave == "ollama_pensar":
+            valor = bool(valor)
         elif chave == "borda_forca":
             valor = max(10, min(100, int(valor)))
         elif chave == "tamanho":
@@ -3192,6 +3196,8 @@ class Claudinho:
                           if valor else "Ok, não mexo mais no seu navegador.", duracao=4, prioridade=ESTADO)
         elif chave == "modelos_acao":
             motores.configurar(self.cfg["motor"], self.cfg["ollama_modelo"], valor)
+        elif chave == "ollama_pensar":   # vale da próxima pergunta em diante, sem recomeçar a conversa
+            motores.CONFIG["pensar"] = valor
         elif chave in ("chat_modelo", "chat_esforco") and hasattr(self.chat, "modelo"):
             self.chat.modelo, self.chat.esforco = self.cfg["chat_modelo"], self.cfg["chat_esforco"]
             self.chat.trocar_personalidade(self.cfg["personalidade"])   # reabre a mesma conversa já com eles
@@ -3267,7 +3273,7 @@ class Claudinho:
             "motor": {"atual": self.cfg["motor"], "pronto": motores.disponivel(), "claude": sistema.claude_instalado(),
                       "api_chave": bool(motores.chave_api()), "ollama": motores.ollama_status(),
                       "modelos_ollama": motores.MODELOS_OLLAMA, "ollama_modelo": self.cfg["ollama_modelo"],
-                      "chat_modelo": self.cfg["chat_modelo"], "chat_esforco": self.cfg["chat_esforco"],
+                      "ollama_pensar": self.cfg["ollama_pensar"], "chat_modelo": self.cfg["chat_modelo"], "chat_esforco": self.cfg["chat_esforco"],
                       "modelos_acao": self.cfg["modelos_acao"],
                       "modelos": [[k, m["nome"], m["desc"]] for k, m in motores.MODELOS.items()]},
             "voz": {"estado": self.voz.estado, "microfones": voz.microfones(), "detector": self.estado_detector()},
@@ -4040,7 +4046,7 @@ class Claudinho:
     def pedido_do_mcp(self, acao, dados):
         """O que as ferramentas novas do chat pedem (claudinho_mcp.py). Devolve o texto que volta pro chat."""
         if not self.jarvis():
-            return ("isso só funciona no modo híbrido de IA (painel → Sistema → Motor de IA → Híbrido): diga isso a "
+            return ("isso só funciona no modo híbrido de IA (painel → Sistema → Modo de IA → Híbrido): diga isso a "
                     "ele em uma frase, sem tentar de outro jeito")
         if acao == "agendar":
             repetir = str(dados.get("repetir") or "").strip().lower()

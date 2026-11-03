@@ -49,7 +49,8 @@ LOCAL = "local"
 TAREFAS_LOCAL = ("piadas", "avisos", "roteador")
 MODELO_HIBRIDO = "qwen3:1.7b"   # o leve (~1,4 GB): o híbrido usa ele mesmo com o "Só local" no modelo maior
 
-CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b", "modelos": dict(TAREFAS_PADRAO)}  # o .pyw atualiza
+CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b", "modelos": dict(TAREFAS_PADRAO),
+          "pensar": False}   # pensar: só o chat local (as tarefas do híbrido seguem sem pensar, pela pressa)  # o .pyw atualiza
 
 
 def configurar(motor, ollama_modelo, modelos=None):
@@ -334,6 +335,13 @@ def frases_completas(buffer, minimo=18):
     return frases, f"{atual} {partes[-1]}".strip()
 
 
+def _ollama_instalado():
+    """O ollama.exe no PATH ou no lugar do instalador (o PATH do processo é o de quando o Claudinho abriu: um Ollama
+    instalado depois não aparece nele)."""
+    padrao = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
+    return bool(shutil.which("ollama")) or os.path.isfile(padrao)
+
+
 def ollama_status():
     """O Ollama está rodando? Que modelos tem? (guarda 5 s: o painel pergunta a cada 3 s)"""
     if time.time() - _OLLAMA_STATUS["visto"] > 5:
@@ -344,7 +352,7 @@ def ollama_status():
             _OLLAMA_STATUS.update(rodando=False, modelos=[])
         _OLLAMA_STATUS["visto"] = time.time()
     return {"rodando": _OLLAMA_STATUS["rodando"], "modelos": _OLLAMA_STATUS["modelos"],
-            "instalado": bool(shutil.which("ollama")), "baixando": dict(BAIXANDO)}
+            "instalado": _OLLAMA_STATUS["rodando"] or _ollama_instalado(), "baixando": dict(BAIXANDO)}
 
 
 def _tem_modelo(modelo):
@@ -656,7 +664,7 @@ class ChatOllama(ChatSimples):
             mensagem["images"] = _imagens_ollama([imagem])
         elif imagem:
             mensagem["content"] = "(Ele mandou um print, mas você não enxerga imagens: diga isso.)\n" + texto
-        corpo = {"model": modelo_local, "think": False, "keep_alive": OLLAMA_KEEP_ALIVE, "options": OLLAMA_OPCOES,
+        corpo = {"model": modelo_local, "think": bool(CONFIG.get("pensar")), "keep_alive": OLLAMA_KEEP_ALIVE, "options": OLLAMA_OPCOES,
                  "messages": [{"role": "system", "content": self.instrucoes()}, *self.mensagens, mensagem]}
         with self.trava:
             try:

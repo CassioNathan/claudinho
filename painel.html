@@ -306,7 +306,7 @@
 <main id="principal">
   <section id="mestre">
     <h2>👑 Meu Mestre</h2>
-    <p class="sub">Quem é você, pra ele te conhecer no chat e nas piadas. Sem nome, ele não chama ninguém por nome.</p>
+    <p class="sub">Quem é você, pra ele te conhecer.</p>
     <div class="cartao" style="padding:16px 18px">
       <label class="rotulo">Nome</label>
       <input id="mestreNome" class="campo" placeholder="como ele deve te chamar" maxlength="60" autocomplete="off">
@@ -322,7 +322,7 @@
 
   <section id="visual">
     <h2>🎨 Visual</h2>
-    <p class="sub">Uma cor e um adereço por espaço. Combina do jeito que quiser — ele já usa na hora.</p>
+    <p class="sub">Uma cor e um adereço por espaço.</p>
     <div class="visual">
       <div class="coluna-palco">
       <div class="palco">
@@ -337,15 +337,15 @@
       </div>
       <div class="cartao" style="margin-top:14px">
         <div class="linha">
-          <div class="info"><div class="titulo">Bordinha branca ⚪</div><div class="desc">Contorno de 1 px que destaca ele do fundo escuro.</div></div>
+          <div class="info"><div class="titulo">Bordinha branca ⚪</div><div class="desc">Destaca ele do fundo escuro.</div></div>
           <label class="chave"><input type="checkbox" data-cfg="borda"><span></span></label>
         </div>
         <div class="linha" style="flex-wrap:wrap;row-gap:8px">
-          <div class="info" style="flex-basis:100%"><div class="titulo">Força da bordinha</div><div class="desc">Menos = mais discreto, quase transparente.</div></div>
+          <div class="info" style="flex-basis:100%"><div class="titulo">Força da bordinha</div></div>
           <input type="range" min="10" max="100" step="5" id="bordaForca" style="flex:1"><span class="valor" id="bordaForcaValor"></span>
         </div>
         <div class="linha" style="flex-wrap:wrap;row-gap:8px">
-          <div class="info" style="flex-basis:100%"><div class="titulo">Tamanho 📏</div><div class="desc">Quanto ele ocupa na tela. Menos = menorzinho e mais discreto.</div></div>
+          <div class="info" style="flex-basis:100%"><div class="titulo">Tamanho 📏</div></div>
           <input type="range" min="30" max="100" step="5" id="tamanho" style="flex:1"><span class="valor" id="tamanhoValor"></span>
         </div>
       </div>
@@ -360,13 +360,10 @@
 
   <section id="personalidade">
     <h2>🎭 Personalidade</h2>
-    <p class="sub">Quem ele é: muda as piadas, o banco de frases e o jeito de falar no chat.</p>
+    <p class="sub">Muda as piadas e o jeito de falar.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Personalidade</div><div class="desc">Muda as piadas, o banco de frases e o jeito
-          dele falar no chat. O Claudinho 🐟 tem o jeito do Darwin (O Incrível Mundo de Gumball): doce, ingênuo e
-          empolgado (combina com o pacote Peixinho no Visual). O Ultron 🤖 é uma IA vilã teatral que também zoa sem dó o que você faz na tela (o antigo "modo maldoso"),
-          mas no chat continua ajudando. (Combina com o pacote Ultron no Visual.)</div></div>
+        <div class="info"><div class="titulo">Personalidade</div><div class="desc">Claudinho 🐟 é doce e empolgado; Ultron 🤖 é um vilão que zoa sem dó.</div></div>
         <div class="segmentos" data-cfg="personalidade">
           <button data-v="claudinho">Claudinho 🐟</button><button data-v="ultron">Ultron 🤖</button>
         </div>
@@ -383,18 +380,17 @@
     <p class="sub">Por onde ele anda e onde fica quando você joga.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">Pela tela toda, só de lado em cima da barra de tarefas, ou parado onde você deixar (arraste ele pro lugar).</div></div>
+        <div class="info"><div class="titulo">Onde ele anda</div><div class="desc">No modo parado, arraste ele pro lugar.</div></div>
         <div class="segmentos" data-cfg="movimento">
           <button data-v="livre">Tela toda</button><button data-v="horizontal">Só na horizontal</button><button data-v="parado">Parado</button>
         </div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Seguir o mouse entre monitores</div><div class="desc">Se o mouse vai pra outro monitor, ele sai correndo atrás.</div></div>
+        <div class="info"><div class="titulo">Seguir o mouse entre monitores</div></div>
         <label class="chave"><input type="checkbox" data-cfg="seguir_mouse_entre_monitores"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Modo jogo 🎮</div><div class="desc">Com algo em tela cheia (jogo, vídeo) ele vai pro canto de cima
-          à direita, fica parado e, de vez em quando, comenta o que está acontecendo. Saiu da tela cheia, ele volta a passear.</div></div>
+        <div class="info"><div class="titulo">Modo jogo 🎮</div><div class="desc">Com tela cheia, vai pro canto e comenta o jogo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="jogo_canto"><span></span></label>
       </div>
     </div>
@@ -405,19 +401,19 @@
     <p class="sub">Os comentários sobre o que está na sua tela.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Comentar o que está na tela</div><div class="desc">Desligado, ele fica quietinho (o Win+Y ainda funciona).</div></div>
+        <div class="info"><div class="titulo">Comentar o que está na tela</div><div class="desc">Desligado, ele fica quieto (o Win+Y continua).</div></div>
         <label class="chave"><input type="checkbox" data-cfg="comentar_tela"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Frequência</div><div class="desc">De quanto em quanto tempo ele solta uma.</div></div>
+        <div class="info"><div class="titulo">Frequência</div></div>
         <div class="segmentos" id="frequencias"></div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Banco de frases ↔ Haiku olhando a tela</div><div class="desc">O banco não gasta nada; o Haiku vê um print e acerta mais.</div></div>
+        <div class="info"><div class="titulo">Banco de frases ↔ Haiku olhando a tela</div><div class="desc">O banco é grátis; o Haiku vê a tela e acerta mais.</div></div>
         <input type="range" min="0" max="100" step="5" id="chance"><span class="valor" id="chanceValor"></span>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Avaliar piadas</div><div class="desc">Botões boa/ruim ao passar o mouse; ele aprende com as notas.</div></div>
+        <div class="info"><div class="titulo">Avaliar piadas</div><div class="desc">Boa ou ruim ao passar o mouse; ele aprende.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_avaliacao"><span></span></label>
       </div>
     </div>
@@ -428,7 +424,7 @@
     <p class="sub">O que ele apronta quando está à toa. Clique numa pra ver agora.</p>
     <div class="cartao" style="margin-bottom:14px">
       <div class="linha">
-        <div class="info"><div class="titulo">Esquetes quando está à toa</div><div class="desc">Uma a cada 4–9 minutos, e às vezes no lugar de uma piada.</div></div>
+        <div class="info"><div class="titulo">Esquetes quando está à toa</div><div class="desc">Uma a cada 4–9 minutos.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="esquetes"><span></span></label>
       </div>
     </div>
@@ -437,15 +433,14 @@
 
   <section id="extras">
     <h2>🎵 Música e emojis</h2>
-    <p class="sub">Os detalhes que deixam ele mais vivo. Tocando agora: <b id="musica">nada</b></p>
+    <p class="sub">Tocando agora: <b id="musica">nada</b></p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Saber o que estou ouvindo</div><div class="desc">Comenta a música nova e mostra os controles no menu.</div></div>
+        <div class="info"><div class="titulo">Saber o que estou ouvindo</div><div class="desc">Comenta a música e mostra os controles.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="ver_musica"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Tocar no YouTube Music</div><div class="desc">Música, artista ou os dois. Toca no seu
-          navegador e depois segue num rádio parecido. (No chat também dá: "toca Helena do MCR".)</div></div>
+        <div class="info"><div class="titulo">Tocar no YouTube Music</div><div class="desc">Música ou artista; depois segue num rádio parecido.</div></div>
         <form id="formMusica" style="display:flex;gap:8px">
           <input id="termoMusica" placeholder="ex.: Helena My Chemical Romance" autocomplete="off"
                  style="background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;width:250px;font:13px Inter,'Segoe UI',sans-serif">
@@ -453,7 +448,7 @@
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Reações com emojis ✨</div><div class="desc">Emojis de pixel que sobem do lado dele.</div></div>
+        <div class="info"><div class="titulo">Reações com emojis ✨</div></div>
         <label class="chave"><input type="checkbox" data-cfg="emojis"><span></span></label>
       </div>
     </div>
@@ -461,134 +456,113 @@
 
   <section id="voz">
     <h2>👂 Ouvir</h2>
-    <p class="sub">Chama ele pelo nome, o chat abre e ele escuta. Tudo local (Whisper), nada de áudio sai do PC.</p>
+    <p class="sub">Chame pelo nome e ele escuta. O áudio não sai do PC.</p>
     <div class="cartao">
       <div class="linha">
         <div class="info"><div class="titulo">Ouvir o microfone</div><div class="desc" id="vozEstado">Desligado.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Frases de chamada</div><div class="desc">O que você diz pra chamar ele, separadas por vírgula. Use frase
-          com cumprimento ("Ei Claudinho", "Fala Claudinho"), não só o nome: senão ele acorda quando você só comenta alguma coisa
-          sobre ele. É só texto, sem treinar; ele aceita uma escuta meio errada. A chamada tem que vir no começo da fala.</div></div>
+        <div class="info"><div class="titulo">Frases de chamada</div><div class="desc">Separadas por vírgula. Prefira "Ei Claudinho" a só o nome.</div></div>
         <form id="formApelidos" style="display:flex;gap:8px">
           <input id="vozApelidos" autocomplete="off" placeholder="Ei Claudinho, Fala Claudinho" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
           <button class="botao principal">Salvar</button>
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Palavras que ele erra 📝</div><div class="desc">Nomes que você fala e o Whisper escreve
-          errado (projetos, programas, bandas), separados por vírgula: vão de dica pra ele acertar. Os programas que você ensinou,
-          os projetos liberados e o artista tocando já entram sozinhos.</div></div>
+        <div class="info"><div class="titulo">Palavras que ele erra 📝</div><div class="desc">Nomes que o Whisper escreve errado, separados por vírgula.</div></div>
         <form id="formVocabulario" style="display:flex;gap:8px">
           <input id="vozVocabulario" autocomplete="off" maxlength="300" placeholder="faturamento, IntelliJ, Legião Urbana" style="width:230px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
           <button class="botao principal">Salvar</button>
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Reconhecimento da fala ☁️</div><div class="desc" id="sttInfo">O Whisper do PC erra mais que os modelos na nuvem.
-          Com um provedor, só o que você diz DEPOIS da chamada vai pra internet (a chamada "Ei Claudinho" é detectada aqui no PC), e se a nuvem falhar ele
-          volta pro Whisper local. Custa centavos por hora de fala; a chave é sua e fica criptografada.</div></div>
+        <div class="info"><div class="titulo">Reconhecimento da fala ☁️</div><div class="desc" id="sttInfo">Na nuvem ele erra menos; só o que vem depois da chamada sai do PC.</div></div>
         <select id="sttProvedor" style="max-width:260px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
       </div>
       <div class="linha" id="sttLinhaChave">
-        <div class="info"><div class="titulo">Chave do provedor 🔑</div><div class="desc" id="sttChaveInfo">Cole a chave da sua conta (Groq: console.groq.com, tem
-          plano grátis). Ela é guardada criptografada pelo Windows.</div></div>
+        <div class="info"><div class="titulo">Chave do provedor 🔑</div><div class="desc" id="sttChaveInfo"></div></div>
         <form id="sttForm" style="display:flex;gap:8px;align-items:center">
           <input id="sttChave" type="password" autocomplete="off" placeholder="cole a chave" style="width:200px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif">
           <button class="botao principal">Salvar</button><button type="button" class="botao" id="sttTestar">Testar</button>
         </form>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Ignorar vozes mais baixas que a minha 🔇</div><div class="desc">Depois da chamada, só conta voz com volume parecido com o
-          da chamada: TV e gente falando ao fundo não entram no que ele escuta.</div></div>
+        <div class="info"><div class="titulo">Ignorar vozes mais baixas que a minha 🔇</div><div class="desc">TV e conversa ao fundo não entram.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_travar_nivel"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Melhorar o áudio do microfone 🎚️</div><div class="desc">Ganho automático (sobe o volume quando você fala baixo ou
-          longe do microfone) e filtro de ruído (chiado, ventilador). Ajuda com microfone distante.</div></div>
+        <div class="info"><div class="titulo">Melhorar o áudio do microfone 🎚️</div><div class="desc">Ganho automático e filtro de ruído.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_limpar"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Microfone</div><div class="desc">Qual ele escuta.</div></div>
+        <div class="info"><div class="titulo">Microfone</div></div>
         <select id="vozMic" style="max-width:260px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas demora uns 2 s a mais pra enviar.</div></div>
+        <div class="info"><div class="titulo">Precisão do que você pede</div><div class="desc">"Melhor" entende mais, mas leva ~2 s a mais.</div></div>
         <div class="segmentos" data-cfg="voz_modelo_fala"><button data-v="base">Rápido</button><button data-v="small">Melhor</button></div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Pausar a música ao ouvir ⏸️</div><div class="desc">Chamou, a música ou o vídeo para
-          (senão o som dele entra no que você fala) e volta a tocar quando a conversa acaba.</div></div>
+        <div class="info"><div class="titulo">Pausar a música ao ouvir ⏸️</div><div class="desc">Volta a tocar quando a conversa acaba.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_pausar_midia"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Um modelo
-          pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e
-          a TV não acordam ele à toa.</div></div>
+        <div class="info"><div class="titulo">Palavra de ativação treinada 🎯</div><div class="desc" id="detectorInfo">Só acorda com "Ei Claudinho": a TV não acorda ele.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_detector"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um tuk-tuk quando ele já pode te ouvir e outro mais grave quando para de ouvir e vai responder.</div></div>
+        <div class="info"><div class="titulo">Sinalzinho 🔔</div><div class="desc">Um som quando começa e quando para de ouvir.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_sons"><span></span></label>
       </div>
-      <p class="sub" style="margin:10px 0 0">Com um jogo em tela cheia ele para de escutar sozinho. Diga "cancela" depois de me chamar pra desistir.</p>
+      <p class="sub" style="margin:10px 0 0">Em jogo de tela cheia ele não escuta. Diga "cancela" pra desistir.</p>
     </div>
   </section>
 
   <section id="voz_conversa">
     <h2>💬 Conversa</h2>
-    <p class="sub">Depois que ele te ouve: quando envia, como responde e com que voz.</p>
+    <p class="sub">Como ele responde e com que voz.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Envia sozinho depois de</div><div class="desc">Quanto tempo calado até ele mandar o que você falou.</div></div>
+        <div class="info"><div class="titulo">Envia sozinho depois de</div><div class="desc">Tempo calado até enviar.</div></div>
         <input type="range" min="0.6" max="5" step="0.2" id="vozSilencio"><span class="valor" id="vozSilencioValor"></span>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Encerra a conversa depois de</div><div class="desc">Depois que ele responde, você pode continuar falando sem chamar de novo.
-          Se ficar esse tempo sem falar, ele encerra e volta a esperar só o nome.</div></div>
+        <div class="info"><div class="titulo">Encerra a conversa depois de</div><div class="desc">Tempo sem falar até ele encerrar.</div></div>
         <input type="range" min="3" max="30" step="1" id="vozEncerrar"><span class="valor" id="vozEncerrarValor"></span>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Conversa por turnos 🔁</div><div class="desc">Depois de responder, ele abre pra você falar de novo, sem precisar chamar outra vez. Quando você fica um tempo sem falar, ele encerra. Enquanto ele fala, o microfone fica fechado.</div></div>
+        <div class="info"><div class="titulo">Conversa por turnos 🔁</div><div class="desc">Depois de responder, ele já escuta de novo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_continua"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Cortar a fala dele ✋</div><div class="desc">Enquanto ele fala, diga "para",
-          "chega" ou "espera": ele cala na hora e já escuta você. Ele ignora o eco da própria voz na caixa de som; com fone
-          funciona melhor. Só no modo híbrido.</div></div>
+        <div class="info"><div class="titulo">Cortar a fala dele ✋</div><div class="desc">Diga "para" ou "chega" e ele cala. Só no híbrido.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_interromper"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Quando a conversa por voz abre, ele fala um oi curtinho
-          (com o seu nome, se estiver preenchido em "Meu Mestre") pra você saber que ele já está ouvindo.</div></div>
+        <div class="info"><div class="titulo">Cumprimentar ao começar 👋</div><div class="desc">Um oi curto quando a conversa por voz abre.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_saudacao"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Responder falando 🔊</div><div class="desc">Em toda mensagem do chat: falada, ou digitada (nesse caso só
-          o começo da resposta é falado; o texto aparece inteiro). Também liga e desliga no 🔊 do balão. Voz offline (Piper).</div></div>
+        <div class="info"><div class="titulo">Responder falando 🔊</div><div class="desc">Em mensagem digitada, só o começo é falado.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_fala"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Só fala 🗣️</div><div class="desc">Sem balão de texto: tudo o que eu digo sai na
-          voz (com as ondinhas do meu lado enquanto falo). Balão só aparece quando preciso de você, e só com os botões.
-          Clicando em mim, abre um balãozinho com <b>ver conversa</b>: a janela da conversa mostra tudo e tem o campo
-          pra você me mandar mensagem de lá.</div></div>
+        <div class="info"><div class="titulo">Só fala 🗣️</div><div class="desc">Sem balão de texto, tudo na voz. Clique nele pra ver a conversa.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="so_fala"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Voz dele</div><div class="desc" id="vozVozInfo">Escolha uma. As que ainda não estão no PC baixam
-          na hora (o tamanho aparece ao lado).</div></div>
+        <div class="info"><div class="titulo">Voz dele</div><div class="desc" id="vozVozInfo">As que faltam baixam na hora.</div></div>
         <select id="vozVoz" style="max-width:240px;background:#232220;border:1px solid #45443f;border-radius:10px;color:var(--texto);padding:9px 12px;font:13px Inter,'Segoe UI',sans-serif"></select>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Tom da voz 🎚️</div><div class="desc">Deixa a voz mais aguda, seja qual for. No máximo vira voz de desenho animado. (Na personalidade Ultron a voz metálica manda.)</div></div>
+        <div class="info"><div class="titulo">Tom da voz 🎚️</div><div class="desc">Mais aguda, até voz de desenho.</div></div>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" min="0" max="40" step="5" id="vozTom"><span class="valor" id="vozTomValor"></span>
         </div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Volume e teste</div><div class="desc">Ouve como ele fala.</div></div>
+        <div class="info"><div class="titulo">Volume e teste</div></div>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="range" min="0" max="100" step="5" id="vozVolume"><span class="valor" id="vozVolumeValor"></span>
           <button class="botao principal" id="vozTestar">▶ Ouvir</button>
@@ -602,20 +576,17 @@
     <p class="sub">O que ele pode ver e ler no seu PC.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Faixa nos olhos 🙈</div><div class="desc">Não tira nenhum print da tela, só banco de frases.</div></div>
+        <div class="info"><div class="titulo">Faixa nos olhos 🙈</div><div class="desc">Nunca tira print da tela.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="vendado"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Olhar a tela quando eu pedir 👀</div><div class="desc">"Olha a tela e me responde": ele tira o print sozinho e manda pra IA (só quando você pede, com aviso no balão).</div></div>
+        <div class="info"><div class="titulo">Olhar a tela quando eu pedir 👀</div><div class="desc">Tira o print só quando você pede.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="ver_tela"><span></span></label>
       </div>
     </div>
     <div class="cartao" style="margin-top:12px">
       <div class="linha">
-        <div class="info"><div class="titulo">Usar o meu navegador (Claude in Chrome) 🌐</div><div class="desc">O chat abre e lê
-          páginas no seu navegador quando você pede algo num site que não tem rotina gravada. Clicar, digitar e preencher
-          sempre pedem <b>Pode / Não</b>; senha, pagamento e mensagem ele nunca faz sozinho. Precisa da extensão
-          <b>Claude in Chrome</b> instalada no <b>Chrome</b> ou no <b>Edge</b> (no Opera ela não controla as abas).</div></div>
+        <div class="info"><div class="titulo">Usar o meu navegador (Claude in Chrome) 🌐</div><div class="desc">Clicar e digitar pedem <b>Pode / Não</b>. Precisa da extensão Claude in Chrome.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="navegador_claude"><span></span></label>
       </div>
     </div>
@@ -626,8 +597,7 @@
       <button class="botao" id="puxarClaude">🧩 Puxar projetos do Claude</button>
     </div>
     <div class="cartao" id="projetosClaude" style="margin-top:10px" hidden>
-      <p class="desc" style="margin:12px 0 6px">Os projetos que você já abriu no Claude (app ou terminal). Marque os que
-        o chat pode <b>ler</b> sem perguntar; mudar arquivo ou rodar comando continua pedindo licença.</p>
+      <p class="desc" style="margin:12px 0 6px">Marque os que o chat pode <b>ler</b> sem perguntar.</p>
       <div id="listaClaude"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin:10px 0 12px">
         <button class="botao" id="marcarClaude">Marcar todos</button>
@@ -639,27 +609,23 @@
 
   <section id="memoria">
     <h2>🧠 Memória</h2>
-    <p class="sub">O mini cérebro: cada aviso do Claude Code e cada troca no chat ficam guardados aqui no seu PC.</p>
+    <p class="sub">Tudo fica guardado só no seu PC.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Lembrar no chat</div><div class="desc">Quando você pergunta algo parecido com o que já
-          rolou, as lembranças certas vão junto. A busca é local (sem IA); só manda algo quando acha, e no máximo 3 lembranças curtas.</div></div>
+        <div class="info"><div class="titulo">Lembrar no chat</div><div class="desc">Lembranças parecidas vão junto da pergunta.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="lembrancas"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Lembranças guardadas</div><div class="desc">Ficam em ~/.claudinho/claudinho.db.</div></div>
+        <div class="info"><div class="titulo">Lembranças guardadas</div></div>
         <span class="valor" id="totalLembrancas">—</span>
       </div>
     </div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 4px">O que eu sei de você</h3>
-    <p class="sub" style="margin-top:0">Fatos curtos que valem pra toda conversa (gostos, rotina, projetos). Entram quando
-      você fala "lembra que…" e, com a chave abaixo, quando o modelo local acha algo seu no fim de uma conversa. Vão uma
-      vez por conversa pro chat. Senha, documento e cartão nunca entram.</p>
+    <p class="sub" style="margin-top:0">Fatos seus que valem pra toda conversa. Diga "lembra que…".</p>
     <div class="so-hibrido" data-so-hibrido></div>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Anotar sozinho 🧠</div><div class="desc">No fim de cada conversa, o modelo
-          local (no seu PC, de graça) procura fatos novos seus. Ele avisa o que anotou.</div></div>
+        <div class="info"><div class="titulo">Anotar sozinho 🧠</div><div class="desc">No fim da conversa, o modelo local anota fatos novos.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="memoria_auto"><span></span></label>
       </div>
       <div id="fatosLista"></div>
@@ -669,17 +635,13 @@
       </div>
     </div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 4px">O que eu sei dos seus programas</h3>
-    <p class="sub" style="margin-top:0">Na primeira vez que você usa um programa (ou um site, no navegador), ele monta uma
-      ficha: o que é e o que você faz nele. Assim o comentário fala do que você está fazendo, não da tela. É feita uma vez só,
-      pelo que o próprio programa diz de si e pelo modelo local leve (de graça); se ficar vago, ele lê uma vez a página
-      inicial do site (ou a Wikipédia, pra programa). Nunca gasta o plano. Corrija o que ele
-      errou e escolha onde ele pode comentar.</p>
+    <p class="sub" style="margin-top:0">Uma ficha por programa, pro comentário fazer sentido. Corrija o que ele errou.</p>
     <div class="cartao"><div id="fichasLista"><div class="desc">Nenhuma ainda: elas aparecem conforme você usa os programas.</div></div></div>
   </section>
 
   <section id="habilidades_sec">
     <h2>🧑‍💼 Habilidades</h2>
-    <p class="sub">Pacotes da sua profissão. Cada um só funciona no programa dele (fora dele não existe nem gasta nada).</p>
+    <p class="sub">Pacotes da sua profissão, cada um só no programa dele.</p>
     <div id="habilidadesLista"></div>
   </section>
 
@@ -688,7 +650,7 @@
     <p class="sub">Coisas pra fazer agora.</p>
     <div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">Nova conversa</div><div class="desc">O chat começa do zero (as piadas e a memória do dia ficam).</div></div>
+        <div class="info"><div class="titulo">Nova conversa</div><div class="desc">O chat começa do zero.</div></div>
         <button class="botao" data-acao="nova">Começar</button>
       </div>
       <div class="linha">
@@ -704,10 +666,10 @@
 
   <section id="atalhos">
     <h2>⌨️ Atalhos</h2>
-    <p class="sub">Funcionam de qualquer lugar. Pra trocar, edite o config.json em ~/.claudinho.</p>
+    <p class="sub">Funcionam de qualquer lugar.</p>
     <div class="cartao" id="listaAtalhos"></div>
     <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 4px">Atalhos dos programas</h3>
-    <p class="sub" style="margin-top:0">Ensine o que cada atalho faz e peça no chat ou na voz ("roda o projeto no IntelliJ"): ele aperta sozinho, só na janela daquele programa. Teclas com Win, Alt+F4 e Alt+Tab não entram.</p>
+    <p class="sub" style="margin-top:0">Ensine o atalho e peça no chat ou na voz: ele aperta só naquele programa.</p>
     <div id="programas"></div>
     <div class="cartao" style="margin-top:10px">
       <div class="linha novo-prog">
@@ -719,7 +681,7 @@
   </section>
   <section id="programas_sec">
     <h2>🧩 Programas</h2>
-    <p class="sub">Tudo o que está instalado no PC (menu Iniciar e Loja). Desligue o que o Claudinho não deve abrir, apertar tecla nem olhar pelo nome.</p>
+    <p class="sub">Desligue o que ele não deve abrir nem olhar.</p>
     <div class="cartao">
       <div class="linha novo-prog">
         <input id="buscaProg" placeholder="procurar programa…" maxlength="60">
@@ -730,39 +692,27 @@
   </section>
   <section id="rotinas_sec">
     <h2>🌐 Rotinas de sites</h2>
-    <p class="sub">Ensine o Claudinho a fazer algo num site mostrando o caminho: no navegador, clique no ícone da extensão do
-      Claudinho → <b>Liberar este site</b> → <b>⏺ Gravar rotina</b>, faça os cliques e o que digitar (use <b>📖 Marcar área pra
-      ler</b> pra ele ler uma lista, como o quadro de um kanban) e salve com um nome. Depois é só pedir no chat.
-      Senha nunca é gravada; o chat só repete o que você gravou.</p>
+    <p class="sub">Na extensão do Claudinho: <b>Liberar este site</b> → <b>⏺ Gravar rotina</b>. Depois é só pedir no chat.</p>
     <div id="rotinas"></div>
   </section>
   <section id="comandos_sec">
     <h2>🗣️ Meus comandos</h2>
-    <p class="sub">Frases que ele resolve na hora, sem conversar com a IA grande: fale uma delas na conversa por voz
-      ("modo trabalho", "bora jogar") e ele faz as ações em ordem. Erro de escuta passa; se a frase sair diferente, o
-      roteador (modelo barato) ainda reconhece qual comando é.</p>
+    <p class="sub">Frases que ele resolve na hora, sem a IA grande.</p>
     <div class="cartao" style="margin-bottom:14px">
       <div class="linha">
-        <div class="info"><div class="titulo">Comandos rápidos ⚡</div><div class="desc">"Pausa", "próxima", "toca Legião Urbana",
-          "abre o Spotify", "que horas são", "timer de 5 minutos", "aumenta o volume": ele faz na hora, sem passar pela IA.
-          Frase com mais coisa ("abre o projeto e me diz o que tem") continua indo pro chat.</div></div>
+        <div class="info"><div class="titulo">Comandos rápidos ⚡</div><div class="desc">"Pausa", "próxima", "timer de 5 minutos": na hora, sem IA.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_comandos"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Roteador de comandos 🧭</div><div class="desc">A frase não bateu com nenhum comando
-          mas parece um pedido ("deixa o vídeo parado")? O modelo barato só diz qual comando é, numa chamada mínima
-          (uns centavos por mil pedidos). Pergunta e conversa vão direto pro chat.</div></div>
+        <div class="info"><div class="titulo">Roteador de comandos 🧭</div><div class="desc">Frase parecida com um comando? O modelo barato descobre qual.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="voz_roteador"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Aprender fluxos 🎓</div><div class="desc">Quando o chat resolve um pedido agindo
-          no PC ("abre o YouTube", "abre o projeto X no IntelliJ"), a resposta vem com <b>deu certo</b>, <b>não deu</b> e
-          <b>tentar de novo</b>. Deu certo: o que ele fez vira um comando seu, e da próxima vez sai direto, sem gastar a IA.</div></div>
+        <div class="info"><div class="titulo">Aprender fluxos 🎓</div><div class="desc">O que o chat fez e deu certo vira um comando seu.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="aprender_fluxos"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Quando não é comando</div><div class="desc">Mandar pro chat (como sempre) ou o modo
-          estrito: ele só faz comandos e diz que ainda não sabe o resto (não gasta nada com conversa).</div></div>
+        <div class="info"><div class="titulo">Quando não é comando</div><div class="desc">Estrito: só comandos, sem conversa.</div></div>
         <select class="campo" id="vozSemComando" style="flex:0 0 150px"><option value="chat">mandar pro chat</option>
           <option value="estrito">modo estrito</option></select>
       </div>
@@ -777,9 +727,7 @@
   </section>
   <section id="tarefas_sec">
     <h2>⏰ Tarefas</h2>
-    <p class="sub">Fale ou digite "às 18h abre o Spotify", "todo dia às 9h me lembra do daily" ou "toda sexta às 17h
-      toca rock". Na hora ele faz pelo caminho mais barato: lembrete e comando pronto não gastam IA; o resto vai pro
-      chat. Ele só faz enquanto está aberto (perdeu por até 30 min, ainda faz). Com jogo em tela cheia, espera você sair.</p>
+    <p class="sub">Ex.: "às 18h abre o Spotify", "todo dia às 9h me lembra do daily".</p>
     <div class="so-hibrido" data-so-hibrido></div>
     <div id="tarefasLista"></div>
     <div class="cartao" style="margin-top:10px">
@@ -800,16 +748,14 @@
     </div>
     <div class="cartao" style="margin-top:10px">
       <div class="linha">
-        <div class="info"><div class="titulo">Puxar assunto quando importa 💬</div><div class="desc">Uma vez por dia, o
-          resumo (o que tem agendado, chats do Claude Code esperando você); e, depois de 2h direto no mesmo programa, a
-          sugestão de uma pausa. Frases prontas, sem gastar IA, e nunca no meio de jogo.</div></div>
+        <div class="info"><div class="titulo">Puxar assunto quando importa 💬</div><div class="desc">Resumo do dia e sugestão de pausa, sem gastar IA.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="iniciativa"><span></span></label>
       </div>
     </div>
   </section>
   <section id="claude_code_sec">
     <h2>🤖 Claude Code</h2>
-    <p class="sub">O que ele faz com os seus chats do Claude Code: avisa quando terminam, confere o trabalho e mostra o seu limite.</p>
+    <p class="sub">Avisos, revisão do trabalho e o seu limite.</p>
     <div class="cartao">
       <div class="linha">
         <div class="info"><div class="titulo">Avisar quando um chat do Claude Code terminar</div>
@@ -817,24 +763,19 @@
         <label class="chave"><input type="checkbox" data-sistema="aviso"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Quanto o "✓ pronto em…" fica na tela (com o mouse em cima ele espera).</div></div>
+        <div class="info"><div class="titulo">Tempo dos avisos</div><div class="desc">Com o mouse em cima, ele espera.</div></div>
         <input type="range" min="3" max="30" step="1" id="aviso"><span class="valor" id="avisoValor"></span>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Aviso de teste</div><div class="desc">Mostra como fica quando um chat do Claude Code termina.</div></div>
+        <div class="info"><div class="titulo">Aviso de teste</div></div>
         <button class="botao" data-acao="teste">Testar</button>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: quando um chat do Claude Code termina mexendo
-          em arquivo, ele confere se o pedido foi feito mesmo (lê o código e o git diff, sem mudar nada) e, se o projeto
-          tiver testes, pede pra rodar. O veredito vem com o botão <b>corrige</b>, que leva tudo pro chat. Pasta fora das
-          liberadas: ele pede pra liberar o projeto inteiro uma vez.</div></div>
+        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: confere o trabalho do Claude Code quando mexe em arquivo.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_junior"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Mostrar meu consumo do Claude 📊</div><div class="desc">Põe a barra de status do
-          Claudinho no Claude Code (seu limite de 5 horas e o semanal, Pro/Max) e mostra debaixo do player. Só atualiza
-          enquanto você usa o Claude Code. Registra no ~/.claude/settings.json (com backup antes).</div></div>
+        <div class="info"><div class="titulo">Mostrar meu consumo do Claude 📊</div><div class="desc">Seu limite de 5 horas e o semanal (Pro/Max).</div></div>
         <label class="chave"><input type="checkbox" data-sistema="barra"><span></span></label>
       </div>
     </div>
@@ -844,13 +785,11 @@
     <p class="sub">Como ele roda neste PC.</p>
     <div class="cartao">
       <div class="linha" style="flex-wrap:wrap">
-        <div class="info"><div class="titulo">⚡ Modo de IA</div><div class="desc">Onde ele pensa: no seu PC, no Claude ou
-          nos dois. Tarefas na hora marcada, memória, iniciativa e cortar a fala são do híbrido.</div></div>
+        <div class="info"><div class="titulo">⚡ Modo de IA</div><div class="desc">Tarefas, memória e iniciativa são do híbrido.</div></div>
         <div id="modoIASistema" style="flex-basis:100%"></div>
       </div>
       <div class="linha" style="flex-wrap:wrap">
-        <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Quem pensa no chat, nas piadas olhando a tela e nos
-          resumos. Ao trocar, a conversa do chat recomeça (o mini cérebro e as piadas continuam).</div></div>
+        <div class="info"><div class="titulo">🧠 Motor de IA</div><div class="desc">Ao trocar, a conversa recomeça.</div></div>
         <div class="segmentos" id="motores">
           <button data-v="claude_code">Claude Code</button><button data-v="api">Chave da API</button>
           <button data-v="ollama">IA local</button><button data-v="nenhum">Nenhum</button>
@@ -858,23 +797,20 @@
         <div class="motor-detalhe" id="detalheMotor"></div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Abrir junto com o Windows</div><div class="desc">Cria um atalho na pasta Inicializar.</div></div>
+        <div class="info"><div class="titulo">Abrir junto com o Windows</div></div>
         <label class="chave"><input type="checkbox" data-sistema="inicio"><span></span></label>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">🧩 Extensão do navegador</div><div class="desc">Deixa ele tocar música no
-          YouTube e repetir rotinas em sites (Chrome, Edge ou Opera).</div></div>
+        <div class="info"><div class="titulo">🧩 Extensão do navegador</div><div class="desc">Música no YouTube e rotinas em sites.</div></div>
         <div class="acoes-ext"><span class="status-ext" id="statusExt">—</span>
           <button class="botao" id="instalarExt">Instalar extensão</button></div>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Passo a passo inicial 👋</div><div class="desc">O tour do primeiro acesso: quem é
-          você, visual, jeito de comentar, voz, privacidade.</div></div>
+        <div class="info"><div class="titulo">Passo a passo inicial 👋</div></div>
         <button class="botao" id="reverTour">Rever</button>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Avisar quando sair versão nova 🎉</div><div class="desc">Olha a última versão
-          no GitHub (só leitura, uma vez ao abrir e a cada 12 h) e avisa num balão. Não baixa nem instala nada sozinho.</div></div>
+        <div class="info"><div class="titulo">Avisar quando sair versão nova 🎉</div><div class="desc">Só avisa; não baixa nada sozinho.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="avisar_versao"><span></span></label>
       </div>
       <div class="linha">
@@ -1468,8 +1404,7 @@ function montarHibrido() {
     el.hidden = hibrido;
     if (hibrido || el.dataset.montado) continue;
     el.dataset.montado = 1;
-    el.innerHTML = `<span>🔒 Só no modo <b>híbrido</b>: o que roda sozinho fica no seu PC, de graça, e só o que pensa
-      vai pro Claude. Na nuvem pura isso estouraria o seu plano.</span><button class="botao principal">Usar o híbrido</button>`;
+    el.innerHTML = `<span>🔒 Só no modo <b>híbrido</b>.</span><button class="botao principal">Usar o híbrido</button>`;
     el.querySelector("button").onclick = async () => { await escolherModoIA("hibrido"); avisar("modo híbrido ✓"); };
   }
 }
@@ -1567,8 +1502,8 @@ function montarFichas() {
     bloco.innerHTML = '<div class="prog-topo"><b></b><span class="desc"></span></div><div class="linha novo-prog" style="padding:0"></div>';
     bloco.querySelector("b").textContent = f.nome;
     bloco.querySelector(".desc").textContent = (f.chave.startsWith("site:") ? "site" : f.chave.slice(4)) +
-      (f.o_que_e ? ` · ${f.o_que_e}` : "") +
-      (f.origem === "voce" ? " · corrigida por você" : f.origem === "basica" ? " · só o básico (o local completa depois)" : "");
+      (f.o_que_e ? ` · ${f.o_que_e.length > 60 ? f.o_que_e.slice(0, 60).trimEnd() + "…" : f.o_que_e}` : "") +
+      (f.origem === "voce" ? " · corrigida por você" : "");
     const topo = bloco.querySelector(".prog-topo"), linha = bloco.querySelector(".linha");
     const categoria = document.createElement("select"), comentar = document.createElement("select");
     categoria.append(...opcoes(CATEGORIAS_FICHA, f.categoria));
@@ -1593,10 +1528,7 @@ function montarHabilidade(caixa, completo) {
   const ligado = ligadas.includes("vendedor");
   caixa.innerHTML = `<div class="cartao">
       <div class="linha">
-        <div class="info"><div class="titulo">💬 WhatsApp</div><div class="desc">No <b>WhatsApp Web</b>: quando chega mensagem
-          eu pergunto se você quer uma sugestão de resposta, ou é só pedir no meu menu. Eu leio a conversa pra entender o assunto
-          e escrevo do seu jeito; se for cliente, uso o que você me contou da loja. Atalho: <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>. A sugestão vai pro campo de mensagem e
-          <b>quem envia é sempre você</b>. Perceber a mensagem nova é de graça; a IA só roda quando você aceita.</div></div>
+        <div class="info"><div class="titulo">💬 WhatsApp</div><div class="desc">Sugiro respostas no <b>WhatsApp Web</b> (<kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>). <b>Quem envia é você.</b></div></div>
         <label class="chave"><input type="checkbox" id="habVendedor" ${ligado ? "checked" : ""}><span></span></label>
       </div>
       <div class="hab-detalhes" ${ligado ? "" : "hidden"}>
@@ -1607,18 +1539,11 @@ function montarHabilidade(caixa, completo) {
           <label class="chave"><input type="checkbox" id="habAvisar" ${v.avisar ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
-          <div class="info"><div class="titulo">WhatsApp só meu 📱</div><div class="desc">Abro um navegador à parte (Edge, minimizado)
-            com o <b>meu</b> WhatsApp Web, como um aparelho conectado: você escaneia o QR code uma vez (celular → WhatsApp → Aparelhos
-            conectados). Aí eu leio, abro conversas e preparo respostas sem mexer no seu navegador nem na sua tela.
-            <b>Cuidados:</b> ele ocupa uma vaga de aparelho conectado; abrir uma conversa ali marca como lida e quem escreveu vê o tique azul
-            (dá para desligar a confirmação de leitura no WhatsApp); a sessão fica guardada neste PC; e vale o mesmo risco do WhatsApp
-            não gostar de automação. Para fechar a sessão, desconecte o aparelho no celular.</div></div>
+          <div class="info"><div class="titulo">WhatsApp só meu 📱</div><div class="desc">Um WhatsApp Web à parte, como aparelho conectado (QR code uma vez). Abrir conversa ali marca como lida.</div></div>
           <label class="chave"><input type="checkbox" id="habProprio" ${v.proprio ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
-          <div class="info"><div class="titulo">Olhar as conversas não lidas 📥</div><div class="desc">de tempos em tempos olho a lista de
-            conversas e te aviso de quem mandou mensagem (nome e prévia), sem abrir nenhuma conversa, então nada é marcado como lido.
-            Sem IA. O WhatsApp Web precisa estar aberto no navegador (pode ser em outra aba).</div></div>
+          <div class="info"><div class="titulo">Olhar as conversas não lidas 📥</div><div class="desc">Aviso quem mandou mensagem, sem abrir nada. Sem IA.</div></div>
           <label class="chave"><input type="checkbox" id="habVarrer" ${v.varrer ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
@@ -1626,26 +1551,18 @@ function montarHabilidade(caixa, completo) {
           <input type="number" id="habVarrerMin" min="1" max="30" value="${v.varrer_min || 3}" style="width:70px">
         </div>
         <div class="linha">
-          <div class="info"><div class="titulo">Deixar eu enviar 📤</div><div class="desc">a sugestão ganha o botão
-            <b>enviar</b>, que preenche e manda na hora (o clique é a sua confirmação). Desligado, eu só preencho o campo.
-            Eu nunca mando nada sozinho, só respondo conversas em que <b>você já escreveu</b> (nunca puxo assunto) e tenho limite próprio: no máximo 1 a cada 25 s, 15 por hora e 100 por dia.
-            <b>⚠️ Ainda há risco:</b> o WhatsApp não gosta de automação e pode restringir o número, mesmo com pouco uso. O risco é baixo
-            nesse ritmo, mas existe; você assume.</div></div>
+          <div class="info"><div class="titulo">Deixar eu enviar 📤</div><div class="desc">A sugestão ganha o botão <b>enviar</b>. Com limite por hora e dia. ⚠️ O WhatsApp pode restringir o número.</div></div>
           <label class="chave"><input type="checkbox" id="habEnviar" ${v.enviar ? "checked" : ""}><span></span></label>
         </div>
         <div class="linha">
-          <div class="info"><div class="titulo">Só no meu PC 🏠</div><div class="desc">a conversa do cliente não sai do PC (modelo
-            local: de graça, mas a resposta sai bem mais fraca)</div></div>
+          <div class="info"><div class="titulo">Só no meu PC 🏠</div><div class="desc">A conversa não sai do PC (resposta mais fraca).</div></div>
           <label class="chave"><input type="checkbox" id="habLocal" ${v.so_local ? "checked" : ""}><span></span></label>
         </div>
-        ${completo ? `<div class="info" style="margin-top:8px"><div class="titulo">Sobre a sua loja (se você vende)</div><div class="desc">Catálogo, preços,
-          prazos, formas de pagamento, perguntas que sempre chegam. Eu só uso o que estiver aqui (o resto deixo [entre colchetes]
-          pra você completar). Vão pra IA só os pedaços que têm a ver com a conversa.</div></div>
+        ${completo ? `<div class="info" style="margin-top:8px"><div class="titulo">Sobre a sua loja (se você vende)</div><div class="desc">Catálogo, preços, prazos e pagamento. Só uso o que estiver aqui.</div></div>
           <textarea id="habConhecimento" class="campo" rows="10" maxlength="30000" style="width:100%;margin-top:8px;resize:vertical"
             placeholder="Ex.:\n- Bike aro 29 Caloi: R$ 2.400 à vista, 10x sem juros no cartão\n- Entrega em Curitiba: 2 dias úteis, frete grátis acima de R$ 300\n- Troca em até 7 dias com nota"></textarea>
           <div class="linha novo-prog"><span class="desc" id="habConta"></span><button class="botao" id="habSalvar">Salvar</button></div>`
           : `<p class="desc" style="margin-top:8px">O catálogo, os preços e o resto da loja você escreve em <b>Faz por mim → Habilidades</b>.</p>`}
-        <p class="desc">Por enquanto é o WhatsApp Web (no navegador com a extensão do Claudinho).</p>
       </div>
     </div>`;
   const salvarV = campos => mudar("vendedor", Object.assign({}, estado.cfg.vendedor || {}, campos));
@@ -1783,12 +1700,12 @@ function atualizarVivos() {
 let motorMontado = "";
 // modelo de cada coisa fora do chat: [chave, ação, o que é]
 const ACOES_MODELO = [
-  ["piadas", "Piadas e comentários 😄", "as piadas olhando a tela e os comentários de música"],
-  ["revisao", "Revisão do Júnior 🔎", "quando um chat do Claude Code termina mexendo em arquivo, confere se ficou feito"],
-  ["junior_chat", "Corrigir pela revisão", "o botão \"corrige\" da revisão, só naquela pergunta"],
-  ["resumo", "Resumir a janela 📄", "o atalho de resumir/explicar o que está na tela"],
-  ["avisos", "Avisos e notificações 🔔", "o resumo das notificações e o aviso de chat do Claude Code que terminou"],
-  ["roteador", "Roteador de comandos 🧭", "diz qual dos seus comandos a frase falada pede (chamada mínima)"],
+  ["piadas", "Piadas e comentários 😄", ""],
+  ["revisao", "Revisão do Júnior 🔎", ""],
+  ["junior_chat", "Corrigir pela revisão", ""],
+  ["resumo", "Resumir a janela 📄", ""],
+  ["avisos", "Avisos e notificações 🔔", ""],
+  ["roteador", "Roteador de comandos 🧭", ""],
 ];
 // o que o modelo local (Ollama) dá conta: o resto precisa ler direito ou enxergar o print
 const ACOES_LOCAL = ["piadas", "avisos", "roteador"];
@@ -1796,15 +1713,12 @@ function tabelaAcoes(m) {
   const linhas = ACOES_MODELO.map(([id, nome, desc]) => {
     const opcoes = m.modelos.concat(ACOES_LOCAL.includes(id) ? [["local", "Local 🏠"]] : []);
     return `<div class="linha" style="padding:6px 0">
-    <div class="info"><div class="titulo" style="font-size:13px">${nome}</div><div class="desc">${desc}</div></div>
+    <div class="info"><div class="titulo" style="font-size:13px">${nome}</div>${desc ? `<div class="desc">${desc}</div>` : ""}</div>
     <select class="campo" data-acao-modelo="${id}" style="flex:0 0 120px">${opcoes.map(([mid, mnome]) =>
       `<option value="${mid}"${(m.modelos_acao || {})[id] === mid ? " selected" : ""}>${mnome}</option>`).join("")}</select></div>`;
   }).join("");
   return `<div style="margin-top:14px"><b>Modelo por ação</b></div>
-    <div class="desc" style="margin-bottom:4px">Fora do chat, cada coisa pode usar um modelo. O Sonnet acerta mais e o Haiku
-      gasta bem menos: deixe o Sonnet onde a resposta precisa ser certeira (a revisão) e o Haiku no que é toda hora (piadas).
-      <b>Local 🏠</b> roda no modelo do Ollama aqui no PC, de graça (precisa do Ollama com o modelo baixado); em jogo,
-      com a placa cheia ou com o Ollama fechado, essa ação vai pro Haiku sozinha.</div>${linhas}`;
+    <div class="desc" style="margin-bottom:4px">Sonnet acerta mais, Haiku gasta menos, <b>Local 🏠</b> é de graça no seu PC.</div>${linhas}`;
 }
 function ligarAcoes(caixa, m) {
   for (const s of caixa.querySelectorAll("[data-acao-modelo]"))
@@ -1828,15 +1742,13 @@ function montarMotor() {
   motorMontado = assinatura;
   if (m.atual === "claude_code") {
     const esforco = ESFORCOS.findIndex(e => e[0] === m.chat_esforco);
-    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa o Claude Code instalado e logado no seu PC (comando <code>claude</code>):
-      chat com ferramentas, piadas olhando a tela e resumos. ${m.claude ? "" : "Instale o Claude Code e rode <code>claude</code> → <code>/login</code>."}</p>
+    caixa.innerHTML = `${situacao}${m.claude ? "" : '<p style="margin:8px 0 0">Instale o Claude Code e rode <code>claude</code> → <code>/login</code>.</p>'}
       <div style="margin-top:12px"><b>Modelo do chat</b></div>
       <div class="modelos-locais">${m.modelos.map(([id, nome, desc]) => `<div class="modelo-local${id === m.chat_modelo ? " ativo" : ""}"
         data-chat-modelo="${id}"><b>${nome}</b>${desc}</div>`).join("")}</div>
       <div style="margin-top:12px"><b>Esforço</b> <span class="valor" id="esforcoValor">${ESFORCOS[esforco < 0 ? 0 : esforco][1]}</span></div>
       <div class="linha-campo"><input type="range" min="0" max="${ESFORCOS.length - 1}" step="1" value="${esforco < 0 ? 0 : esforco}" id="esforco" style="flex:1"></div>
-      <div class="desc" style="margin-top:4px">Mais esforço = ele pensa mais antes de responder: fica melhor nas coisas difíceis,
-        mas demora mais e gasta mais do seu plano. O Haiku leve é o mais rápido. Vale só pro chat.</div>
+      <div class="desc" style="margin-top:4px">Mais esforço: melhor no difícil, mais lento e mais caro.</div>
       ${tabelaAcoes(m)}`;
     ligarAcoes(caixa, m);
     for (const c of caixa.querySelectorAll("[data-chat-modelo]")) c.onclick = () => mudar("chat_modelo", c.dataset.chatModelo);
@@ -1844,8 +1756,7 @@ function montarMotor() {
     slide.oninput = () => { document.getElementById("esforcoValor").textContent = ESFORCOS[slide.value][1]; };
     slide.onchange = () => mudar("chat_esforco", ESFORCOS[slide.value][0]);
   } else if (m.atual === "api") {
-    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Usa uma chave da API da Anthropic (crie em console.anthropic.com): paga por uso,
-      com o Haiku nas coisas do dia a dia e o Sonnet no resumo de tela. A chave fica guardada criptografada pelo Windows, só no seu usuário.</p>
+    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Chave da API da Anthropic (console.anthropic.com), paga por uso. Fica criptografada.</p>
       <div class="linha-campo"><input id="chaveApi" class="campo" type="password" placeholder="${m.api_chave ? "chave salva — cole outra pra trocar" : "sk-ant-…"}" autocomplete="off">
       <button class="botao principal" id="salvarChave">Salvar</button>${m.api_chave ? '<button class="botao" id="apagarChave">Apagar</button>' : ""}</div>
       ${tabelaAcoes(m)}`;
@@ -1866,12 +1777,10 @@ function montarMotor() {
     }).join("");
     const progresso = b.modelo ? `<div>Baixando ${b.modelo}… ${b.total ? Math.round(b.feito / b.total * 100) + "%" : ""}</div>
       <div class="barra"><i style="width:${b.total ? b.feito / b.total * 100 : 2}%"></i></div>` : (b.erro ? `<div>⚠ ${b.erro}</div>` : "");
-    caixa.innerHTML = `<div class="aviso-pc">⚠️ Usar um modelo local consome o desempenho do seu PC (processador, memória e placa de vídeo).
-      Escolha com responsabilidade — em jogo ou tela cheia ele não roda e usa o banco de frases.</div>${situacao}
+    caixa.innerHTML = `<div class="aviso-pc">⚠️ Pesa no PC (processador, memória e placa). Em jogo ele não roda.</div>${situacao}
       <div class="modelos-locais">${cartoes}</div>${progresso}
       <div class="linha" style="padding:10px 0 4px"><div class="info"><div class="titulo">Pensar antes de responder 🤔</div>
-        <div class="desc">No chat, ele raciocina antes: segue melhor as instruções e erra menos, mas demora bem mais
-        (às vezes o dobro ou mais). As tarefas rápidas do híbrido continuam sem pensar.</div></div>
+        <div class="desc">Erra menos, mas demora bem mais. Só no chat.</div></div>
         <label class="chave"><input type="checkbox" id="ollamaPensar"${m.ollama_pensar ? " checked" : ""}><span></span></label></div>
       ${o.rodando ? `<button class="botao" id="baixarModelo"${b.modelo ? " disabled" : ""}>Baixar o modelo escolhido</button>`
                   : `O Ollama ${o.instalado ? "está instalado mas fechado: abra ele" : "não está instalado"}.
@@ -1883,8 +1792,7 @@ function montarMotor() {
     const site = document.getElementById("siteOllama");
     if (site) site.onclick = () => acao("ollama_site", "abri o site do Ollama");
   } else {
-    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Sem IA: não gasta nada e não pesa no PC. O chat fica desligado e as piadas
-      vêm do banco de frases; música, YouTube, esquetes, skins e o resto funcionam normal.</p>`;
+    caixa.innerHTML = `${situacao}<p style="margin:8px 0 0">Sem IA: sem chat, piadas do banco de frases. O resto funciona normal.</p>`;
   }
 }
 // o peso da IA local (Ollama) no PC agora: CPU e RAM dos processos dela; a placa de vídeo é a placa toda
@@ -1988,7 +1896,7 @@ function montarStt() {
   document.getElementById("sttLinhaChave").style.display = nuvem ? "" : "none";
   const info = document.getElementById("sttChaveInfo");
   info.textContent = st.teste ? st.teste : st.erro ? `Última falha: ${st.erro} (usando o Whisper local)` :
-    st.chave ? "Chave salva ✓ (cole outra pra trocar, ou clique em Testar)" : "Cole a chave da sua conta (Groq: console.groq.com, tem plano grátis). Fica criptografada pelo Windows.";
+    st.chave ? "Chave salva ✓ (cole outra pra trocar, ou clique em Testar)" : "Groq tem plano grátis (console.groq.com). Fica criptografada.";
   document.getElementById("sttForm").onsubmit = ev => {
     ev.preventDefault();
     const campo = document.getElementById("sttChave");
@@ -2015,7 +1923,7 @@ function montarVozes(forcar) {
   // a voz escolhida não deu (ex.: minha voz sem memória livre): ele fala no Faber até dar, e conta aqui
   const caiu = f.erro_voz && estado.cfg.voz_voz.startsWith("minha:") ? `⚠ ${f.erro_voz}: por enquanto ele fala na voz reserva.` : "";
   info.textContent = f.erro ? f.erro : baixando ? "Baixando a voz… (uns segundos)" : caiu ||
-    "Escolha uma. As que ainda não estão no PC baixam na hora (o tamanho aparece ao lado).";
+    "As que faltam baixam na hora.";
   sel.onchange = async () => {
     const v = f.vozes.find(x => x.id === sel.value);
     if (v.instalada) { await mudar("voz_voz", v.id); acao("voz_testar", "falando… 🔊"); }
@@ -2030,10 +1938,10 @@ function montarVoz() {
     mudar("voz_apelidos", ap.value.split(",").map(s => s.trim()).filter(Boolean));
   };
   const det = (estado.voz && estado.voz.detector) || {}, detInfo = document.getElementById("detectorInfo");
-  const base = 'Um modelo pequeno que só sabe ouvir "Ei Claudinho": o Whisper só entra quando ele ouve a chamada, então a conversa da sala e a TV não acordam ele à toa. ';
-  detInfo.textContent = base + (!det.treinado ? "Ainda não foi treinado neste PC (treino_ativacao/): sem ele, a chamada é só pelo Whisper."
+  const base = 'Só acorda com "Ei Claudinho": a TV não acorda ele. ';
+  detInfo.textContent = base + (!det.treinado ? "Ainda não treinado neste PC."
     : det.erro ? `Não carregou: ${det.erro}`
-    : det.info && det.info.acerto != null ? `Treinado: reconhece ${Math.round(det.info.acerto * 100)}% das chamadas nos testes; em áudio qualquer, só ~${Math.round(det.info.disparos_por_hora)} vez(es) por hora ele pede pro Whisper conferir (e o Whisper ainda tem que ouvir a chamada pra acordar).${det.ligado ? " Rodando ✓" : " Liga junto com a escuta por voz."}`
+    : det.info && det.info.acerto != null ? `Acerta ${Math.round(det.info.acerto * 100)}% das chamadas.${det.ligado ? " Rodando ✓" : ""}`
     : "Treinado.");
   const semCmd = document.getElementById("vozSemComando");
   if (document.activeElement !== semCmd) semCmd.value = estado.cfg.voz_sem_comando || "chat";
@@ -2108,10 +2016,9 @@ function opcoes(corpo, lista, atual, escolher) {   // botões grandes de escolhe
 }
 // ---------- o modo de IA (o segundo passo do tour) ----------
 const MODOS_IA = [
-  {id: "hibrido", nome: "⚡ Híbrido (recomendado)", desc: "o que é simples e toda hora (entender comandos de voz, resumir " +
-    "avisos) roda no seu PC, de graça; conversar e pensar de verdade fica com o Claude. Gasta bem menos do seu plano"},
-  {id: "nuvem", nome: "☁️ Só nuvem", desc: "tudo pelo Claude. Não pesa nada no PC, mas cada coisinha gasta um pouco do seu plano"},
-  {id: "local", nome: "🏠 Só local", desc: "tudo no seu PC, sem conta e sem gastar nada. Usa a placa de vídeo e é bem menos esperto"},
+  {id: "hibrido", nome: "⚡ Híbrido (recomendado)", desc: "o simples no PC, o resto no Claude. Gasta bem menos"},
+  {id: "nuvem", nome: "☁️ Só nuvem", desc: "tudo no Claude. Não pesa no PC, gasta mais do plano"},
+  {id: "local", nome: "🏠 Só local", desc: "tudo no PC, de graça. Pesa na placa e é menos esperto"},
 ];
 const TAREFAS_LOCAIS = ["avisos", "roteador"];   // o que o híbrido manda pro local (as piadas o modelo pequeno faz mal)
 let tourVigia = null;
@@ -2185,11 +2092,7 @@ function desenharCerebro(caixa) {
     else parte = `✓ <b>Modelo local</b> (${modelo}): pronto.`;
     linhas.push(parte);
     if (modo === "hibrido" && !(o.rodando && tem))
-      linhas.push('<span class="desc">Enquanto o local não fica pronto, eu uso o Claude no lugar dele: nada deixa de funcionar.</span>');
-    linhas.push(modo === "hibrido"
-      ? '<span class="desc">No híbrido o local é sempre o leve (qwen3:1.7b): ele só entende os comandos e resume os avisos.</span>'
-      : '<span class="desc">Outro modelo (mais esperto ou que enxerga a tela): <b>Sistema → Motor de IA → IA local</b>.</span>');
-    linhas.push('<span class="desc">Em jogo ou tela cheia eu tiro o modelo da placa de vídeo na hora.</span>');
+      linhas.push('<span class="desc">Até o local ficar pronto, uso o Claude.</span>');
   }
   const html = linhas.map(l => `<div style="margin:4px 0">${l}</div>`).join("");
   if (caixa.dataset.html === html) return;   // não redesenha à toa (o botão piscava a cada 2 s)

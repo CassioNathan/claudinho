@@ -35,7 +35,10 @@ VOZES = {  # id do Piper → nome que aparece no painel
     "edge:pt-BR-FranciscaNeural": "Francisca (Microsoft, online)",
     "edge:pt-BR-AntonioNeural": "Antônio (Microsoft, online)",
 }
-VOZ_PADRAO = "pt_BR-faber-medium"
+VOZ_PADRAO = "minha:darwin"   # a voz do Claudinho (baixa sozinha na 1ª vez; até lá, fala no Faber)
+# vozes próprias já treinadas, publicadas numa release à parte do GitHub (114 MB não cabem no git): baixam como as do Piper
+PRONTAS = {"darwin": ("Darwin (a voz do Claudinho)",
+                      "https://github.com/CassioNathan/claudinho/releases/download/voz-darwin-1/darwin.onnx")}
 TOM_MAXIMO = 1.6   # o tom no máximo (40) sobe ≈ +8 semitons: o Faber vai de ~150-180 Hz pra ~245 Hz
 PASTA = sistema.DADOS / "vozes"   # respeita o CLAUDINHO_DADOS, como o resto do Claudinho
 KOKORO_PASTA = PASTA / "kokoro"
@@ -67,6 +70,22 @@ FIM_DE_FRASE = re.compile(r"(?<=[.!?…])\s+|\n+")
 EMOJI = re.compile("[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF\U0000FE0F\U0000200D]")
 
 
+def _baixar_arquivo(url, destino):
+    """Baixa pra .part e só então renomeia (download cortado não vira arquivo quebrado). Já existe: não baixa."""
+    import urllib.request
+    if destino.exists():
+        return
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    parcial = destino.with_suffix(destino.suffix + ".part")
+    with urllib.request.urlopen(url, timeout=60) as r, open(parcial, "wb") as saida:
+        while True:
+            pedaco = r.read(1 << 20)
+            if not pedaco:
+                break
+            saida.write(pedaco)
+    parcial.replace(destino)
+
+
 def eh_kokoro(voz):
     return bool(voz) and voz.startswith("kokoro:")
 
@@ -92,13 +111,23 @@ def achar_minhas():
     catálogo novo e troca de uma vez: a thread da voz e o painel (outra thread) podem estar percorrendo o antigo."""
     global VOZES
     novo = {v: nome for v, nome in VOZES.items() if not eh_minha(v)}
+    for nome, (rotulo, _) in PRONTAS.items():   # aparecem mesmo sem baixar (o painel oferece o download)
+        novo[f"minha:{nome}"] = rotulo
     if MINHAS.is_dir():
         for pasta in sorted(MINHAS.iterdir()):
+            if pasta.name in PRONTAS:
+                continue
             if (pasta / "voz.onnx").exists():   # treinada: leve, roda no processador como as outras do Piper
                 novo[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (treinada, leve)"
             elif (pasta / "referencia.wav").exists():
                 novo[f"minha:{pasta.name}"] = f"Minha voz: {pasta.name} (Chatterbox, usa a placa de vídeo)"
     VOZES = novo
+
+
+def pronta(voz):
+    """O nome de uma voz própria publicada (PRONTAS), ou None."""
+    nome = voz.split(":", 1)[1] if eh_minha(voz) else None
+    return nome if nome in PRONTAS else None
 
 
 def instalada(voz):
@@ -122,7 +151,8 @@ def catalogo():
     """As vozes que o painel oferece e quais já estão no PC."""
     achar_minhas()
     return [{"id": v, "nome": nome, "instalada": instalada(v),
-             "tamanho": ("precisa de internet" if eh_edge(v) else "sua, no seu PC" if eh_minha(v) else
+             "tamanho": ("precisa de internet" if eh_edge(v) else "~115 MB" if pronta(v) else
+                        "sua, no seu PC" if eh_minha(v) else
                          "~350 MB, o modelo vale pras 3 vozes do Kokoro" if eh_kokoro(v) else "~60 MB")}
             for v, nome in list(VOZES.items())]
 
@@ -232,7 +262,11 @@ class Fala:
 
     def carregar(self):
         """Carrega a voz escolhida em segundo plano (e faz uma síntese de aquecimento: a primeira é bem mais lenta).
-        Se a escolha mudou, troca."""
+        Se a escolha mudou, troca. A escolhida é uma voz publicada que ainda não está no PC (outro PC, instalação
+        nova): baixa sozinha, e enquanto isso fala na que tiver."""
+        pedida = self.config().get("voz_voz") or VOZ_PADRAO
+        if pronta(pedida) and not instalada(pedida) and not self.erro_download:
+            self.baixar(pedida)
         escolhida = self.nome_escolhido()
         with self.trava:
             if self.carregando or not escolhida or self.voz_nome == escolhida:
@@ -277,14 +311,19 @@ class Fala:
 
     def baixar(self, voz):
         """Baixa uma voz do catálogo (em segundo plano; o painel acompanha por `baixando`)."""
-        if voz not in VOZES or eh_minha(voz) or self.baixando or instalada(voz):
+        if voz not in VOZES or (eh_minha(voz) and not pronta(voz)) or self.baixando or instalada(voz):
             return
         self.baixando, self.erro_download = voz, None
 
         def trabalhar():
             try:
                 PASTA.mkdir(parents=True, exist_ok=True)
-                if eh_kokoro(voz):
+                if pronta(voz):
+                    self._baixar_pronta(pronta(voz))
+                    while self.carregando:   # a reserva ainda carregando: espera, senão a troca era ignorada
+                        time.sleep(0.5)
+                    self.carregar()   # era a escolhida (caso da 1ª vez): troca a reserva por ela
+                elif eh_kokoro(voz):
                     self._baixar_kokoro()
                 else:
                     from piper.download_voices import download_voice
@@ -413,21 +452,16 @@ class Fala:
             return None, 0
 
     def _baixar_kokoro(self):
-        """O modelo (~325 MB) e o arquivo de vozes (~28 MB) do Kokoro; baixa pra .part e só então renomeia."""
-        import urllib.request
-        KOKORO_PASTA.mkdir(parents=True, exist_ok=True)
+        """O modelo (~325 MB) e o arquivo de vozes (~28 MB) do Kokoro."""
         for nome in KOKORO_ARQUIVOS:
-            destino = KOKORO_PASTA / nome
-            if destino.exists():
-                continue
-            parcial = destino.with_suffix(destino.suffix + ".part")
-            with urllib.request.urlopen(_KOKORO_URL + nome, timeout=60) as r, open(parcial, "wb") as saida:
-                while True:
-                    pedaco = r.read(1 << 20)
-                    if not pedaco:
-                        break
-                    saida.write(pedaco)
-            parcial.replace(destino)
+            _baixar_arquivo(_KOKORO_URL + nome, KOKORO_PASTA / nome)
+
+    def _baixar_pronta(self, nome):
+        """Uma voz própria publicada (PRONTAS) pra minhas/<nome>/: o .json antes (o voz.onnx existir é o sinal de
+        "instalada")."""
+        url = PRONTAS[nome][1]
+        _baixar_arquivo(url + ".json", MINHAS / nome / "voz.onnx.json")
+        _baixar_arquivo(url, MINHAS / nome / "voz.onnx")
 
     def _iniciar_fios(self):
         if not self._fios:

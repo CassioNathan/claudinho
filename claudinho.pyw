@@ -118,7 +118,7 @@ CONFIG_PADRAO = {
     "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
     "voz_fala": True,                    # ele responde falando (Piper) em toda mensagem do chat (botão 🔊 no balão)
     "so_fala": False,                    # só fala: nada de balão de texto; balão só com os botões quando precisa de você
-    "voz_voz": "pt_BR-faber-medium",     # qual voz do Piper (as de fala.VOZES)
+    "voz_voz": fala.VOZ_PADRAO,          # qual voz (as de fala.VOZES); a do Claudinho baixa sozinha na 1ª vez
     "voz_limpar": True,                  # ganho automático (na faixa) + filtro de ruído no microfone
     "voz_reconhecimento": "local",       # "local" (Whisper no PC) ou um provedor de nuvem de stt.PROVEDORES ("groq", "openai")
     "voz_travar_nivel": True,            # depois da chamada, só conta voz tão alta quanto ela (TV e gente ao fundo não)

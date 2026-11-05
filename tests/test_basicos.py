@@ -586,3 +586,11 @@ def test_vendedor_conversa_e_resposta():
     pessoal = h.prompt_sugestao(conversa, {"loja": "", "tom": ""}, "", eu="Cassio")   # sem loja: conversa qualquer
     assert "venda" not in pessoal.split("Conversa (")[0].split("ignore.")[-1]
     assert h.limpar('Sugestão: "Temos sim! Sai por R$ 2.400."') == "Temos sim! Sai por R$ 2.400."
+
+
+# ---------- voz do Claudinho publicada ----------
+def test_voz_pronta():
+    import fala
+    assert fala.pronta("minha:darwin") == "darwin" and fala.VOZ_PADRAO == "minha:darwin"
+    assert fala.pronta("minha:outra") is None and fala.pronta("pt_BR-faber-medium") is None
+    assert "minha:darwin" in fala.VOZES and fala.PRONTAS["darwin"][1].startswith("https://github.com/")

@@ -823,9 +823,14 @@ PROMPT_REVISAO = (
     "O que pediram: <dado>{pedido}</dado>\n\nO que o assistente respondeu no fim: <dado>{resposta}</dado>\n\n"
     "Arquivos que ele editou ou criou: <dado>{mexeu}</dado>\n\n"
     "git status: <dado>{status}</dado>\n\ngit diff: <dado>{diff}</dado>\n\n"
+    "Ele JÁ LEU a resposta do assistente: não repita nem descreva o que foi feito, não conte o que você conferiu "
+    "e não fale do que não leu. Só diga o que AGREGA: problema real que o assistente não mencionou, ou melhoria que "
+    "vale o trabalho. Nada de estilo, sugestão óbvia ou \"conferir se tem teste\". Não achou nada assim: listas "
+    "vazias (é o melhor resultado).\n\n"
     "Responda SÓ um JSON, em português, sem nada antes ou depois: {{\"feito\": true ou false, "
-    "\"resumo\": \"uma frase curta do veredito\", \"problemas\": [\"até 3, curtos e concretos\"], "
-    "\"melhorias\": [\"até 3, só as que valem a pena\"], \"teste\": \"o comando que roda os testes "
+    "\"resumo\": \"o veredito em até 8 palavras, ex.: 'Feito.' ou 'Feito, mas falta tratar o erro de rede.'\", "
+    "\"problemas\": [\"até 3, uma linha curta cada, concretos (arquivo e o quê)\"], "
+    "\"melhorias\": [\"até 2, uma linha curta cada, só as que valem a pena\"], \"teste\": \"o comando que roda os testes "
     "deste projeto, se existir e cobrir o que mudou, exatamente um destes: " + ", ".join(revisao.TESTES)
     + ", " + ", ".join(revisao.WRAPPERS) + "; senão vazio\"}}"
 )
@@ -5663,9 +5668,14 @@ class Claudinho:
 
     def fala_da_revisao(self, nome, raiz, r, teste, saida):
         """O balão do veredito: o que falta, o que melhorar, como foram os testes; "corrige" leva tudo pro chat."""
-        problemas = [str(x) for x in (r.get("problemas") or []) if x][:3]
-        melhorias = [str(x) for x in (r.get("melhorias") or []) if x][:3]
-        linhas = [("✅ " if r.get("feito") and not problemas else "⚠ ") + str(r.get("resumo") or "").strip()]
+        curto = lambda x: (lambda s: s if len(s) <= 160 else s[:160].rsplit(" ", 1)[0] + "…")(" ".join(str(x).split()))  # noqa: E731
+        problemas = [curto(x) for x in (r.get("problemas") or []) if x][:3]
+        melhorias = [curto(x) for x in (r.get("melhorias") or []) if x][:2]
+        if r.get("feito") and not problemas and not melhorias and (not saida or saida[0] == "passou"):
+            # nada a acrescentar: um recado curto que some sozinho (o que o chat fez você já leu nele)
+            return {"tipo": "comentario", "duracao": 6,
+                    "texto": f"✅ Conferi {nome}: nada a acrescentar" + (" (testes passaram)." if saida else ".")}
+        linhas = [("✅ " if r.get("feito") and not problemas else "⚠ ") + curto(r.get("resumo") or "").strip()]
         linhas += [f"• {p}" for p in problemas] + [f"💡 {m}" for m in melhorias]
         if saida:
             situacao, codigo, _ = saida

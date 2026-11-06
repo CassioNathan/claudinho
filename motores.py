@@ -20,6 +20,7 @@ import time
 import urllib.request
 
 import consumo
+import seguranca
 import sistema
 
 MOTORES = ("claude_code", "api", "ollama", "nenhum")
@@ -32,6 +33,30 @@ MODELOS = {
     "opus": {"id": "claude-opus-5-5", "nome": "Opus 🦉", "desc": "o mais esperto, mais lento", "preco": (4.00, 20.00)},
 }
 MODELOS_CLAUDE = {apelido: m["id"] for apelido, m in MODELOS.items()}
+# "auto" no chat (opção, não padrão): cada pergunta vai pro Haiku ou pro Sonnet pela cara dela (complexidade, na
+# ideia do OpenJarvis learning/routing/complexity.py, com sinais em português)
+AUTO = {"nome": "Auto 🎚️", "desc": "Haiku no simples, Sonnet no difícil"}
+SINAIS_DIFICEIS = [
+    (re.compile(r"```|\b(def|class|function|const|import|select|update|insert)\s+\w|traceback|exception|stack ?trace"
+                r"|\.(py|js|ts|java|cs|sql|html|css|json)\b", re.I), 2),
+    (re.compile(r"\b(erro|bug|quebr\w+|n[ãa]o (funciona|compila|roda)|depur\w+|debug\w*)\b", re.I), 1),
+    (re.compile(r"\b(analis\w+|compar\w+|avali\w+|revis\w+|refator\w+|arquitet\w+|otimiz\w+|planej\w+|estrat[ée]g\w+"
+                r"|pr[óo]s e contras|vale a pena|por que|porqu[êe]|explic\w+|passo a passo)\b", re.I), "cada"),
+    (re.compile(r"\b(calcul\w+|equa[çc][ãa]o|derivad\w+|integral|probabilidade|estat[íi]stic\w+)\b|\d+\s*[*/^]\s*\d+",
+                re.I), 1),
+    (re.compile(r"(\n\s*(\d+[.)]|-)\s+.*){2,}|\b(depois|em seguida|al[ée]m disso)\b", re.I), 1),
+]
+
+
+def modelo_auto(texto):
+    """Pergunta simples (conversa, comando, curiosidade): Haiku. Código, análise, conta ou várias etapas: Sonnet."""
+    texto = texto or ""
+    pontos = 0
+    for rx, peso in SINAIS_DIFICEIS:   # "cada": vale um ponto por pedido de análise diferente ("analisa e compara")
+        pontos += min(2, len({m.group(0).lower() for m in rx.finditer(texto)})) if peso == "cada" else (
+            peso if rx.search(texto) else 0)
+    pontos += 1 if len(texto) > 500 else 0
+    return "sonnet" if pontos >= 2 else "haiku"
 # qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
 TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
                   "resumo": "sonnet", "avisos": "local", "roteador": "local"}
@@ -499,6 +524,8 @@ def completar(prompt, imagens=(), tarefa="piadas", max_tokens=600, timeout=180):
             except Exception:
                 pass   # o Ollama caiu no meio: a nuvem resolve (com o Haiku)
     imagens = list(imagens) if ve_imagem() else []
+    if motor in ("claude_code", "api"):   # vai pra nuvem: chave, token e cartão que vieram na tela/aviso ficam aqui
+        prompt = seguranca.tirar_segredos(prompt)
     if motor == "claude_code":
         return _completar_claude_code(prompt, imagens, na_nuvem(tarefa), timeout, tarefa)
     if motor == "api":
@@ -607,6 +634,7 @@ class ChatAPI(ChatSimples):
     def perguntar(self, texto, imagem=None, modelo=None, ao_frase=None):
         """Devolve (resposta, sid, erro), como o ChatClaude. `modelo="sonnet"` = pergunta que precisa ler direito."""
         self.ultimo_uso = time.time()
+        texto = seguranca.tirar_segredos(texto)   # (vai pra nuvem)
         conteudo = ([imagem] if imagem else []) + [{"type": "text", "text": texto}]
         with self.trava:
             try:
@@ -617,6 +645,7 @@ class ChatAPI(ChatSimples):
                 conversa = self.mensagens + [{"role": "user", "content": conteudo}]
                 ferramentas = FERRAMENTAS + [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
                 self.interrompido = False
+                vigia = seguranca.VigiaDeLoop()
                 for _ in range(8):  # no máximo 8 idas e voltas de ferramenta
                     if self.interrompido:
                         return "✋ Parei.", None, None
@@ -637,6 +666,10 @@ class ChatAPI(ChatSimples):
                             except Exception as e:
                                 conteudo_tela = f"não consegui tirar o print: {e}"
                             resultados.append({"type": "tool_result", "tool_use_id": bloco.id, "content": conteudo_tela})
+                        elif bloco.type == "tool_use" and vigia.preso(bloco.name, bloco.input or {}):
+                            resultados.append({"type": "tool_result", "tool_use_id": bloco.id, "is_error": True,
+                                               "content": "Você já fez exatamente isso: pare de repetir e responda "
+                                                          "com o que já tem (ou diga o que não deu certo)."})
                         elif bloco.type == "tool_use":
                             argumentos = (bloco.input or {}).get("argumentos") or []
                             self.ao_usar_ferramenta(bloco.name, {"command": " ".join([bloco.name, *argumentos])})

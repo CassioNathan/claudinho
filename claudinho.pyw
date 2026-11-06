@@ -42,6 +42,7 @@ import pystray
 from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
 import formatar
+import seguranca
 import frases
 import abrir
 import janelas
@@ -158,6 +159,7 @@ CONFIG_PADRAO = {
     # --- só no modo híbrido (o que roda sozinho fica no PC; só o que pensa gasta o plano) ---
     "tarefas": [],                       # tarefas na hora marcada (tarefas.py; painel → Tarefas)
     "fatos": [],                         # o que ele sabe de você, de outras conversas (painel → Memória)
+    "sempre_pode": [],                   # Pode/Não respondidos com "Sempre": [{"chave", "descricao"}] (painel → Privacidade)
     "memoria_auto": True,                # no fim de uma conversa o modelo local anota fatos novos seus
     "iniciativa": True,                  # ele puxa assunto quando importa (resumo do dia, hora da pausa)
     "habilidades": [],                   # pacotes de profissão ligados (habilidades.CATALOGO): ex. "vendedor"
@@ -209,7 +211,7 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "novidades_vistas", "navegador_claude", "emojis", "borda", "borda_forca", "tamanho",
-                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
+                 "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "sempre_pode", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
                  "ollama_modelo", "ollama_pensar", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
@@ -310,7 +312,7 @@ def traduzir_espera(mensagem):
     return mensagem or "precisa de você."
 
 # o que o painel oferece pro chat do Claude Code (apelidos da tabela motores.MODELOS e níveis do `--effort`)
-MODELOS_CHAT = tuple(motores.MODELOS)
+MODELOS_CHAT = tuple(motores.MODELOS) + ("auto",)   # auto: cada pergunta escolhe entre Haiku e Sonnet
 ESFORCOS = ("low", "medium", "high", "xhigh", "max")
 
 PROMPT_CONSUMO = (
@@ -687,6 +689,7 @@ def carregar_config():
     cfg["modelos_acao"] = motores.modelos_validos(cfg.get("modelos_acao"))
     cfg["tarefas"] = tarefas.validar_lista(cfg.get("tarefas"))
     cfg["fatos"] = validar_fatos(cfg.get("fatos"))
+    cfg["sempre_pode"] = validar_sempre(cfg.get("sempre_pode"))
     cfg["habilidades"] = habilidades.validar(cfg.get("habilidades"))
     cfg["vendedor"] = habilidades.validar_vendedor(cfg.get("vendedor"))   # completa chave nova (ex.: "enviar")
     if cfg["atalho_comentar"] == "Ctrl+Shift+Alt+C":  # padrão antigo, complicado demais
@@ -830,6 +833,47 @@ PROMPT_REVISAO = (
 REVISOR_PODE = "Read,Grep,Glob"
 
 
+# tarefa que pede o resumo da manhã: juntado aqui, sem IA (na ideia do morning_digest do OpenJarvis)
+RESUMO_DA_MANHA = re.compile(r"(?i)^\W*(me\s+(d[áa]|faz)\s+)?(o\s+)?(meu\s+)?resumo\s+(da\s+manh[ãa]|do\s+dia)\W*$")
+
+
+def validar_sempre(valor):
+    """Os "Sempre" do Pode/Não: chave e descrição curtas, sem repetidas, no máximo 60."""
+    vistos, limpos = set(), []
+    for s in valor if isinstance(valor, list) else []:
+        if isinstance(s, dict) and isinstance(s.get("chave"), str) and s["chave"] not in vistos:
+            vistos.add(s["chave"])
+            limpos.append({"chave": s["chave"][:300], "descricao": str(s.get("descricao") or s["chave"])[:200]})
+    return limpos[-60:]
+
+
+def chave_sempre(ferramenta, entrada):
+    """O que um "Sempre" libera: (chave, descrição), ou None quando não dá pra liberar de vez. O mesmo comando
+    exato; editar arquivos dentro do mesmo projeto; a mesma rotina; o mesmo atalho na mesma janela. Nunca:
+    mensagem (WhatsApp), navegador, comando encadeado. O destrutivo nem chega aqui (PERIGOSO recusa antes)."""
+    if ferramenta in ("Bash", "PowerShell"):
+        comando = " ".join(str(entrada.get("command") or "").split())
+        if not comando or len(comando) > 200 or re.search(r"[;&|<>`$]", comando) or PERIGOSO.search(comando):
+            return None
+        return f"{ferramenta}:{comando}", f"Rodar: {comando}"
+    if ferramenta in ("Edit", "MultiEdit", "Write", "NotebookEdit"):
+        caminho = entrada.get("file_path") or entrada.get("notebook_path") or ""
+        if not caminho:
+            return None
+        pasta = Path(caminho).parent
+        raiz = raiz_do_projeto(pasta) if pasta.is_dir() else str(pasta)
+        if len(Path(raiz).parts) < 3:   # C:\ ou C:\Users: largo demais pra liberar de vez
+            return None
+        return f"editar:{raiz.lower()}", f"Mexer em arquivos de {raiz}"
+    if ferramenta.endswith("rodar_rotina_confirmada") and entrada.get("nome"):
+        return f"rotina:{entrada['nome'].lower()}", f"Rodar a rotina \"{entrada['nome']}\""
+    if ferramenta.endswith("atalho_confirmado") and entrada.get("teclas"):
+        janela = entrada.get("janela") or ""
+        return (f"atalho:{entrada['teclas'].lower()}:{janela.lower()}",
+                f"Apertar {entrada['teclas']}" + (f" em {janela}" if janela else ""))
+    return None
+
+
 def raiz_do_projeto(pasta):
     """A pasta inteira do projeto (raiz do git), pra liberar e revisar o projeto todo, não só a subpasta."""
     try:
@@ -875,7 +919,8 @@ class ChatClaude:
                  navegador=False, modelo="haiku", esforco="low"):
         self.sid = sid
         self.personalidade = personalidade
-        self.modelo = modelo if modelo in MODELOS_CHAT else "haiku"
+        self.auto = modelo == "auto"   # o processo abre no Haiku; pergunta difícil troca pro Sonnet só nela
+        self.modelo = modelo if modelo in motores.MODELOS else "haiku"
         self.custo_processo = 0.0
         self.contexto = 0            # tokens que a última chamada mandou (instruções + histórico + prints)
         self.esforco = esforco if esforco in ESFORCOS else "low"
@@ -1069,6 +1114,9 @@ class ChatClaude:
         """Devolve (resposta, session_id, erro). `imagem` = bloco de imagem (ex.: print pra resumir);
         `modelo` = usar outro modelo só nesta pergunta (ex.: "sonnet" no resumo de tela), depois volta pro escolhido."""
         self.ultimo_uso = time.time()
+        if modelo is None and self.auto:
+            modelo = motores.modelo_auto(texto)
+        texto = seguranca.tirar_segredos(texto)   # chave, token e cartão não vão pra nuvem (nem colados por engano)
         with self.trava:
             if self.sid != self.blocos_sid:   # conversa nova: ela ainda não viu nenhum bloco
                 self.blocos_mandados = set()
@@ -1087,6 +1135,7 @@ class ChatClaude:
                         self.trocar_modelo(modelo)
                     self.interrompido = False
                     self.passos = []
+                    vigia, preso = seguranca.VigiaDeLoop(), False
                     self.escrever({"type": "user", "message": {"role": "user", "content": conteudo}})
                     for linha in self.proc.stdout:
                         try:
@@ -1103,6 +1152,9 @@ class ChatClaude:
                                 if isinstance(bloco, dict) and bloco.get("type") == "tool_use":
                                     self.passos.append({"id": bloco.get("id"), "nome": bloco.get("name", ""),
                                                         "entrada": bloco.get("input") or {}, "ok": True})
+                                    if not preso and vigia.preso(bloco.get("name", ""), bloco.get("input") or {}):
+                                        preso = True   # repetindo a mesma ferramenta: corta (como o ⏹)
+                                        self.interromper()
                                     self.ao_usar_ferramenta(bloco.get("name", ""), bloco.get("input") or {})
                         elif ev.get("type") == "user":   # o resultado de cada ferramenta: o que falhou não entra no fluxo
                             for bloco in (ev.get("message") or {}).get("content") or []:
@@ -1120,7 +1172,8 @@ class ChatClaude:
                             if modelo:
                                 self.trocar_modelo(self.modelo)  # o chat normal volta pro escolhido
                             if self.interrompido:
-                                return "✋ Parei.", self.sid, None
+                                return ("🔁 Parei: eu estava repetindo a mesma coisa sem sair do lugar. Me diz como "
+                                        "você prefere seguir." if preso else "✋ Parei."), self.sid, None
                             if ev.get("is_error"):
                                 erro = ev.get("result") or "Erro do Claude."
                                 if "claude_code_version_too_old" in erro:  # modelo novo, Claude Code velho
@@ -3134,6 +3187,8 @@ class Claudinho:
             valor = tarefas.validar_lista(valor)
         elif chave == "fatos":
             valor = validar_fatos(valor)
+        elif chave == "sempre_pode":
+            valor = validar_sempre(valor)
         elif chave == "novidades_vistas":
             valor = [n for n in NOVIDADES if n in (valor if isinstance(valor, list) else [])]
         elif chave == "voz_sem_comando":
@@ -3205,7 +3260,9 @@ class Claudinho:
         elif chave == "ollama_pensar":   # vale da próxima pergunta em diante, sem recomeçar a conversa
             motores.CONFIG["pensar"] = valor
         elif chave in ("chat_modelo", "chat_esforco") and hasattr(self.chat, "modelo"):
-            self.chat.modelo, self.chat.esforco = self.cfg["chat_modelo"], self.cfg["chat_esforco"]
+            self.chat.auto = self.cfg["chat_modelo"] == "auto"
+            self.chat.modelo = "haiku" if self.chat.auto else self.cfg["chat_modelo"]
+            self.chat.esforco = self.cfg["chat_esforco"]
             self.chat.trocar_personalidade(self.cfg["personalidade"])   # reabre a mesma conversa já com eles
         elif chave == "voz_microfone":
             self.voz.reiniciar()
@@ -3281,7 +3338,7 @@ class Claudinho:
                       "modelos_ollama": motores.MODELOS_OLLAMA, "ollama_modelo": self.cfg["ollama_modelo"],
                       "ollama_pensar": self.cfg["ollama_pensar"], "chat_modelo": self.cfg["chat_modelo"], "chat_esforco": self.cfg["chat_esforco"],
                       "modelos_acao": self.cfg["modelos_acao"],
-                      "modelos": [[k, m["nome"], m["desc"]] for k, m in motores.MODELOS.items()]},
+                      "modelos": [[k, m["nome"], m["desc"]] for k, m in {**motores.MODELOS, "auto": motores.AUTO}.items()]},
             "voz": {"estado": self.voz.estado, "microfones": voz.microfones(), "detector": self.estado_detector()},
             "stt": {"provedores": [{"id": k, "nome": i["nome"]} for k, i in stt.PROVEDORES.items()],
                     "chave": bool(sistema.ler_segredo("stt_chave")), "teste": self.stt_teste,
@@ -3635,8 +3692,14 @@ class Claudinho:
 
     # ---------- confirmação antes de agir no PC ----------
     def pedir_permissao(self, ferramenta, entrada):
-        """Roda na thread do chat: abre o popup e espera o Sim/Não (até 3 min; sem resposta = não)."""
-        pedido = {"ferramenta": ferramenta, "entrada": entrada, "ok": False, "evento": threading.Event()}
+        """Roda na thread do chat: abre o popup e espera o Sim/Não (até 3 min; sem resposta = não).
+        Já respondido com "Sempre" (mesmo comando, mesmo projeto…): passa sem perguntar."""
+        sempre = chave_sempre(ferramenta, entrada)
+        if sempre and any(s["chave"] == sempre[0] for s in self.cfg["sempre_pode"]):
+            registrar_comando("permissão", f"sempre pode: {sempre[1]}")
+            return True
+        pedido = {"ferramenta": ferramenta, "entrada": entrada, "ok": False, "evento": threading.Event(),
+                  "sempre": sempre}
         self.eventos.put(("permissao", pedido))
         pedido["evento"].wait(180)
         pedido["evento"].set()
@@ -3678,7 +3741,10 @@ class Claudinho:
         return texto if len(texto) <= 500 else texto[:500] + "…"
 
     def mostrar_permissao(self, pedido):
-        def responder(ok):
+        def responder(ok, sempre=False):
+            if sempre and not pedido["evento"].is_set():   # daqui pra frente esse mesmo pedido passa direto
+                chave, descricao = pedido["sempre"]
+                self.aplicar_cfg("sempre_pode", self.cfg["sempre_pode"] + [{"chave": chave, "descricao": descricao}])
             pedido["ok"] = ok
             pedido["evento"].set()
 
@@ -3689,6 +3755,8 @@ class Claudinho:
         self.balao = Balao(self, "permissao", self.descrever_acao(pedido["ferramenta"], pedido["entrada"]),
                            titulo="posso fazer isso?",
                            botoes=[("Pode", lambda: responder(True), True),
+                                   *([("Sempre", lambda: responder(True, sempre=True), False)]
+                                     if pedido.get("sempre") else []),
                                    ("Não", lambda: responder(False), False)])
         if self.cfg["so_fala"]:   # só fala: o pedido também é falado (o texto fica: é o que você está autorizando)
             self.dizer("Posso fazer isso? " + self.descrever_acao(pedido["ferramenta"], pedido["entrada"])[:160], URGENTE)
@@ -4051,6 +4119,8 @@ class Claudinho:
                              "duracao": 60, "dizer": f"Ei, lembrete: {texto}.", "urgente": True}, IMPORTANTE,
                             na_frente=True)
             return
+        if RESUMO_DA_MANHA.match(texto):
+            return self.resumo_da_manha()
         if self.cfg["voz_comandos"] and self.comando_rapido(texto):
             return
         meu = meus_comandos.achar(texto, self.cfg["comandos_meus"])
@@ -4116,6 +4186,10 @@ class Claudinho:
             return "faltou o que lembrar"
         if FATO_SENSIVEL.search(fato):
             return "isso parece dado sensível (senha, documento, cartão): não guardo na memória"
+        if seguranca.parece_instrucao(fato):   # veio de página/mensagem tentando mandar em mim: não vira memória
+            registrar_comando("memória", "recusei (parece instrução): " + fato)
+            return ("isso parece uma ordem pra mim (talvez de uma página ou mensagem), não um fato do usuário: "
+                    "não guardei. Se foi ele mesmo que pediu, ele pode pôr em painel → Memória")
         if any(fato_parecido(fato, f) for f in self.cfg["fatos"]):
             return "isso eu já sabia 😉"
         self.aplicar_cfg("fatos", self.cfg["fatos"] + [fato])
@@ -4127,8 +4201,11 @@ class Claudinho:
         if not self.jarvis() or not self.cfg["fatos"] or self.fatos_na_conversa == conversa:
             return ""
         self.fatos_na_conversa = conversa
+        fatos = [f for f in self.cfg["fatos"] if not seguranca.parece_instrucao(f)]   # (ordem não vai como fato)
+        if not fatos:
+            return ""
         return ("\n\n(O que você já sabe dele, de outras conversas; use quando ajudar, sem listar nem dizer que "
-                "lembrou:\n" + "\n".join(f"- {f}" for f in self.cfg["fatos"]) + ")")
+                "lembrou:\n" + "\n".join(f"- {f}" for f in fatos) + ")")
 
     def tirar_fatos(self, numero):
         """Fim de uma conversa: o modelo LOCAL anota fatos novos seus (nunca a nuvem: isso roda sozinho)."""
@@ -4162,7 +4239,8 @@ class Claudinho:
         threading.Thread(target=tirar, daemon=True).start()
 
     def guardar_fatos(self, novos):
-        novos = [f for f in novos if not FATO_SENSIVEL.search(f) and not any(fato_parecido(f, o) for o in self.cfg["fatos"])]
+        novos = [f for f in novos if not FATO_SENSIVEL.search(f) and not seguranca.parece_instrucao(f)
+                 and not any(fato_parecido(f, o) for o in self.cfg["fatos"])]
         if novos:
             self.aplicar_cfg("fatos", self.cfg["fatos"] + novos)
             registrar_comando("memória", "anotei: " + " | ".join(novos))
@@ -4181,6 +4259,51 @@ class Claudinho:
             self.ultima_iniciativa = agora
             self.enfileirar({"tipo": "comentario", "texto": fala, "duracao": 25, "dizer": fala.split("\n")[0]},
                             IMPORTANTE)
+
+    def tarefas_de_hoje(self):
+        fim_do_dia = time.mktime(time.strptime(time.strftime("%Y-%m-%d") + " 23:59", "%Y-%m-%d %H:%M"))
+        return sorted((t for t in self.cfg["tarefas"] if t.get("ativa") and t.get("proxima")
+                       and t["proxima"] <= fim_do_dia and not RESUMO_DA_MANHA.match(t["pedido"])),
+                      key=lambda t: t["proxima"])
+
+    def resumo_da_manha(self):
+        """Tarefa "resumo da manhã": agenda de hoje, chats do Claude Code esperando, notificações e WhatsApp não
+        lido, num balão e falado. Só junta o que existe (sem IA, nada inventado); ler as fontes demora: thread."""
+        de_hoje, esperando = self.tarefas_de_hoje(), len(self.esperas)
+        whatsapp = "vendedor" in self.cfg["habilidades"]
+
+        def juntar():
+            hora = time.localtime().tm_hour
+            partes = [("Bom dia" if 5 <= hora < 12 else "Boa tarde" if 12 <= hora < 18 else "Boa noite")
+                      + "! Seu resumo ☀️"]
+            if de_hoje:
+                partes.append("📅 Hoje: " + "; ".join(f"{t['hora']} {t['pedido']}" for t in de_hoje[:5])
+                              + ("…" if len(de_hoje) > 5 else ""))
+            if esperando:
+                partes.append(f"🤖 {esperando} chat(s) do Claude Code esperando você")
+            try:
+                apps = {}
+                for n in notificacoes.listar():
+                    apps[n["app"]] = apps.get(n["app"], 0) + 1
+                if apps:
+                    mais = sorted(apps.items(), key=lambda x: -x[1])[:3]
+                    partes.append(f"🔔 {sum(apps.values())} notificações (" + ", ".join(f"{a} {n}" for a, n in mais) + ")")
+            except Exception as e:
+                print("resumo da manhã, notificações:", e, file=sys.stderr)
+            if whatsapp:
+                try:
+                    conversas = [c for c in habilidades.ler_lista(30).get("conversas", []) if not c.get("silenciada")]
+                    if conversas:
+                        partes.append(f"💬 WhatsApp: {len(conversas)} conversa(s) não lida(s) ("
+                                      + ", ".join(c["nome"] for c in conversas[:3]) + ("…" if len(conversas) > 3 else "") + ")")
+                except Exception as e:
+                    print("resumo da manhã, WhatsApp:", e, file=sys.stderr)
+            if len(partes) == 1:
+                partes.append("Nada pendente por aqui. Dia livre! 🎉")
+            texto = "\n".join(partes)
+            falado = ". ".join(re.sub(r"^\W+", "", p) for p in partes)   # sem os emojis do começo de cada linha
+            self.eventos.put(("resumo_da_manha", {"texto": texto, "dizer": falado}))
+        threading.Thread(target=juntar, daemon=True).start()
 
     def resumo_do_comeco_do_dia(self):
         hoje = time.strftime("%Y-%m-%d")
@@ -4483,7 +4606,11 @@ class Claudinho:
         achadas = self.mem.buscar_lembrancas(texto, fora_da_conversa=self.mem.conversa_atual())
         if not achadas:
             return ""
-        linhas = [f"- {l['criado_em'][:16]}: " + " ".join(l["texto"].split())[:320] for l in achadas]
+        # lembrança com cara de ordem (veio de página ou mensagem) não vai junto da pergunta
+        linhas = [f"- {l['criado_em'][:16]}: " + " ".join(l["texto"].split())[:320] for l in achadas
+                  if not seguranca.parece_instrucao(l["texto"])]
+        if not linhas:
+            return ""
         return ("\n\n(Lembranças de conversas e avisos anteriores que podem ter a ver; use só se ajudar e "
                 "não diga que buscou:\n" + "\n".join(linhas) + ")")
 
@@ -4759,7 +4886,7 @@ class Claudinho:
         elif motor == "nenhum":
             onde = "nenhuma IA: só os comandos prontos"
         else:
-            nome = motores.MODELOS.get(self.cfg["chat_modelo"], {}).get("nome", self.cfg["chat_modelo"])
+            nome = {**motores.MODELOS, "auto": motores.AUTO}.get(self.cfg["chat_modelo"], {}).get("nome", self.cfg["chat_modelo"])
             onde = f"o Claude ({nome.split()[0]}), da Anthropic, pelo Claude Code do usuário, na nuvem"
         return (f"Seu cérebro agora: {onde}. Dá pra trocar no painel, em Sistema → Motor de IA: Claude (Claude Code "
                 "ou API) ou Ollama, local.")
@@ -5912,6 +6039,9 @@ class Claudinho:
                 return
             if ev[0] == "permissao":
                 self.mostrar_permissao(ev[1])
+            elif ev[0] == "resumo_da_manha":
+                self.enfileirar({"tipo": "comentario", "texto": ev[1]["texto"], "duracao": 60, "dizer": ev[1]["dizer"]},
+                                IMPORTANTE, na_frente=True)
             elif ev[0] == "ditado_estado":
                 self.ditado_estado(ev[1])
             elif ev[0] == "ditado_texto":

@@ -596,6 +596,8 @@
       <button class="botao" id="addPasta">+ Adicionar pasta</button>
       <button class="botao" id="puxarClaude">🧩 Puxar projetos do Claude</button>
     </div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--apagado);margin:22px 0 8px">Liberado com "Sempre"</h3>
+    <div id="semprePode"></div>
     <div class="cartao" id="projetosClaude" style="margin-top:10px" hidden>
       <p class="desc" style="margin:12px 0 6px">Marque os que o chat pode <b>ler</b> sem perguntar.</p>
       <div id="listaClaude"></div>
@@ -744,6 +746,7 @@
         <label class="desc" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
           <input type="checkbox" id="novaTarefaLembrete"> só lembrar</label>
         <button class="botao" id="addTarefa">+ Agendar</button>
+        <button class="botao" id="addResumo" title="todo dia útil às 9h: agenda, chats esperando, notificações e WhatsApp">☀️ Resumo da manhã</button>
       </div>
     </div>
     <div class="cartao" style="margin-top:10px">
@@ -1130,6 +1133,23 @@ function montarPastas() {
     caixa.appendChild(item);
   }
 }
+function montarSempre() {   // os "Sempre" do Pode/Não: passam sem perguntar até você tirar
+  const caixa = document.getElementById("semprePode"), lista = estado.cfg.sempre_pode || [];
+  const assinatura = JSON.stringify(lista);
+  if (caixa.dataset.assinatura === assinatura) return;
+  caixa.dataset.assinatura = assinatura;
+  caixa.innerHTML = lista.length ? "" : '<span class="desc">Nada: tudo pergunta antes.</span>';
+  for (const s of lista) {
+    const item = document.createElement("span");
+    item.className = "pasta";
+    item.textContent = s.descricao + " ";
+    const x = document.createElement("button");
+    x.className = "tirar-pasta"; x.textContent = "✕"; x.title = "voltar a perguntar";
+    x.onclick = () => mudar("sempre_pode", lista.filter(o => o.chave !== s.chave)).then(() => avisar("volta a perguntar ✓"));
+    item.appendChild(x);
+    caixa.appendChild(item);
+  }
+}
 // ---------- atalhos dos programas (ensinar: escolhe o programa, escreve o que faz e escuta o atalho) ----------
 const CODIGOS = {ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", PageUp: "pageup",
   PageDown: "pagedown", Home: "home", End: "end", Enter: "enter", NumpadEnter: "enter", Escape: "esc", Space: "space",
@@ -1448,6 +1468,11 @@ function montarTarefas() {
   if (lista.length) caixa.appendChild(cartao);
   const repetir = document.getElementById("novaTarefaRepetir");
   repetir.onchange = () => { document.getElementById("novaTarefaDia").hidden = repetir.value !== "semanal"; };
+  document.getElementById("addResumo").onclick = () => {
+    if (tarefasAgora().some(t => /resumo (da manh|do dia)/i.test(t.pedido))) { avisar("já tem um resumo agendado"); return; }
+    salvarTarefas([...tarefasAgora(), {pedido: "resumo da manhã", hora: "09:00", repetir: "uteis", lembrete: false}],
+                  "resumo às 9h nos dias úteis ☀️");
+  };
   document.getElementById("addTarefa").onclick = () => {
     const pedido = document.getElementById("novaTarefa").value.trim(), hora = document.getElementById("novaTarefaHora").value;
     if (!pedido || !hora) { avisar("preencha o que e a hora"); return; }
@@ -1673,6 +1698,7 @@ function montarRotinas(forcar) {
 
 function atualizarVivos() {
   montarPastas();
+  montarSempre();
   montarProgramas();
   montarInstalados();
   montarRotinas();
@@ -1711,7 +1737,7 @@ const ACOES_MODELO = [
 const ACOES_LOCAL = ["piadas", "avisos", "roteador"];
 function tabelaAcoes(m) {
   const linhas = ACOES_MODELO.map(([id, nome, desc]) => {
-    const opcoes = m.modelos.concat(ACOES_LOCAL.includes(id) ? [["local", "Local 🏠"]] : []);
+    const opcoes = m.modelos.filter(([mid]) => mid !== "auto").concat(ACOES_LOCAL.includes(id) ? [["local", "Local 🏠"]] : []);
     return `<div class="linha" style="padding:6px 0">
     <div class="info"><div class="titulo" style="font-size:13px">${nome}</div>${desc ? `<div class="desc">${desc}</div>` : ""}</div>
     <select class="campo" data-acao-modelo="${id}" style="flex:0 0 120px">${opcoes.map(([mid, mnome]) =>

@@ -504,11 +504,8 @@ class Fala:
                     fila.get_nowait()
                 except queue.Empty:
                     break
-        try:
-            import sounddevice as sd
-            sd.stop()
-        except Exception:
-            pass
+        # o som em si quem corta é a thread que toca (_tocar vê a versão nova em até 20 ms). sd.stop() daqui, da
+        # thread das janelas, brigava com um sd.play() começando lá e derrubava o processo (crash nativo no PortAudio)
 
     def esperar(self, limite=60):
         fim = time.time() + limite

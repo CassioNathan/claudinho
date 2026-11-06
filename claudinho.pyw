@@ -12,6 +12,7 @@ except ImportError:  # sem o comando por voz instalado, segue sem ele
     pass
 import base64
 import ctypes
+import faulthandler
 import gc
 import ctypes.wintypes as wt
 import io
@@ -63,6 +64,7 @@ import rotinas
 import consumo
 import tela
 import atualizacao
+from assunto import Assunto
 import projetos
 import abas
 import ativacao
@@ -339,6 +341,8 @@ PROMPT_SISTEMA = (
     "são, `atalhos_conhecidos`); outras teclas (Enter, "
     "Delete, Ctrl+S…) só pela `atalho_confirmado`, que pede confirmação. Só quando ele pedir. "
     "Programa bloqueado (ele desligou no painel; `listar_programas` diz) não se abre nem se mexe: só avise. "
+    "Na `description` do Bash/PowerShell escreva em português, curto, o que o comando faz pra ele (\"rodar os testes\", "
+    "\"listar os arquivos da pasta\"): é o que aparece quando você pede licença. "
     "NUNCA feche nem mate programa (taskkill, Stop-Process) pra "
     "consertar algo: diga o que viu e pergunte. O que ele pedir num site é com as rotinas que ELE gravou "
     "(`rotinas_conhecidas`, `rodar_rotina`). "
@@ -836,6 +840,39 @@ PROMPT_REVISAO = (
 )
 # o revisor só lê arquivos (o git vem pronto no prompt): nada de Bash, nem pra git (git diff --output grava arquivo)
 REVISOR_PODE = "Read,Grep,Glob"
+
+
+# Pode/Não de um comando: em vez do comando cru, o que ele faz em português. O comando só aparece junto quando é
+# composto (encadeado, redirecionado, comprido): aí o que vai rodar de verdade importa mais que a descrição
+COMANDO_COMPOSTO = re.compile(r"[|;&<>`]|\$\(|\n")
+COMANDOS_CONHECIDOS = [   # (regex do comando, o que ele faz)
+    (r"(python(\.exe)?\s+-m\s+)?pytest\b|npm\s+(run\s+)?test\b|yarn\s+test\b|pnpm\s+test\b|mvnw?(\.cmd)?\s+test\b"
+     r"|gradlew?(\.bat)?\s+test\b|dotnet\s+test\b|go\s+test\b|cargo\s+test\b|python(\.exe)?\s+-m\s+unittest\b",
+     "rodar os testes"),
+    (r"git\s+(status|diff|log|show)\b", "olhar o git"),
+    (r"git\s+(add|commit)\b", "fazer um commit"),
+    (r"git\s+push\b", "subir pro GitHub (git push)"),
+    (r"git\s+(pull|fetch)\b", "baixar do GitHub"),
+    (r"(python(\.exe)?\s+-m\s+)?pip\s+install\b|npm\s+(install|i|ci)\b|yarn(\s+install)?$|pnpm\s+install\b",
+     "instalar as dependências"),
+    (r"npm\s+run\s+(dev|start|serve)\b|npm\s+start\b", "abrir o servidor de desenvolvimento"),
+    (r"npm\s+run\s+build\b|mvnw?(\.cmd)?\s+(package|install)\b|dotnet\s+build\b|cargo\s+build\b", "compilar o projeto"),
+    (r"(python(\.exe)?\s+-m\s+)?ruff\b|flake8\b|eslint\b|npm\s+run\s+lint\b", "conferir o código (lint)"),
+]
+
+
+def frase_do_comando(comando, descricao="", onde=""):
+    """("Posso rodar os testes no claudinho?", mostrar_o_comando)."""
+    comando = " ".join(str(comando or "").split())
+    sem_caminho = re.sub(r'^"?[A-Za-z]:\\[^"\s]*\\', "", comando)   # C:\Python313\python.exe -m pytest → python.exe …
+    o_que = next((frase for rx, frase in COMANDOS_CONHECIDOS if re.match(rx, sem_caminho, re.I)), None)
+    conhecido = bool(o_que)
+    if not o_que and descricao:   # comando que eu não conheço: a descrição do chat na frente, o comando embaixo
+        o_que = descricao.strip().rstrip(".")
+        o_que = o_que[:1].lower() + o_que[1:]
+    o_que = o_que or "rodar um comando no terminal"
+    composto = not conhecido or bool(COMANDO_COMPOSTO.search(comando)) or len(comando) > 100
+    return f"Posso {o_que}" + (f" no {onde}" if onde else "") + "?", composto
 
 
 # tarefa que pede o resumo da manhã: juntado aqui, sem IA (na ideia do morning_digest do OpenJarvis)
@@ -2135,6 +2172,7 @@ class Claudinho:
         self.revisao_pendente = set()   # pastas com o "posso revisar?" na fila (um balão por projeto, não um por aviso)
         self.revisao_recusada = set()   # "agora não" nesta pasta: não pergunta de novo até o Claudinho reabrir
         self.fluxo_revisao = None  # um botão da revisão mandou algo pro chat: a resposta volta no balão dela
+        self.assunto = Assunto()   # linha de raciocínio: até quando tem assunto em andamento (ver assunto.py)
         self.olhando_forcado = False  # pediram "comentar agora": mostra que está olhando
         self.menu_aberto = False
         self.notebook = 0.0           # 0 = guardado, 1 = aberto e digitando (anima entre os dois)
@@ -2889,7 +2927,7 @@ class Claudinho:
         """Música nova: às vezes ele comenta (curiosidade ou cantarola), com a notinha 🎵.
         Em maldoso/TDAH bem menos, que nesses modos a zoeira é sobre a tela."""
         so_tela = self.modo_maldoso or self.cfg["modo_tdah"]
-        if (not self.cfg["comentar_tela"] or self.comentando or self.ocupado or self.balao or self.entrada
+        if (not self.cfg["comentar_tela"] or self.comentando or self.em_assunto() or self.balao
                 or not tem_ia() or random.random() > (0.15 if so_tela else 0.45)):
             return
         self.comentando = True
@@ -3554,6 +3592,8 @@ class Claudinho:
 
     def mostrar(self, fala):
         self.fechar_balao()
+        if fala.get("prioridade", FALA) >= IMPORTANTE:
+            self.marcar_assunto()
         montar = getattr(self, f"balao_{self.especie(fala)}", None)
         if self.cfg["so_fala"]:   # só fala: o texto sai na voz; balão só se tem botão (e sem o texto)
             if fala["tipo"] == "pensando":   # as bolinhas na cabeça dele já mostram
@@ -3601,11 +3641,20 @@ class Claudinho:
         self.soltar_emoji("check")  # comemora o chat que terminou
         return balao
 
+    # ---------- linha de raciocínio: um assunto por vez ----------
+    def marcar_assunto(self):
+        """Tem assunto em andamento: piada e comentário à toa que estavam na fila saem (chegariam no meio dele)."""
+        self.assunto.marcar(self.falas)
+
+    def em_assunto(self):
+        return self.assunto.ativo(self.ocupado, bool(self.entrada))
+
     # ---------- continuar a partir de um balão ----------
     def continuar(self, mostrado, contexto=None):
         """💬 de um balão: abre a conversa já respondendo a ele. `contexto` = o que o chat precisa saber além do que
         aparece (a pasta do projeto, o pedido, a resposta inteira…)."""
         self.fechar_balao(fixo_tambem=True)
+        self.marcar_assunto()
         self.respondendo_a = (time.time(), contexto or mostrado)
         self.abrir_conversa(mostrado, por_clique=True)
 
@@ -3798,9 +3847,9 @@ class Claudinho:
     def descrever_acao(self, ferramenta, entrada):
         caminho = entrada.get("file_path") or entrada.get("path") or entrada.get("pattern") or ""
         if ferramenta in ("Bash", "PowerShell"):
-            texto = f"Rodar no {ferramenta}:\n{entrada.get('command', '')}"
-            if entrada.get("description"):
-                texto += f"\n({entrada['description']})"
+            frase, mostrar = frase_do_comando(entrada.get("command"), entrada.get("description") or "",
+                                              entrada.get("onde") or "")
+            texto = frase + (f"\n{entrada.get('command', '')}" if mostrar else "")
         elif ferramenta == "Write":
             texto = f"Criar/sobrescrever o arquivo:\n{caminho}"
         elif ferramenta in ("Edit", "MultiEdit", "NotebookEdit"):
@@ -4348,7 +4397,7 @@ class Claudinho:
         if (not (self.jarvis() and self.cfg["iniciativa"]) or self.modo_jogo or self.ocupado or self.entrada
                 or agora - self.ultima_iniciativa < INICIATIVA_INTERVALO_S):
             return
-        fala = self.resumo_do_comeco_do_dia() or self.hora_da_pausa(agora)
+        fala = self.resumo_do_comeco_do_dia() or (None if self.em_assunto() else self.hora_da_pausa(agora))
         if fala:
             self.ultima_iniciativa = agora
             self.enfileirar({"tipo": "comentario", "texto": fala, "duracao": 25, "dizer": fala.split("\n")[0],
@@ -4608,9 +4657,11 @@ class Claudinho:
             digitando = False
         por_clique = por_clique or digitando
         self.fechar_conversa(manter_print=True)  # reabrir o balão não perde o rascunho nem o print
-        if self.balao and self.balao.tipo not in ("pensando", "comentario"):
-            self.falas.appendleft(self.balao.dados)  # volta para a fila, mostra depois
-        self.fechar_balao()   # (revisão do Júnior, que é FIXO, volta pra fila sozinha)
+        dados = (self.balao.dados or {}) if self.balao else {}
+        if (self.balao and self.balao.tipo != "pensando" and dados.get("prioridade", FALA) != FIXO
+                and (self.balao.tipo != "comentario" or dados.get("prioridade", FALA) >= IMPORTANTE)):
+            self.falas.appendleft(dados)  # aviso, notificação, resumo, lembrete: volta pra fila, mostra depois
+        self.fechar_balao()   # (revisão do Júnior, que é FIXO, volta pra fila sozinha; piada à toa vai embora)
         # conversa por voz: o balão fica aberto enquanto durar a conversa (quem encerra é o contador da voz)
         duracao = None if por_clique or self.conversa_voz else limitar(20 + len(texto) / 12, 20, 90)
         self.entrada = Balao(self, "entrada", texto, titulo="claudinho" if texto else None, rodape=self.voz_rodape(),
@@ -4633,7 +4684,8 @@ class Claudinho:
             self.fluxo_revisao = None
         texto = (self.entrada.entry.get() if do_campo else texto).strip()
         if not texto:
-            return
+            return   # vazio não é mensagem: não renova o silêncio do assunto
+        self.marcar_assunto()
         if self.ocupado:
             if do_campo:
                 self.entrada.entry.delete(0, "end")
@@ -5386,7 +5438,7 @@ class Claudinho:
         piadas, esquetes_ligadas = self.cfg["comentar_tela"], self.cfg["esquetes"]
         if not (piadas or esquetes_ligadas) or self.comentando or time.time() < self.prox_comentario:
             return
-        if self.ocupado or self.balao or self.entrada or self.falas or self.esquete or self.modo != "passeio":
+        if (self.em_assunto() or self.balao or self.falas or self.esquete or self.modo != "passeio"):
             return
         a, b = self.cfg["comentar_a_cada_minutos"]
         self.prox_comentario = time.time() + random.uniform(a, b) * 60
@@ -5401,8 +5453,8 @@ class Claudinho:
 
     def comentar_do_jogo(self):
         """No canto, parado: de tempos em tempos olha a tela (o print que ele já tira) e comenta o jogo."""
-        if (not self.cfg["comentar_tela"] or self.cfg["vendado"] or not tem_ia() or self.comentando or self.ocupado
-                or self.balao or self.entrada or self.falas or self.movendo or time.time() < self.prox_comentario_jogo):
+        if (not self.cfg["comentar_tela"] or self.cfg["vendado"] or not tem_ia() or self.comentando or self.em_assunto()
+                or self.balao or self.falas or self.movendo or time.time() < self.prox_comentario_jogo):
             return
         a, b = self.cfg["comentar_a_cada_minutos"]
         self.prox_comentario_jogo = time.time() + random.uniform(a, b) * 60
@@ -5651,7 +5703,7 @@ class Claudinho:
                     saida = None
                     if argumentos and self.pedir_permissao("Bash", {
                             "command": " ".join(argumentos),
-                            "description": f"rodar os testes de {nome}: comando SUGERIDO PELA IA revisora ({teste})"}):
+                            "description": "rodar os testes", "onde": nome}):   # (só comandos da lista revisao.TESTES)
                         saida = revisao.rodar_teste(argumentos, raiz)
                     elif teste and not argumentos:
                         saida = ("nao_rodou", None, f"o revisor sugeriu \"{teste[:80]}\", que não está na lista de "
@@ -6200,7 +6252,7 @@ class Claudinho:
                 self.talvez_comentar_musica(ev[1])
             elif ev[0] == "comentario_musica":
                 self.comentando = False
-                if ev[1] and not self.parecida(ev[1]):
+                if ev[1] and not self.parecida(ev[1]) and not self.em_assunto():
                     pid = self.lembrar_piada(ev[1], "musica")
                     self.comentar(ev[1], {"origem": "musica", "id": pid})
                     self.soltar_emoji("nota")
@@ -6262,6 +6314,7 @@ class Claudinho:
             elif ev[0] == "aviso_pronto":
                 self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
             elif ev[0] == "resposta":
+                self.marcar_assunto()
                 self.usou_ferramenta = False
                 _, resposta, sid, erro = ev
                 self.ocupado = False
@@ -6321,7 +6374,7 @@ class Claudinho:
                 self.comentando = False
                 forcado, self.olhando_forcado = self.olhando_forcado, False
                 _, r, lista, alvo = ev
-                if self.modo != "passeio" and not forcado:
+                if (self.modo != "passeio" or self.em_assunto()) and not forcado:   # (assunto começou enquanto pensava)
                     continue
                 # Haiku falhou, ou repetiu uma piada recente com outras palavras: vai de banco de frases
                 # (em jogo não tem banco: fica quieto até a próxima; "calado": a ficha do site diz pra não comentar)
@@ -6420,6 +6473,13 @@ def main():
         DADOS.mkdir(exist_ok=True)
         sys.stderr = open(DADOS / "erros.log", "a", encoding="utf-8", buffering=1)
         print(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} Claudinho abriu", file=sys.stderr)
+    # crash nativo (Tk, ctypes, biblioteca em C) não passa pelo erros.log: o faulthandler grava onde cada thread estava
+    global QUEDAS
+    DADOS.mkdir(exist_ok=True)
+    QUEDAS = open(DADOS / "quedas.log", "a", encoding="utf-8")
+    QUEDAS.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} Claudinho abriu\n")
+    QUEDAS.flush()
+    faulthandler.enable(QUEDAS, all_threads=True)
     # coleta automática desligada: ela roda na thread que estiver alocando, e fonte/variável do Tk solta nela
     # chama o Tk de fora da thread principal e trava tudo ("não está respondendo"). O tick coleta a cada 30 s.
     gc.disable()

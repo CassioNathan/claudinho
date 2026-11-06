@@ -1698,12 +1698,19 @@ class Balao:
     CAUDA_W, CAUDA_H = 22, 12
 
     def __init__(self, app, tipo, texto="", titulo=None, rodape=None, duracao=None, entrada=False,
-                 botoes=None, botoes_no_hover=False, barras=False, botao_largo=False, botoes_estreitos=False):
+                 botoes=None, botoes_no_hover=False, barras=False, botao_largo=False, botoes_estreitos=False,
+                 fechavel=None):
         self.app, self.tipo, self.dados = app, tipo, None
         # texto grande rola com a rodinha (o Windows 10/11 manda a rodinha pra janela embaixo do mouse, mesmo sem foco;
         # antes eram páginas, um clique pra cada). `paginas` fica com uma só, pra quem lê o texto atual dele.
         self.paginas = [texto]
         self.rolagem = len(texto) > ROLAR_DEPOIS_DE
+        # ✕ no canto: texto que rola, ou balão com botões (aviso, resumo…: clicar nele não fecha, pra não perder o
+        # clique do botão). Pode/Não, conversa e revisão do Júnior (fechavel=False) só saem pelos botões deles
+        if fechavel is None:
+            fechavel = self.rolagem or (bool(botoes) and not entrada and not botao_largo and not botoes_no_hover
+                                        and tipo not in ("permissao", "pensando"))
+        self.fechavel = fechavel
         self.rodape_base = rodape or ""
         self.duracao = duracao
         self.ate = time.time() + duracao if duracao else None
@@ -1733,7 +1740,7 @@ class Balao:
             self.link_voz.pack(side="right", padx=(0, 12))
         elif titulo:
             ctk.CTkLabel(self.frame, text=titulo, font=f(12, "bold"), text_color=LARANJA,
-                         anchor="w", height=18).pack(fill="x", padx=16, pady=(10, 0))
+                         anchor="w", height=18).pack(fill="x", padx=(16, 42 if self.fechavel else 16), pady=(10, 0))
         # conversa = última resposta (se tiver) + campo de texto embaixo, tudo no mesmo balão
         self.entry = None
         if texto or not entrada:
@@ -1752,7 +1759,7 @@ class Balao:
             else:
                 self.texto = ctk.CTkLabel(self.frame, text=texto, wraplength=340, justify="left",
                                           anchor="w", text_color=TEXTO, font=f(13))
-                margem_dir = 16
+                margem_dir = 42 if self.fechavel else 16   # (coluna do ✕ à direita)
             if texto or not botoes:   # só botões (modo só fala): sem a linha vazia em cima deles
                 self.texto.pack(fill="x", padx=(16, margem_dir),
                                 pady=(2 if titulo or entrada else 10, 2 if tem_rodape or entrada else 10))
@@ -1822,7 +1829,7 @@ class Balao:
 
         # texto que rola: ✕ no canto pra fechar (clicar no texto não fecha: você está lendo)
         self.interagiu = False  # já rolou o texto: aí não some sozinho e fecha com clique fora
-        if self.rolagem:
+        if self.fechavel:
             fechar = tk.Label(self.frame, text="✕", bg=FUNDO, fg=APAGADO, font=("Segoe UI", 10),
                               cursor="hand2", padx=4)
             fechar.place(relx=1.0, x=-10, y=6, anchor="ne")
@@ -1856,11 +1863,16 @@ class Balao:
 
     def mouse_entrou(self, e):
         self.hover = True
+        if self.ate is not None:   # pausa o timer: guarda o que faltava
+            self.restante = self.ate - time.time()
         if self.botoes_no_hover and not self.linha_botoes.winfo_ismapped():
             self.linha_botoes.pack(fill="x", padx=12, pady=(4, 12))
 
     def mouse_saiu(self, e):
         self.hover = False
+        if self.ate is not None and getattr(self, "restante", None) is not None:   # retoma sem sumir na hora
+            self.ate = time.time() + max(self.restante, 3)
+            self.restante = None
         if self.botoes_no_hover:
             # o Leave também dispara ao passar de um pedaço do balão pro outro: confere depois
             self.win.after(250, self.esconder_botoes_se_saiu)
@@ -3626,7 +3638,7 @@ class Claudinho:
         resposta = formatar.limpar(d.get("resumo") or d.get("resposta") or "(sem texto)")  # balão não entende markdown
         if len(resposta) > 5000:  # no máximo ~12 páginas
             resposta = resposta[:5000].rsplit(" ", 1)[0] + "…"
-        botoes = [("💬", lambda: self.continuar(f"✓ pronto em {d.get('projeto') or '?'}: {resposta[:300]}",
+        botoes = [("conversar", lambda: self.continuar(f"✓ pronto em {d.get('projeto') or '?'}: {resposta[:300]}",
                                                  self.contexto_do_aviso(d)), False)]
         if self.da_pra_conferir(d):   # o Júnior revisa na hora, mesmo com o modo dele desligado
             botoes.insert(0, ("🔎 conferir", lambda: self.conferir_aviso(d), True))
@@ -3695,7 +3707,7 @@ class Claudinho:
                                True))
         if r.get("notificacoes"):
             botoes.append(("resumir 🔔", depois(self.ver_notificacoes), not botoes))
-        botoes.append(("💬", lambda: self.continuar(fala["texto"], "[resumo da manhã que você deu a ele] " + fala["texto"]
+        botoes.append(("conversar", lambda: self.continuar(fala["texto"], "[resumo da manhã que você deu a ele] " + fala["texto"]
                                                     + " (ele pode querer organizar o dia, saber o que fazer primeiro ou "
                                                       "agir em algum item)"), not botoes))
         botoes.append(("ok", self.fechar_balao, False))
@@ -3704,7 +3716,7 @@ class Claudinho:
 
     def balao_continuar(self, fala):   # comentário que vale continuar (lembrete, pausa, tarefa perdida…): 💬
         return Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
-                     botoes=[("💬", lambda: self.continuar(fala["texto"]), False)])
+                     botoes=[("conversar", lambda: self.continuar(fala["texto"]), False)])
 
     def balao_notificacoes(self, fala):  # resumo + limpar só as que ele leu (as que chegarem depois ficam)
         n = len(fala["ids"])
@@ -3720,7 +3732,7 @@ class Claudinho:
         except Exception:
             pass
         return Balao(self, fala["tipo"], fala["texto"], titulo=f"⏳ {fala['espera'].get('projeto') or '?'} esperando você",
-                     duracao=fala["duracao"], botoes=[("ok", self.fechar_balao, True), ("💬", lambda: self.continuar(
+                     duracao=fala["duracao"], botoes=[("ok", self.fechar_balao, True), ("conversar", lambda: self.continuar(
                          fala["texto"], f"[um chat do Claude Code está parado esperando o usuário no projeto "
                                         f"{fala['espera'].get('projeto') or '?'}, pasta {fala['espera'].get('pasta') or '?'}] "
                                         + fala["texto"]), False)])
@@ -3731,13 +3743,13 @@ class Claudinho:
 
     def balao_revisar_pasta(self, fala):  # Júnior pedindo pra liberar a pasta do projeto antes de revisar
         item = fala["revisar_pasta"]
-        return Balao(self, fala["tipo"], fala["texto"], titulo="🔎 posso revisar?", duracao=None,
+        return Balao(self, fala["tipo"], fala["texto"], titulo="🔎 posso revisar?", duracao=None, fechavel=False,
                      botoes=[("pode", lambda: self.revisao_permitir(item, True), True),
                              ("agora não", lambda: self.revisao_permitir(item, False), False)])
 
     def balao_revisao(self, fala):  # revisão do trabalho de um chat do Claude Code (e as respostas do fluxo dela)
         item = fala["revisao"]
-        return Balao(self, fala["tipo"], fala["texto"], titulo=f"🔎 revisão: {item['nome']}",
+        return Balao(self, fala["tipo"], fala["texto"], titulo=f"🔎 revisão: {item['nome']}", fechavel=False,
                      duracao=None, botoes=self.botoes_da_revisao(item), botoes_estreitos=True)
 
     def balao_atualizacao(self, fala):  # versão nova no GitHub
@@ -3967,7 +3979,8 @@ class Claudinho:
             # a próxima só sai quando a voz acabou (nada entra no meio de outra fala); resposta sua não espera e o
             # urgente só espera se o que está falando não é papo. Pergunta tem prioridade: enquanto ele pensa, os
             # avisos esperam (o urgente, não)
-            voz = (not self.voz_ocupada() or proxima["tipo"] == "resposta"
+            # (balão "falado" = a voz que está tocando é ele mesmo, ex.: a resposta do corrige da revisão: aparece junto)
+            voz = (not self.voz_ocupada() or proxima["tipo"] == "resposta" or proxima.get("falado")
                    or (proxima.get("urgente") and self.falando == PAPO))
             if voz and (not self.ocupado or proxima["tipo"] == "resposta" or proxima.get("urgente")):
                 self.mostrar(self.falas.popleft())

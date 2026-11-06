@@ -180,7 +180,7 @@ CONVERSA, URGENTE, AVISO, PAPO = "conversa", "urgente", "aviso", "papo"
 # falas com balão próprio (botões, título): a chave que a fala traz → método balao_<chave> do Claudinho. Na ordem:
 # se uma fala trouxer duas, vale a primeira. "aviso" e "notificacoes" vêm do tipo da fala; "piada", do modo avaliação
 BALOES_ESPECIAIS = ("login", "espera", "revisar_pasta", "revisao", "atualizacao", "novidades", "vendas", "rapido",
-                    "so_botoes")
+                    "so_botoes", "resumo", "continuar")
 # o que veio numa atualização e precisa de você escolher (cada uma tem a tela dela no painel, NOVIDADES de lá).
 # Coisa nova sem aviso ninguém usa: quem atualiza ganha um balão "tenho novidade"; quem instala do zero vê no tour
 NOVIDADES = {"modo_hibrido": "o modo híbrido de IA (gasta bem menos do seu plano)",
@@ -1617,18 +1617,13 @@ def iniciar_servidor(eventos):
 
 
 # ---------------- balão de fala ----------------
-def paginar(texto, limite=420):
-    """Quebra o texto em páginas de até ~`limite` caracteres, sem cortar palavras."""
-    paginas, atual = [], ""
-    for paragrafo in texto.split("\n"):
-        for palavra in paragrafo.split(" "):
-            if atual and len(atual) + len(palavra) + 1 > limite:
-                paginas.append(atual.rstrip())
-                atual = ""
-            atual += palavra + " "
-        atual = atual.rstrip(" ") + "\n"
-    paginas.append(atual.strip())
-    return [p for p in paginas if p] or [""]
+ROLAR_DEPOIS_DE = 520   # texto maior que isso: caixa com rolagem (rodinha do mouse) em vez de esticar o balão
+LINHAS_VISIVEIS = 14
+
+
+def linhas_estimadas(texto, por_linha=46):
+    """Quantas linhas o texto ocupa na largura do balão (estimativa: ~46 letras por linha em Segoe UI 13)."""
+    return sum(max(1, -(-len(p) // por_linha)) for p in texto.split("\n"))
 
 
 
@@ -1663,9 +1658,10 @@ class Balao:
     def __init__(self, app, tipo, texto="", titulo=None, rodape=None, duracao=None, entrada=False,
                  botoes=None, botoes_no_hover=False, barras=False, botao_largo=False, botoes_estreitos=False):
         self.app, self.tipo, self.dados = app, tipo, None
-        # texto grande vira páginas: clique passa para a próxima. (Rolagem não dá: no Windows a
-        # rodinha só chega na janela com foco, e o sistema não deixa o balão pegar o foco.)
-        self.paginas, self.pagina = paginar(texto), 0
+        # texto grande rola com a rodinha (o Windows 10/11 manda a rodinha pra janela embaixo do mouse, mesmo sem foco;
+        # antes eram páginas, um clique pra cada). `paginas` fica com uma só, pra quem lê o texto atual dele.
+        self.paginas = [texto]
+        self.rolagem = len(texto) > ROLAR_DEPOIS_DE
         self.rodape_base = rodape or ""
         self.duracao = duracao
         self.ate = time.time() + duracao if duracao else None
@@ -1687,7 +1683,7 @@ class Balao:
 
         if entrada:  # conversa: nome dele e, do lado, o link pra abrir a conversa inteira numa janela maior
             topo = ctk.CTkFrame(self.frame, fg_color=FUNDO, height=18)
-            topo.pack(fill="x", padx=(16, 42 if len(self.paginas) > 1 else 16), pady=(10, 0))
+            topo.pack(fill="x", padx=(16, 42 if self.rolagem else 16), pady=(10, 0))
             ctk.CTkLabel(topo, text=titulo or "claudinho", font=f(12, "bold"), text_color=LARANJA,
                          anchor="w", height=18).pack(side="left")
             self.link(topo, "ver conversa", app.ver_conversa).pack(side="right")
@@ -1699,15 +1695,27 @@ class Balao:
         # conversa = última resposta (se tiver) + campo de texto embaixo, tudo no mesmo balão
         self.entry = None
         if texto or not entrada:
-            tem_rodape = rodape is not None or len(self.paginas) > 1
-            self.texto = ctk.CTkLabel(self.frame, text=self.paginas[0], wraplength=340, justify="left",
-                                      anchor="w", text_color=TEXTO, font=f(13))
-            margem_dir = 42 if len(self.paginas) > 1 else 16  # espaço pro ✕ no canto
+            tem_rodape = rodape is not None
+            if self.rolagem:   # caixa de texto só de leitura, do tamanho de ~14 linhas, que rola com a rodinha
+                linhas = min(LINHAS_VISIVEIS, linhas_estimadas(texto))
+                self.texto = ctk.CTkTextbox(self.frame, width=350, height=linhas * 19 + 10, wrap="word",
+                                            fg_color=FUNDO, text_color=TEXTO, font=f(13), border_width=0,
+                                            scrollbar_button_color=FUNDO2, scrollbar_button_hover_color=APAGADO)
+                self.texto._textbox.configure(takefocus=0, cursor="arrow")
+                self.definir_texto(texto)
+                # clique no texto não seleciona nem pega o foco (seria roubar o teclado de quem está trabalhando)
+                self.texto._textbox.bind("<Button-1>", lambda e: (self.clicou(e), "break")[1])
+                self.texto._textbox.bind("<MouseWheel>", self.rolou, add="+")
+                margem_dir = 8
+            else:
+                self.texto = ctk.CTkLabel(self.frame, text=texto, wraplength=340, justify="left",
+                                          anchor="w", text_color=TEXTO, font=f(13))
+                margem_dir = 16
             if texto or not botoes:   # só botões (modo só fala): sem a linha vazia em cima deles
                 self.texto.pack(fill="x", padx=(16, margem_dir),
                                 pady=(2 if titulo or entrada else 10, 2 if tem_rodape or entrada else 10))
         self.rodape = None
-        if rodape is not None or len(self.paginas) > 1:
+        if rodape is not None:
             self.rodape = ctk.CTkLabel(self.frame, text="", font=f(11), text_color=APAGADO,
                                        anchor="w", justify="left", height=16)
             self.rodape.pack(fill="x", padx=16, pady=(0, 2 if entrada else 10))
@@ -1762,7 +1770,7 @@ class Balao:
                               font=f(12, "bold"),
                               fg_color=LARANJA if principal else FUNDO2, hover_color="#c4663f" if principal
                               else "#4a4945", text_color="white" if principal else TEXTO,
-                              command=acao).pack(side="right", padx=(6, 0))
+                              command=lambda a=acao: self.apertou(a)).pack(side="right", padx=(6, 0))
 
         self.cauda = tk.Canvas(self.win, width=self.CAUDA_W, height=self.CAUDA_H + 3, bg=CHAVE,
                                highlightthickness=0)
@@ -1770,9 +1778,9 @@ class Balao:
         self.cauda.create_polygon(0, 0, w, 0, w // 2, h, fill=FUNDO, outline="")
         self.cauda.create_line(0, 0, w // 2, h, w, 0, fill=LARANJA, width=2)
 
-        # mais de uma página: ✕ no canto pra fechar (clicar no texto só avança, em círculo)
-        self.interagiu = False  # já mexeu nas páginas: aí não some sozinho e fecha com clique fora
-        if len(self.paginas) > 1:
+        # texto que rola: ✕ no canto pra fechar (clicar no texto não fecha: você está lendo)
+        self.interagiu = False  # já rolou o texto: aí não some sozinho e fecha com clique fora
+        if self.rolagem:
             fechar = tk.Label(self.frame, text="✕", bg=FUNDO, fg=APAGADO, font=("Segoe UI", 10),
                               cursor="hand2", padx=4)
             fechar.place(relx=1.0, x=-10, y=6, anchor="ne")
@@ -1909,28 +1917,40 @@ class Balao:
             c.create_rectangle(x, (altura - h) / 2, x + passo * 0.4, (altura + h) / 2, fill=cor, width=0)
 
     def desenhar_rodape(self):
-        partes = [self.rodape_base] if self.rodape_base else []
-        if len(self.paginas) > 1:
-            n, total = self.pagina + 1, len(self.paginas)
-            partes.append(f"clique pra continuar ▸ {n}/{total}" if n < total
-                          else f"clique pra voltar ao início ↺ {n}/{total}")
-        self.rodape.configure(text="  ·  ".join(partes))
+        self.rodape.configure(text=self.rodape_base)
+
+    def definir_texto(self, texto):
+        self.paginas = [texto]
+        if self.rolagem:
+            self.texto.configure(state="normal")
+            self.texto.delete("1.0", "end")
+            self.texto.insert("1.0", texto)
+            self.texto.configure(state="disabled")
+        else:
+            self.texto.configure(text=texto)
+
+    def rolou(self, e=None):
+        self.interagiu = True
+        self.ate = None  # está lendo: não some sozinho (fecha no ✕ ou clicando fora)
 
     def clicou(self, e):
         if self.entry is not None and str(e.widget).startswith(str(self.linha_campo)):
-            return  # clique no campo de texto ou no microfone: não passa página nem fecha
-        if len(self.paginas) > 1:  # avança em círculo: da última volta pra primeira (fecha no ✕ ou clicando fora)
-            self.pagina = (self.pagina + 1) % len(self.paginas)
-            self.texto.configure(text=self.paginas[self.pagina])
-            self.desenhar_rodape()
-            self.interagiu = True
-            self.ate = None  # está lendo: não some sozinho
+            return  # clique no campo de texto ou no microfone: não fecha
+        if self.rolagem:   # clicar no texto que rola é ler, não fechar
+            self.rolou()
         elif self.entry is None and not self.botoes:  # conversa e confirmação não fecham no clique
             self.app.fechar_balao(pela_mao=True)
 
+    def apertou(self, acao):
+        """Botão do balão: se ele estava lendo este balão em voz alta, cala antes (você já decidiu, não precisa
+        ouvir o resto). Pode/Não e afins não são falados: não cortam nada."""
+        if (self.dados or {}).get("falado") and self.app.voz_ocupada():
+            self.app.calar()
+        acao()
+
     def fechar_pelo_x(self):
         if self.entry is not None:
-            self.app.fechar_conversa()
+            self.app.fechar_conversa(pela_mao=True)
         else:
             self.app.fechar_balao(pela_mao=True)
 
@@ -1992,7 +2012,7 @@ class Balao:
             self.desenhar_rodape()
 
     def mudar_texto(self, texto):
-        self.texto.configure(text=texto)
+        self.definir_texto(texto)
 
     def posicionar(self):
         app = self.app
@@ -3561,8 +3581,13 @@ class Claudinho:
         resposta = formatar.limpar(d.get("resumo") or d.get("resposta") or "(sem texto)")  # balão não entende markdown
         if len(resposta) > 5000:  # no máximo ~12 páginas
             resposta = resposta[:5000].rsplit(" ", 1)[0] + "…"
+        botoes = [("💬", lambda: self.continuar(f"✓ pronto em {d.get('projeto') or '?'}: {resposta[:300]}",
+                                                 self.contexto_do_aviso(d)), False)]
+        if self.da_pra_conferir(d):   # o Júnior revisa na hora, mesmo com o modo dele desligado
+            botoes.insert(0, ("🔎 conferir", lambda: self.conferir_aviso(d), True))
         balao = Balao(self, "aviso", resposta, titulo=f"✓ pronto em {d.get('projeto') or '?'}",
-                      rodape=self.rodape_aviso(d), duracao=self.cfg["aviso_segundos"])
+                      rodape=self.rodape_aviso(d), duracao=self.cfg["aviso_segundos"], botoes=botoes,
+                      botoes_estreitos=True)
         try:
             import winsound
             winsound.MessageBeep(0x40)
@@ -3570,6 +3595,62 @@ class Claudinho:
             pass
         self.soltar_emoji("check")  # comemora o chat que terminou
         return balao
+
+    # ---------- continuar a partir de um balão ----------
+    def continuar(self, mostrado, contexto=None):
+        """💬 de um balão: abre a conversa já respondendo a ele. `contexto` = o que o chat precisa saber além do que
+        aparece (a pasta do projeto, o pedido, a resposta inteira…)."""
+        self.fechar_balao(fixo_tambem=True)
+        self.respondendo_a = (time.time(), contexto or mostrado)
+        self.abrir_conversa(mostrado, por_clique=True)
+
+    def contexto_do_aviso(self, d):
+        pedido = " ".join((d.get("pedido") or "").split())[:500]
+        resposta = formatar.limpar(d.get("resposta") or d.get("resumo") or "")[:1500]
+        return (f"[aviso: um chat do Claude Code terminou no projeto {d.get('projeto') or '?'}, pasta "
+                f"{d.get('pasta') or '?'}] Ele tinha pedido: \"{pedido}\". O chat respondeu: \"{resposta}\". Se ele "
+                "pedir pra verificar, conferir ou testar, olhe os arquivos e o git dessa pasta (ler pode; mudar pede licença).")
+
+    def da_pra_conferir(self, d):
+        pasta = d.get("pasta") or ""
+        return (motores.CONFIG["motor"] == "claude_code" and not self.cfg["vendado"] and bool(pasta)
+                and "scratch-" not in pasta and Path(pasta).is_dir())
+
+    def conferir_aviso(self, d):
+        """🔎 do aviso: a revisão do Júnior naquele projeto, agora (pasta fora das liberadas: pede uma vez)."""
+        self.fechar_balao()
+        if self.revisando:
+            return self.comentar("Já estou conferindo outro trabalho; termino ele e você me chama de novo.",
+                                 duracao=6, prioridade=ESTADO)
+        self.revisar_projeto(d, pedido=True)   # (mexeu = a lista de arquivos; vazia, o revisor olha o git)
+
+    def balao_resumo(self, fala):   # resumo da manhã: e agora? o que dá pra fazer com cada parte
+        r = fala["resumo"]
+        botoes = []
+
+        def depois(funcao, *args):   # fecha o resumo e faz
+            def fazer():
+                self.fechar_balao()
+                funcao(*args)
+            return fazer
+        if r.get("whatsapp"):
+            if self.whats_proprio and self.whats_proprio.pronto():
+                botoes.append(("responder", depois(self.preparar_respostas, r["whatsapp"]), True))
+            else:
+                botoes.append(("ver whats", depois(self.receber_vendas, {"etapa": "nao_lidas", "conversas": r["whatsapp"]}),
+                               True))
+        if r.get("notificacoes"):
+            botoes.append(("resumir 🔔", depois(self.ver_notificacoes), not botoes))
+        botoes.append(("💬", lambda: self.continuar(fala["texto"], "[resumo da manhã que você deu a ele] " + fala["texto"]
+                                                    + " (ele pode querer organizar o dia, saber o que fazer primeiro ou "
+                                                      "agir em algum item)"), not botoes))
+        botoes.append(("ok", self.fechar_balao, False))
+        return Balao(self, fala["tipo"], fala["texto"], titulo="☀️ seu resumo", duracao=fala["duracao"],
+                     botoes=botoes, botoes_estreitos=True)
+
+    def balao_continuar(self, fala):   # comentário que vale continuar (lembrete, pausa, tarefa perdida…): 💬
+        return Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
+                     botoes=[("💬", lambda: self.continuar(fala["texto"]), False)])
 
     def balao_notificacoes(self, fala):  # resumo + limpar só as que ele leu (as que chegarem depois ficam)
         n = len(fala["ids"])
@@ -3585,7 +3666,10 @@ class Claudinho:
         except Exception:
             pass
         return Balao(self, fala["tipo"], fala["texto"], titulo=f"⏳ {fala['espera'].get('projeto') or '?'} esperando você",
-                     duracao=fala["duracao"], botoes=[("ok", self.fechar_balao, True)])
+                     duracao=fala["duracao"], botoes=[("ok", self.fechar_balao, True), ("💬", lambda: self.continuar(
+                         fala["texto"], f"[um chat do Claude Code está parado esperando o usuário no projeto "
+                                        f"{fala['espera'].get('projeto') or '?'}, pasta {fala['espera'].get('pasta') or '?'}] "
+                                        + fala["texto"]), False)])
 
     def balao_login(self, fala):  # o Claude Code está sem login: botão que abre o terminal pra fazer /login
         return Balao(self, fala["tipo"], fala["texto"], titulo="🔑 preciso de login", duracao=fala["duracao"],
@@ -3638,7 +3722,8 @@ class Claudinho:
         sua próxima mensagem pro chat e, se não for piada à toa, entra no histórico da conversa."""
         if fala["tipo"] == "aviso":
             d = fala["dados"]
-            texto = f"[aviso] pronto em {d.get('projeto') or '?'}: {formatar.limpar(d.get('resposta') or '')[:1500]}"
+            pasta = f" ({d['pasta']})" if d.get("pasta") else ""   # pra "confere isso" saber onde olhar
+            texto = f"[aviso] pronto em {d.get('projeto') or '?'}{pasta}: {formatar.limpar(d.get('resposta') or '')[:1500]}"
         else:
             texto = fala.get("texto", "")
         if not texto:
@@ -3856,10 +3941,13 @@ class Claudinho:
     def ultima_resposta(self):
         return self.mem.ultima_resposta()
 
-    def fechar_conversa(self, manter_print=False):
+    def fechar_conversa(self, manter_print=False, pela_mao=False):
+        """`pela_mao`: você fechou (✕, Esc): se ele ainda estava lendo a resposta em voz alta, cala também."""
         if self.entrada:
             self.entrada.destruir()
             self.entrada = None
+            if pela_mao:
+                self.calar()
         if not manter_print:  # desistiu da mensagem: o print vai junto
             self.print_anexado = None
 
@@ -4092,8 +4180,9 @@ class Claudinho:
         agora, lista, mudou, rodou = time.time(), [dict(t) for t in self.cfg["tarefas"]], False, False
         for t, como in tarefas.vencidas(lista, agora, self.aberto_em):
             if como == "perdida":
-                self.comentar(f"⏰ Não fiz a tarefa das {t['hora']} ({t['pedido']}): eu não estava aberto na hora.",
-                              duracao=30, prioridade=IMPORTANTE)
+                self.enfileirar({"tipo": "comentario", "duracao": 30, "continuar": True,   # 💬: "faz agora então"
+                                 "texto": f"⏰ Não fiz a tarefa das {t['hora']} ({t['pedido']}): eu não estava aberto na hora."},
+                                IMPORTANTE)
             elif rodou or self.modo_jogo or self.ocupado or self.comando_pendente:
                 continue   # espera a próxima volta (jogo na frente, chat pensando, outra tarefa agora há pouco)
             else:
@@ -4116,7 +4205,7 @@ class Claudinho:
                 pass
             # pela fila (urgente: passa na frente e não espera o chat pensar); a voz fala o "Ei, lembrete" uma vez só
             self.enfileirar({"tipo": "comentario", "texto": f"⏰ Lembrete: {texto[:1].upper() + texto[1:]}!",
-                             "duracao": 60, "dizer": f"Ei, lembrete: {texto}.", "urgente": True}, IMPORTANTE,
+                             "duracao": 60, "dizer": f"Ei, lembrete: {texto}.", "urgente": True, "continuar": True}, IMPORTANTE,
                             na_frente=True)
             return
         if RESUMO_DA_MANHA.match(texto):
@@ -4257,8 +4346,8 @@ class Claudinho:
         fala = self.resumo_do_comeco_do_dia() or self.hora_da_pausa(agora)
         if fala:
             self.ultima_iniciativa = agora
-            self.enfileirar({"tipo": "comentario", "texto": fala, "duracao": 25, "dizer": fala.split("\n")[0]},
-                            IMPORTANTE)
+            self.enfileirar({"tipo": "comentario", "texto": fala, "duracao": 25, "dizer": fala.split("\n")[0],
+                             "continuar": True}, IMPORTANTE)
 
     def tarefas_de_hoje(self):
         fim_do_dia = time.mktime(time.strptime(time.strftime("%Y-%m-%d") + " 23:59", "%Y-%m-%d %H:%M"))
@@ -4273,6 +4362,7 @@ class Claudinho:
         whatsapp = "vendedor" in self.cfg["habilidades"]
 
         def juntar():
+            achado = {"dia": True}   # o que deu pra fazer algo depois (os botões do balão; nunca vazio: marca o balão)
             hora = time.localtime().tm_hour
             partes = [("Bom dia" if 5 <= hora < 12 else "Boa tarde" if 12 <= hora < 18 else "Boa noite")
                       + "! Seu resumo ☀️"]
@@ -4286,6 +4376,7 @@ class Claudinho:
                 for n in notificacoes.listar():
                     apps[n["app"]] = apps.get(n["app"], 0) + 1
                 if apps:
+                    achado["notificacoes"] = True
                     mais = sorted(apps.items(), key=lambda x: -x[1])[:3]
                     partes.append(f"🔔 {sum(apps.values())} notificações (" + ", ".join(f"{a} {n}" for a, n in mais) + ")")
             except Exception as e:
@@ -4293,6 +4384,7 @@ class Claudinho:
             if whatsapp:
                 try:
                     conversas = [c for c in habilidades.ler_lista(30).get("conversas", []) if not c.get("silenciada")]
+                    achado["whatsapp"] = conversas
                     if conversas:
                         partes.append(f"💬 WhatsApp: {len(conversas)} conversa(s) não lida(s) ("
                                       + ", ".join(c["nome"] for c in conversas[:3]) + ("…" if len(conversas) > 3 else "") + ")")
@@ -4302,7 +4394,7 @@ class Claudinho:
                 partes.append("Nada pendente por aqui. Dia livre! 🎉")
             texto = "\n".join(partes)
             falado = ". ".join(re.sub(r"^\W+", "", p) for p in partes)   # sem os emojis do começo de cada linha
-            self.eventos.put(("resumo_da_manha", {"texto": texto, "dizer": falado}))
+            self.eventos.put(("resumo_da_manha", {"texto": texto, "dizer": falado, "resumo": achado}))
         threading.Thread(target=juntar, daemon=True).start()
 
     def resumo_do_comeco_do_dia(self):
@@ -4337,8 +4429,7 @@ class Claudinho:
     def recado_na_conversa(self, texto, falar=True):
         """Uma linha no fim da resposta que está aberta (sem trocar o balão; o recado novo troca o anterior)."""
         if self.entrada and getattr(self.entrada, "texto", None) is not None:
-            atual = self.entrada.paginas[self.entrada.pagina]
-            self.entrada.texto.configure(text=f"{atual}\n\n{texto}")
+            self.entrada.definir_texto(f"{self.entrada.paginas[0]}\n\n{texto}")
         else:
             self.comentar(texto, duracao=8, prioridade=ESTADO)
         if falar and self.cfg["voz_fala"]:
@@ -4521,8 +4612,8 @@ class Claudinho:
                              duracao=duracao, entrada=True, barras=self.conversa_voz, botoes=botoes)
         self.entrada_desde, self.entrada_teve_foco = time.time(), False
         self.entrada.entry.bind("<Return>", self.enviar)
-        self.entrada.entry.bind("<Escape>", lambda e: self.fechar_conversa())
-        self.entrada.win.bind("<Escape>", lambda e: self.fechar_conversa())  # com a faixa, o campo está escondido
+        self.entrada.entry.bind("<Escape>", lambda e: self.fechar_conversa(pela_mao=True))
+        self.entrada.win.bind("<Escape>", lambda e: self.fechar_conversa(pela_mao=True))  # com a faixa, o campo está escondido
         if rascunho:
             self.entrada.entry.insert(0, rascunho)
         if por_clique:  # abriu clicando nele: já pode digitar
@@ -5491,17 +5582,29 @@ class Claudinho:
         threading.Thread(target=trabalho, daemon=True).start()
 
     def talvez_revisar(self, dados):
-        """Modo Júnior: um chat do Claude Code terminou mexendo em arquivo → confere se está feito mesmo.
-        Pasta fora das liberadas: pede pra liberar a raiz do projeto (uma vez; depois fica liberada)."""
+        """Modo Júnior: um chat do Claude Code terminou mexendo em arquivo → confere se está feito mesmo."""
+        if self.cfg["modo_junior"] and dados.get("mexeu") and not self.revisando:
+            self.revisar_projeto(dados)
+
+    def revisar_projeto(self, dados, pedido=False):
+        """Revisa a raiz do projeto do aviso. Pasta fora das liberadas: pede pra liberar a raiz (uma vez; depois fica
+        liberada). `pedido`: você clicou em 🔎 (pergunta mesmo se antes disse "agora não", e diz quando não dá)."""
         pasta = dados.get("pasta") or ""
-        if (not self.cfg["modo_junior"] or not dados.get("mexeu") or self.revisando or self.cfg["vendado"]
-                or not pasta or not Path(pasta).is_dir() or "scratch-" in pasta
-                or motores.CONFIG["motor"] != "claude_code"):
+        if not self.da_pra_conferir(dados):
+            if pedido:
+                self.comentar("Não dá pra conferir esse: preciso do Claude Code como motor e da pasta do projeto.",
+                              duracao=6, prioridade=ESTADO)
             return
         raiz = raiz_do_projeto(pasta)
         if Path(raiz) in (Path.home(), Path(Path(raiz).anchor)):   # home ou C:\ inteiro: não é projeto
+            if pedido:
+                self.comentar("Essa pasta é a pasta pessoal inteira, não um projeto: não confiro.", duracao=6,
+                              prioridade=ESTADO)
             return
         nome = Path(raiz).name
+        if pedido:
+            self.revisao_recusada.discard(raiz)
+            self.revisao_pendente.discard(raiz)
         if projetos.dentro(raiz, self.cfg["pastas_leitura"]):
             self.revisar(raiz, dados)
         elif raiz not in self.revisao_pendente and raiz not in self.revisao_recusada:
@@ -6040,8 +6143,8 @@ class Claudinho:
             if ev[0] == "permissao":
                 self.mostrar_permissao(ev[1])
             elif ev[0] == "resumo_da_manha":
-                self.enfileirar({"tipo": "comentario", "texto": ev[1]["texto"], "duracao": 60, "dizer": ev[1]["dizer"]},
-                                IMPORTANTE, na_frente=True)
+                self.enfileirar({"tipo": "comentario", "texto": ev[1]["texto"], "duracao": 60, "dizer": ev[1]["dizer"],
+                                 "resumo": ev[1]["resumo"]}, IMPORTANTE, na_frente=True)
             elif ev[0] == "ditado_estado":
                 self.ditado_estado(ev[1])
             elif ev[0] == "ditado_texto":

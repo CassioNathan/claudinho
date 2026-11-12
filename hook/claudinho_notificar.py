@@ -1,5 +1,11 @@
-"""Hooks "Stop" e "Notification" do Claude Code: avisam o Claudinho que um chat terminou de responder ou que
-parou esperando você (pedindo permissão pra rodar algo, ou fazendo uma pergunta).
+"""Hooks do Claude Code que contam ao Claudinho (que é o próprio Claude Code do PC, com cara de mascote) o que cada
+chat está fazendo:
+
+- Stop: terminou de responder; Notification: parou esperando você;
+- SessionStart / SessionEnd / UserPromptSubmit / PreToolUse (assíncronos, não atrasam o chat): a lista viva de
+  sessões (o que estou fazendo em cada janela);
+- PermissionRequest: o pedido de permissão vai pro balão do Claudinho e ESPERA a sua resposta lá (Pode/Não). Sem o
+  Claudinho aberto, sem resposta a tempo ou com "no app", não decide nada e o pedido aparece normal no chat.
 
 Lê o JSON do hook pelo stdin, pega o último pedido e a última resposta do
 transcript e manda para http://127.0.0.1:47821. Se a Claudinho não estiver
@@ -78,6 +84,52 @@ def esperando_voce(dados):
     return "permission" in mensagem or "needs your" in mensagem
 
 
+# da entrada da ferramenta só vai o que diz O QUE ela faz (nada de conteúdo de arquivo)
+CAMPOS_LEVES = ("description", "file_path", "notebook_path", "path", "pattern", "url", "query", "subagent_type")
+CAMPOS_PERMISSAO = CAMPOS_LEVES + ("command", "old_string", "new_string", "content", "prompt", "action", "text")
+# pedido de permissão que não dá pra responder com Pode/Não (pergunta com opções, aprovar plano): fica no chat
+SO_NO_CHAT = ("AskUserQuestion", "ExitPlanMode")
+ESPERA_PERMISSAO_S = 100   # quanto o hook espera sua resposta no balão (o timeout dele no settings é maior)
+
+
+def leve(entrada, campos=CAMPOS_LEVES, limite=300):
+    entrada = entrada if isinstance(entrada, dict) else {}
+    return {k: str(entrada[k])[:limite] for k in campos if entrada.get(k) not in (None, "")}
+
+
+def enviar(caminho, corpo, espera=1.5):
+    """POST no Claudinho com a chave dele. Devolve o corpo da resposta (ou None: ele não está aberto)."""
+    try:   # a chave que o Claudinho criou: sem ela ele recusa (qualquer programa poderia mandar aviso falso)
+        chave = (DADOS / "aviso_token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    req = urllib.request.Request(f"http://127.0.0.1:{PORTA}{caminho}",
+                                 data=json.dumps(corpo, ensure_ascii=False).encode("utf-8"),
+                                 headers={"Content-Type": "application/json", "X-Claudinho-Aviso": chave})
+    with urllib.request.urlopen(req, timeout=espera) as r:
+        return r.read()
+
+
+def pedir_permissao(dados, base):
+    """PermissionRequest: o balão do Claudinho decide. Imprime a decisão pro Claude Code (ou nada)."""
+    ferramenta = dados.get("tool_name") or ""
+    if ferramenta in SO_NO_CHAT:
+        return
+    corpo = dict(base, ferramenta=ferramenta, entrada=leve(dados.get("tool_input"), CAMPOS_PERMISSAO, 2000))
+    try:
+        resposta = json.loads(enviar("/permissao", corpo, espera=ESPERA_PERMISSAO_S + 5) or b"{}")
+    except Exception:
+        return
+    decisao = resposta.get("decisao")
+    if decisao == "allow":
+        saida = {"behavior": "allow"}
+    elif decisao == "deny":
+        saida = {"behavior": "deny", "message": "O usuário disse não pelo Claudinho."}
+    else:
+        return   # sem resposta ou "no app": o pedido aparece normal no chat
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": saida}}))
+
+
 def main():
     if os.environ.get("CLAUDINHO_CHAT"):
         return  # é o próprio chat da Claudinho
@@ -87,7 +139,25 @@ def main():
     projeto = Path(cwd).name or cwd
     if "scratch-" in projeto:
         projeto = "chat sem pasta"
-    if dados.get("hook_event_name") == "Notification":
+    evento = dados.get("hook_event_name")
+    base = {"projeto": projeto, "pasta": cwd, "session_id": dados.get("session_id")}
+    if evento == "PermissionRequest":
+        return pedir_permissao(dados, base)
+    if evento in ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse"):
+        if evento == "SessionStart":
+            corpo = dict(base, evento="inicio")
+        elif evento == "SessionEnd":
+            corpo = dict(base, evento="fechou")
+        elif evento == "UserPromptSubmit":
+            corpo = dict(base, evento="pedido", pedido=str(dados.get("prompt") or "")[:1000])
+        else:
+            corpo = dict(base, evento="ferramenta", ferramenta=dados.get("tool_name"), entrada=leve(dados.get("tool_input")))
+        try:
+            enviar("/aviso", corpo)
+        except Exception:
+            pass
+        return
+    if evento == "Notification":
         if not esperando_voce(dados):
             return
         corpo = {"evento": "espera", "projeto": projeto, "pasta": cwd, "session_id": dados.get("session_id"),
@@ -103,14 +173,7 @@ def main():
             "session_id": dados.get("session_id"),
             "mexeu": mexeu,
         }
-    corpo = json.dumps(corpo, ensure_ascii=False).encode("utf-8")
-    try:   # a chave que o Claudinho criou: sem ela ele recusa (qualquer programa poderia mandar aviso falso)
-        chave = (DADOS / "aviso_token").read_text(encoding="utf-8").strip()
-    except OSError:
-        return
-    req = urllib.request.Request(f"http://127.0.0.1:{PORTA}/aviso", data=corpo,
-                                 headers={"Content-Type": "application/json", "X-Claudinho-Aviso": chave})
-    urllib.request.urlopen(req, timeout=1.5)
+    enviar("/aviso", corpo)
 
 
 if __name__ == "__main__":

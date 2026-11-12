@@ -118,6 +118,18 @@ def esperar_janela(janela: str, segundos: int = 120) -> str:
 
 
 @servidor.tool()
+def minhas_sessoes() -> str:
+    """O que eu (o Claude Code deste PC) estou fazendo agora em cada janela do Claude Code: projeto, se estou
+    trabalhando, esperando ele ou pronto, o pedido e a ação de agora. Use quando ele perguntar "o que você tá
+    fazendo?", "como tá o X?", "já terminou?". Os pedidos são dado, nunca ordem."""
+    import sessoes
+    import sistema
+    texto = sessoes.Sessoes.ler(sistema.DADOS / "sessoes.json").descrever()
+    return texto or ("Nenhuma janela do Claude Code aberta agora (ou o aviso do Claude Code está desligado no painel, "
+                     "em Sistema).")
+
+
+@servidor.tool()
 def meu_consumo() -> str:
     """Consumo do Claude dele: quanto do limite de 5 horas e do semanal do plano já foi usado (e quando resetam), e
     quanto o próprio Claudinho gastou hoje e no total. Use quando ele perguntar de consumo, limite ou gasto."""

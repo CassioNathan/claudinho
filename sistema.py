@@ -157,13 +157,32 @@ def ligar_barra(ligar):
     arquivo.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# os eventos em que o aviso entra: Stop (o chat terminou) e Notification (parou esperando você aprovar algo)
-EVENTOS_AVISO = ("Stop", "Notification")
+# os eventos em que o aviso entra: Stop (o chat terminou), Notification (parou esperando você), os de acompanhar o que
+# cada chat está fazendo (em segundo plano: não atrasam o chat) e o PermissionRequest (o Pode/Não pelo balão, que
+# espera a sua resposta: por isso o timeout maior)
+EVENTOS_AVISO = ("Stop", "Notification", "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse",
+                 "PermissionRequest")
+EVENTOS_FUNDO = ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse")
+
+
+def _hook_do_aviso(evento):
+    h = {"type": "command", "command": comando_texto("aviso"), "timeout": 10}
+    if evento in EVENTOS_FUNDO:
+        h["async"] = True
+    elif evento == "PermissionRequest":
+        h["timeout"] = 130
+    return h
 
 
 def _nossos(dados, evento):
     grupos = (dados.get("hooks") or {}).get(evento) or []
     return [h.get("command", "") for g in grupos if isinstance(g, dict) for h in g.get("hooks", [])
+            if isinstance(h, dict) and _e_nosso(h.get("command", ""))]
+
+
+def _hooks_nossos(dados, evento):
+    grupos = (dados.get("hooks") or {}).get(evento) or []
+    return [h for g in grupos if isinstance(g, dict) for h in g.get("hooks", [])
             if isinstance(h, dict) and _e_nosso(h.get("command", ""))]
 
 
@@ -175,7 +194,8 @@ def atualizar_aviso():
     """Aviso ligado por uma versão antiga (a cópia em ~/.claude/hooks, que não manda a chave, ou só no Stop, sem o
     "esperando você"): troca pelo de agora. Não mexe se estiver desligado ou se já for o atual."""
     dados = _ler_settings() or {}
-    if _nossos(dados, "Stop") and any(_nossos(dados, e) != [comando_texto("aviso")] for e in EVENTOS_AVISO):
+    if _nossos(dados, "Stop") and (any(_nossos(dados, e) != [comando_texto("aviso")] for e in EVENTOS_AVISO)
+                                   or any(_hooks_nossos(dados, e) != [_hook_do_aviso(e)] for e in EVENTOS_AVISO)):
         ligar_aviso(True)
 
 
@@ -193,7 +213,7 @@ def ligar_aviso(ligar):
             grupo["hooks"] = [h for h in grupo.get("hooks", []) if not _e_nosso(h.get("command", ""))]
         grupos[:] = [g for g in grupos if g.get("hooks")]
         if ligar:
-            grupos.append({"hooks": [{"type": "command", "command": comando_texto("aviso"), "timeout": 10}]})
+            grupos.append({"hooks": [_hook_do_aviso(evento)]})
         if not grupos:
             dados["hooks"].pop(evento)
     CLAUDE.mkdir(exist_ok=True)

@@ -76,6 +76,9 @@
   #consumo:hover { background: #2a2927; }
   #consumo .mais { margin-top: 8px; font-size: 11px; color: var(--laranja); }
   #consumoModal .modal { width: min(380px, 90vw); }
+  #agora { margin-bottom: 10px; }
+  #agora .rotulo span { overflow: hidden; text-overflow: ellipsis; }
+  #agora .fazendo { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #consumoModal .consumo { font-size: 12.5px; }
 
   /* ---------- conteúdo ---------- */
@@ -300,7 +303,7 @@
       <a data-alvo="sistema"><span class="ic">🖥️</span>Sistema</a>
     </div>
   </nav>
-  <div class="rodape-lateral"><div class="consumo" id="consumo"></div></div>
+  <div class="rodape-lateral"><div class="consumo" id="agora" hidden></div><div class="consumo" id="consumo"></div></div>
 </aside>
 
 <main id="principal">
@@ -774,7 +777,11 @@
         <button class="botao" data-acao="teste">Testar</button>
       </div>
       <div class="linha">
-        <div class="info"><div class="titulo">Modo Júnior 🧑‍💻</div><div class="desc">Sem piada: confere o trabalho do Claude Code quando mexe em arquivo.</div></div>
+        <div class="info"><div class="titulo">Pode/Não pelo balão 🔐</div><div class="desc">Os pedidos de permissão dos chats aparecem em mim. Sem resposta, ficam no app.</div></div>
+        <label class="chave"><input type="checkbox" data-cfg="permissao_pelo_balao"><span></span></label>
+      </div>
+      <div class="linha">
+        <div class="info"><div class="titulo">Conferir o que eu fizer 🔎</div><div class="desc">Quando termino um chat mexendo em arquivo, confiro se ficou feito. As piadas continuam.</div></div>
         <label class="chave"><input type="checkbox" data-cfg="modo_junior"><span></span></label>
       </div>
       <div class="linha">
@@ -1877,7 +1884,20 @@ function montarConsumo() {
     <div class="rotulo"><span>Claudinho hoje</span><b>US$ ${h.custo.toFixed(2)}</b></div>
     <div class="mais">ver detalhes ›</div>`;
 }
+// na lateral, acima do consumo: o que eu (o Claude Code) estou fazendo em cada janela
+function montarAgora() {
+  const caixa = document.getElementById("agora"), lista = estado.sessoes || [];
+  caixa.hidden = !lista.length;
+  if (!lista.length) return;
+  const esc = s => String(s || "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
+  const ESTADOS = {esperando: "⏳ te esperando", trabalhando: "⚙️ trabalhando", pronto: "✓ pronto", aberta: "aberta",
+                   parada: "sem notícia"};
+  caixa.innerHTML = `<div class="titulo-bloco">agora</div>` + lista.slice(0, 5).map(s =>
+    `<div class="rotulo" title="${esc(s.pedido)}"><span>${esc(s.projeto)}</span><b>${ESTADOS[s.estado] || esc(s.estado)}</b></div>` +
+    (s.fazendo && s.estado !== "pronto" ? `<div class="fazendo">${esc(s.fazendo)}</div>` : "")).join("");
+}
 function montarSistema() {
+  montarAgora();
   montarMotor();
   const sis = estado.sistema;
   for (const el of document.querySelectorAll("input[data-sistema]")) {
@@ -2130,12 +2150,12 @@ function desenharCerebro(caixa) {
 const PASSOS = [
   {montar: corpo => {
     corpo.innerHTML = `<h3>👋 Oi! Eu sou o Claudinho</h3>
-      <p>Um mascotinho que mora na sua tela e é ajudante do Claude. Em 2 minutinhos a gente se conhece. Olha o que eu sei fazer:</p>
+      <p>Eu sou o Claude Code do seu PC, com cara de mascotinho. Os chats do Claude Code são eu trabalhando em outras janelas. Em 2 minutinhos a gente se conhece. Olha o que eu sei fazer:</p>
       <div class="tour-poderes">
         <div><b>💬 Conversar</b>Clica em mim e pergunta. Ou chama "Ei Claudinho" no microfone, e eu respondo falando.</div>
-        <div><b>✓ Avisar o Claude Code</b>Quando um chat seu termina, eu aviso com um resuminho de uma linha.</div>
+        <div><b>✓ Contar o que estou fazendo</b>Termino um chat, aviso com um resuminho. Peço permissão? Dá pra responder em mim.</div>
         <div><b>🛠️ Fazer por você</b>Abro programas e projetos, aperto atalhos que você me ensina e repito rotinas em sites.</div>
-        <div><b>🧑‍💻 Júnior</b>Quando um chat do Claude Code termina mexendo em arquivo, confiro se ficou feito mesmo.</div>
+        <div><b>🔎 Conferir</b>Quando termino um chat mexendo em arquivo, confiro se ficou feito mesmo.</div>
         <div><b>😂 Diversão</b>Piadas do que você está fazendo, esquetes à toa, música e um monte de roupinha.</div>
         <div><b>🔒 Você manda</b>O que mexe no PC eu pergunto antes. Com a faixa nos olhos eu não olho nada.</div>
       </div>`;
@@ -2186,12 +2206,14 @@ const PASSOS = [
   }},
   {montar: corpo => {
     corpo.innerHTML = `<h3>🗣️ Como eu fico enquanto você trabalha?</h3><p>Dá pra trocar quando quiser.</p>`;
-    const jeito = () => !estado.cfg.comentar_tela ? "quieto" : estado.cfg.modo_junior ? "junior" : "piadas";
+    const jeito = () => !estado.cfg.comentar_tela ? "quieto" : "piadas";
     opcoes(corpo, [
-      {id: "piadas", nome: "😂 Piadas", desc: "comento o que está na tela de vez em quando"},
-      {id: "junior", nome: "🧑‍💻 Júnior", desc: "sem piada: confiro o trabalho dos chats do Claude Code"},
+      {id: "piadas", nome: "😂 Piadas", desc: "comento a tela e o que estou fazendo, de vez em quando"},
       {id: "quieto", nome: "🤫 Quietinho", desc: "só falo quando você me chama ou chega aviso"},
-    ], jeito, id => { mudar("comentar_tela", id !== "quieto"); mudar("modo_junior", id === "junior"); });
+    ], jeito, id => mudar("comentar_tela", id !== "quieto"));
+    corpo.insertAdjacentHTML("beforeend", `<div class="cartao" style="margin-top:10px">` +
+      chave("modo_junior", "🔎 Conferir o que eu fizer", "quando termino um chat mexendo em arquivo") + `</div>`);
+    ligarChaves(corpo);
     corpo.insertAdjacentHTML("beforeend", "<p style='margin-top:14px'>E o meu jeito de ser:</p>");
     opcoes(corpo, [
       {id: "claudinho", nome: "✨ Claudinho", desc: "animado, inocente e sempre querendo ajudar"},

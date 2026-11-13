@@ -5,7 +5,10 @@ chat está fazendo:
 - SessionStart / SessionEnd / UserPromptSubmit / PreToolUse (assíncronos, não atrasam o chat): a lista viva de
   sessões (o que estou fazendo em cada janela);
 - PermissionRequest: o pedido de permissão vai pro balão do Claudinho e ESPERA a sua resposta lá (Pode/Não). Sem o
-  Claudinho aberto, sem resposta a tempo ou com "no app", não decide nada e o pedido aparece normal no chat.
+  Claudinho aberto, sem resposta a tempo ou com "no app", não decide nada e o pedido aparece normal no chat. A
+  pergunta com opções (AskUserQuestion) também: você escolhe no balão e a resposta volta pro chat;
+- Stop, depois do aviso: espera um pouco você responder pelo balão (texto ou voz). Respondeu: o chat continua com a
+  sua mensagem (decision "block" + reason). Não respondeu: termina normal. A regra do tempo está no responder.py.
 
 Lê o JSON do hook pelo stdin, pega o último pedido e a última resposta do
 transcript e manda para http://127.0.0.1:47821. Se a Claudinho não estiver
@@ -87,9 +90,11 @@ def esperando_voce(dados):
 # da entrada da ferramenta só vai o que diz O QUE ela faz (nada de conteúdo de arquivo)
 CAMPOS_LEVES = ("description", "file_path", "notebook_path", "path", "pattern", "url", "query", "subagent_type")
 CAMPOS_PERMISSAO = CAMPOS_LEVES + ("command", "old_string", "new_string", "content", "prompt", "action", "text")
-# pedido de permissão que não dá pra responder com Pode/Não (pergunta com opções, aprovar plano): fica no chat
-SO_NO_CHAT = ("AskUserQuestion", "ExitPlanMode")
+# pedido de permissão que não dá pra responder com Pode/Não nem com opções (aprovar plano): fica no chat
+SO_NO_CHAT = ("ExitPlanMode",)
+PERGUNTA = "AskUserQuestion"
 ESPERA_PERMISSAO_S = 100   # quanto o hook espera sua resposta no balão (o timeout dele no settings é maior)
+ESPERA_RESPOSTA_S = 900    # responder/escolher pelo balão (quem decide o tempo de verdade é o Claudinho)
 
 
 def leve(entrada, campos=CAMPOS_LEVES, limite=300):
@@ -115,19 +120,43 @@ def pedir_permissao(dados, base):
     ferramenta = dados.get("tool_name") or ""
     if ferramenta in SO_NO_CHAT:
         return
-    corpo = dict(base, ferramenta=ferramenta, entrada=leve(dados.get("tool_input"), CAMPOS_PERMISSAO, 2000))
+    entrada = dados.get("tool_input") if isinstance(dados.get("tool_input"), dict) else {}
+    corpo = dict(base, ferramenta=ferramenta, entrada=leve(entrada, CAMPOS_PERMISSAO, 2000))
+    if ferramenta == PERGUNTA:
+        perguntas = entrada.get("questions")
+        if not isinstance(perguntas, list) or not perguntas:
+            return
+        corpo["perguntas"] = perguntas
     try:
-        resposta = json.loads(enviar("/permissao", corpo, espera=ESPERA_PERMISSAO_S + 5) or b"{}")
+        resposta = json.loads(enviar("/permissao", corpo, espera=(ESPERA_RESPOSTA_S if ferramenta == PERGUNTA
+                                                                  else ESPERA_PERMISSAO_S) + 5) or b"{}")
     except Exception:
         return
     decisao = resposta.get("decisao")
-    if decisao == "allow":
+    if ferramenta == PERGUNTA:   # escolheu no balão: a pergunta já vai respondida (as respostas por texto da pergunta)
+        respostas = resposta.get("respostas")
+        if decisao != "allow" or not isinstance(respostas, dict) or not respostas:
+            return
+        saida = {"behavior": "allow", "updatedInput": dict(entrada, answers=respostas)}
+    elif decisao == "allow":
         saida = {"behavior": "allow"}
     elif decisao == "deny":
         saida = {"behavior": "deny", "message": "O usuário disse não pelo Claudinho."}
     else:
         return   # sem resposta ou "no app": o pedido aparece normal no chat
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": saida}}))
+
+
+def esperar_resposta(corpo):
+    """Stop: o aviso vai e fica esperando você responder pelo balão. Respondeu: o chat continua com a sua mensagem."""
+    try:
+        resposta = json.loads(enviar("/resposta", corpo, espera=ESPERA_RESPOSTA_S) or b"{}")
+    except Exception:
+        return
+    texto = str(resposta.get("texto") or "").strip()
+    if texto:
+        print(json.dumps({"decision": "block", "reason": "Mensagem do usuário, mandada pelo balão do Claudinho: "
+                                                          + texto}))
 
 
 def main():
@@ -173,6 +202,8 @@ def main():
             "session_id": dados.get("session_id"),
             "mexeu": mexeu,
         }
+    if evento == "Stop":
+        return esperar_resposta(corpo)   # (o /resposta também dá o aviso)
     enviar("/aviso", corpo)
 
 

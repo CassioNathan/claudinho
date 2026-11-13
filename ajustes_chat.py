@@ -16,6 +16,7 @@ AJUSTES = {
     "modo_junior": ("conferir sozinho o que eu fizer nos chats do Claude Code (modo Júnior)", "bool", None),
     "resumir_avisos": ("resumir em uma frase o aviso de chat que terminou (desligado: texto inteiro)", "bool", None),
     "permissao_pelo_balao": ("o Pode/Não dos chats do Claude Code no meu balão", "bool", None),
+    "responder_pelo_balao": ("responder pelo meu balão (texto ou voz) os chats do Claude Code que terminaram ou perguntaram algo", "bool", None),
     "comentar_tela": ("piadas e comentários sobre a tela", "bool", None),
     "esquetes": ("esquetes à toa (café, cochilo…)", "bool", None),
     "modo_tdah": ("piadas no modo TDAH", "bool", None),
@@ -81,7 +82,7 @@ APELIDOS = {"junior": "modo_junior", "resumo": "resumir_avisos", "resumir": "res
             "voz": "voz_fala", "falar": "voz_fala", "microfone": "voz", "ouvir": "voz", "volume": "voz_volume",
             "tom": "voz_tom", "abaixar": "voz_abaixar_outros", "abaixar som": "voz_abaixar_outros", "tamanho": "tamanho", "andar": "movimento", "frequencia": "comentar_a_cada_minutos",
             "esforco": "chat_esforco", "modelo": "chat_modelo", "contorno": "borda", "ultron": "personalidade",
-            "permissao": "permissao_pelo_balao", "pode nao": "permissao_pelo_balao"}
+            "permissao": "permissao_pelo_balao", "pode nao": "permissao_pelo_balao", "responder": "responder_pelo_balao", "responder chats": "responder_pelo_balao"}
 FREQUENCIAS = {"bastante": [1, 3], "muito": [1, 3], "normal": [4, 10], "de vez em quando": [15, 30], "pouco": [15, 30]}
 
 

@@ -160,14 +160,40 @@ def catalogo():
 achar_minhas()
 
 
+# expressões que a voz não sabe fazer (sai esquisito): "Zzz", "lalala", "lá-lá-lá", "tum-tss", "hmmm", "kkkk". No
+# balão elas ficam; na voz, somem
+PALAVRA = re.compile(r"[A-Za-zÀ-ÿ]+(?:-[A-Za-zÀ-ÿ]+)*")
+LETRA_REPETIDA = re.compile(r"([A-Za-zÀ-ÿ])\1\1", re.I)               # zzz, hmmm, aaah, kkkk, brrr, pfff, shhh
+SILABA_REPETIDA = re.compile(r"^([A-Za-zÀ-ÿ]{1,4})(?:-?\1){2,}$|^([A-Za-zÀ-ÿ]{1,4})(?:-\2)+$", re.I)  # lalala, lá-lá
+EXPRESSOES = {"tss", "tum-tss", "tsss", "uôu", "uou", "hm", "hum", "hmm", "ahn", "pf", "pff", "zz", "rs", "brr",
+              "shh", "tchan", "tcharam", "nhac", "plim", "bip", "bipe", "tic-tac", "tique-taque", "vrum", "puf"}
+CANTADO = re.compile(r"[♪♫♬][^♪♫♬]*[♪♫♬]|[♪♫♬]")   # o que está entre notas é cantarolado
+
+
+def e_expressao(palavra):
+    p = palavra.lower()
+    return (p in EXPRESSOES or bool(LETRA_REPETIDA.search(p)) or bool(SILABA_REPETIDA.match(p))
+            or all(parte in EXPRESSOES for parte in p.split("-")))
+
+
+def sem_expressoes(texto):
+    texto = CANTADO.sub(" ", texto)
+    texto = PALAVRA.sub(lambda m: "" if e_expressao(m.group()) else m.group(), texto)
+    texto = re.sub(r"(?:\s*[,;:!?.…]+){2,}", lambda m: m.group().strip()[-1], texto)   # "Zzz... ok" → "... ok" → "ok"
+    texto = re.sub(r"\s+([,;:!?.…])", r"\1", texto)
+    return re.sub(r"^[\s,;:!?.…-]+", "", texto)
+
+
 def limpar_para_fala(texto):
-    """Tira o que não se fala: emoji, markdown, link, bloco de código."""
+    """Tira o que não se fala: emoji, markdown, link, bloco de código e expressão (Zzz, lalala, ♪…♪)."""
     texto = re.sub(r"```.*?```", " ", texto, flags=re.S)
     texto = re.sub(r"https?://\S+", " link ", texto)
     texto = EMOJI.sub("", texto)
+    texto = sem_expressoes(texto)
     texto = re.sub(r"[*_`#>~|]+", "", texto)
     texto = re.sub(r"^\s*[-•]\s+", "", texto, flags=re.M)
-    return re.sub(r"\s+", " ", texto).strip()
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return "" if not re.search(r"[A-Za-zÀ-ÿ0-9]", texto) else texto   # só sobrou pontuação: não fala nada
 
 
 def dividir_em_frases(texto, minimo=18):

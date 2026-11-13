@@ -169,8 +169,8 @@ def _hook_do_aviso(evento):
     h = {"type": "command", "command": comando_texto("aviso"), "timeout": 10}
     if evento in EVENTOS_FUNDO:
         h["async"] = True
-    elif evento == "PermissionRequest":
-        h["timeout"] = 130
+    elif evento in ("PermissionRequest", "Stop"):   # esperam você no balão (Pode/Não, opções, responder)
+        h["timeout"] = 960
     return h
 
 

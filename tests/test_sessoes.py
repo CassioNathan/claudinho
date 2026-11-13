@@ -85,9 +85,43 @@ def test_permissao_sem_resposta_fica_no_app(monkeypatch, capsys):
     assert rodar_hook(monkeypatch, capsys, PEDIDO, None)[1] == ""   # Claudinho fechado
 
 
-def test_pergunta_com_opcoes_nao_vem_pro_balao(monkeypatch, capsys):
-    enviados, saida = rodar_hook(monkeypatch, capsys, dict(PEDIDO, tool_name="AskUserQuestion"), {"decisao": "allow"})
+PERGUNTA = dict(PEDIDO, tool_name="AskUserQuestion", tool_input={"questions": [
+    {"question": "Qual banco?", "header": "Banco", "multiSelect": False,
+     "options": [{"label": "Postgres", "description": "o de sempre"}, {"label": "SQLite", "description": "leve"}]}]})
+
+
+def test_pergunta_com_opcoes_escolhida_no_balao(monkeypatch, capsys):
+    enviados, saida = rodar_hook(monkeypatch, capsys, PERGUNTA,
+                                 {"decisao": "allow", "respostas": {"Qual banco?": "SQLite"}})
+    assert enviados[0][0] == "/permissao" and enviados[0][1]["perguntas"][0]["question"] == "Qual banco?"
+    decisao = json.loads(saida)["hookSpecificOutput"]["decision"]
+    assert decisao["behavior"] == "allow"
+    assert decisao["updatedInput"] == dict(PERGUNTA["tool_input"], answers={"Qual banco?": "SQLite"})
+
+
+def test_pergunta_sem_escolha_fica_no_app(monkeypatch, capsys):
+    assert rodar_hook(monkeypatch, capsys, PERGUNTA, {})[1] == ""
+    assert rodar_hook(monkeypatch, capsys, PERGUNTA, {"decisao": "allow", "respostas": {}})[1] == ""
+
+
+def test_aprovar_plano_fica_no_chat(monkeypatch, capsys):
+    enviados, saida = rodar_hook(monkeypatch, capsys, dict(PEDIDO, tool_name="ExitPlanMode"), {"decisao": "allow"})
     assert enviados == [] and saida == ""
+
+
+PRONTO = {"hook_event_name": "Stop", "session_id": "s1", "cwd": "D:/lc-pedir", "last_assistant_message": "Feito."}
+
+
+def test_respondeu_pelo_balao_o_chat_continua(monkeypatch, capsys):
+    enviados, saida = rodar_hook(monkeypatch, capsys, PRONTO, {"texto": "agora roda os testes"})
+    assert [c for c, _ in enviados] == ["/resposta"] and enviados[0][1]["resposta"] == "Feito."
+    saida = json.loads(saida)
+    assert saida["decision"] == "block" and saida["reason"].endswith("agora roda os testes")
+
+
+def test_sem_resposta_o_chat_termina_normal(monkeypatch, capsys):
+    assert rodar_hook(monkeypatch, capsys, PRONTO, {"texto": ""})[1] == ""
+    assert rodar_hook(monkeypatch, capsys, PRONTO, None)[1] == ""   # Claudinho fechado
 
 
 def test_ferramenta_manda_so_o_leve(monkeypatch, capsys):
@@ -103,7 +137,9 @@ def test_ligar_aviso_poe_os_eventos_novos(tmp_path, monkeypatch):
     dados = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     pre = dados["hooks"]["PreToolUse"][0]["hooks"][0]
     perm = dados["hooks"]["PermissionRequest"][0]["hooks"][0]
-    assert pre["async"] is True and "async" not in perm and perm["timeout"] > claudinho_notificar.ESPERA_PERMISSAO_S
+    stop = dados["hooks"]["Stop"][0]["hooks"][0]
+    assert pre["async"] is True and "async" not in perm and perm["timeout"] > claudinho_notificar.ESPERA_RESPOSTA_S
+    assert "async" not in stop and stop["timeout"] > claudinho_notificar.ESPERA_RESPOSTA_S
     # já atualizado: o atualizar_aviso não mexe de novo
     antes = (tmp_path / "settings.json").read_text(encoding="utf-8")
     sistema.atualizar_aviso()

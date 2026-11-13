@@ -55,6 +55,7 @@ AJUSTES = {
     "voz_saudacao": ("cumprimentar quando a conversa por voz começa", "bool", None),
     "voz_comandos": ("comandos rápidos de voz sem IA (pausa, próxima, abre X)", "bool", None),
     "voz_pausar_midia": ("pausar a música enquanto te ouço", "bool", None),
+    "voz_abaixar_outros": ("abaixar o som dos outros programas enquanto eu falo", "bool", None),
     "voz_continua": ("continuar ouvindo depois de responder", "bool", None),
     "voz_interromper": ("parar de falar quando você diz \"para\"", "bool", None),
     "voz_roteador": ("adivinhar comando de voz que não bateu certinho", "bool", None),
@@ -78,7 +79,7 @@ AJUSTES = {
 APELIDOS = {"junior": "modo_junior", "resumo": "resumir_avisos", "resumir": "resumir_avisos", "piadas": "comentar_tela",
             "piada": "comentar_tela", "comentarios": "comentar_tela", "tdah": "modo_tdah", "faixa": "vendado",
             "voz": "voz_fala", "falar": "voz_fala", "microfone": "voz", "ouvir": "voz", "volume": "voz_volume",
-            "tom": "voz_tom", "tamanho": "tamanho", "andar": "movimento", "frequencia": "comentar_a_cada_minutos",
+            "tom": "voz_tom", "abaixar": "voz_abaixar_outros", "abaixar som": "voz_abaixar_outros", "tamanho": "tamanho", "andar": "movimento", "frequencia": "comentar_a_cada_minutos",
             "esforco": "chat_esforco", "modelo": "chat_modelo", "contorno": "borda", "ultron": "personalidade",
             "permissao": "permissao_pelo_balao", "pode nao": "permissao_pelo_balao"}
 FREQUENCIAS = {"bastante": [1, 3], "muito": [1, 3], "normal": [4, 10], "de vez em quando": [15, 30], "pouco": [15, 30]}

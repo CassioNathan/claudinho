@@ -67,6 +67,7 @@ import atualizacao
 from assunto import Assunto
 import sessoes
 import ajustes_chat
+import abaixar
 import projetos
 import abas
 import ativacao
@@ -120,6 +121,7 @@ CONFIG_PADRAO = {
     "voz_saudacao": True,                # quando a conversa por voz começa, ele cumprimenta (com o seu nome, se tiver)
     "voz_comandos": True,                # comandos rápidos (pausa, próxima, toca X, abre X, timer, volume) sem passar pela IA
     "voz_pausar_midia": True,            # chamou por voz: pausa a música/vídeo enquanto ouve e volta a tocar no fim
+    "voz_abaixar_outros": True,          # enquanto ele fala, o som dos outros programas cai pra 30% (abaixar.py)
     "voz_detector": True,                # palavra de ativação treinada (ativacao.py): só chama o Whisper quando ela ouve
     "voz_guardar_chamadas": True,        # guarda o áudio das chamadas que o detector ouviu (pro próximo treino; só no PC)
     "voz_vocabulario": "",               # nomes que você fala e o Whisper erra, separados por vírgula (vão de dica pra ele)
@@ -218,7 +220,7 @@ FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entr
 CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "permissao_pelo_balao", "resumir_avisos", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "novidades_vistas", "navegador_claude", "emojis", "borda", "borda_forca", "tamanho",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "sempre_pode", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
-                 "ollama_modelo", "ollama_pensar", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
+                 "ollama_modelo", "ollama_pensar", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_abaixar_outros", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
 NOMES_ESQUETES = {
     "ideia": "💡 Tive uma ideia", "inseto": "🐞 Caça ao bug", "deploy": "🚀 Deploy rapidinho",
     "push_force": "😰 git push --force", "cafe": "☕ Café", "cochilo": "💤 Cochilo", "alongar": "🙆 Alongamento",
@@ -2179,6 +2181,8 @@ class Claudinho:
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
         self.permissoes_na_fila = deque()   # outros pedidos (de outro chat) chegaram enquanto um estava na tela
+        self.abaixador = abaixar.Abaixador()   # som dos outros programas mais baixo enquanto ele fala
+        threading.Thread(target=abaixar.restaurar_se_ficou, daemon=True).start()   # fechou no meio de uma fala
         self.sessoes = sessoes.Sessoes(sistema.DADOS / "sessoes.json")   # o que estou fazendo em cada janela
         self.print_anexado = None  # {"imagem": bloco, "nome": ...} que vai junto da próxima mensagem
         self.pergunta_atual = ""  # a última pergunta do chat (vira lembrança junto com a resposta)
@@ -2930,13 +2934,7 @@ class Claudinho:
             self.pausa_ate = time.time() + 2
         elif self.cfg["so_fala"] and self.fala.ocupada:   # só fala: clicou nele falando = cala a boca
             self.calar()
-        elif self.cfg["so_fala"] and not self.entrada:   # só fala: sem o campo; o balãozinho leva pra conversa
-            if self.balao and (self.balao.dados or {}).get("rapido"):   # clicou de novo: fecha (liga/desliga)
-                self.fechar_balao()
-            elif not any(f.get("rapido") for f in self.falas):   # vários cliques seguidos: um balãozinho só
-                self.enfileirar({"tipo": "comentario", "texto": "", "duracao": 8, "rapido": True}, IMPORTANTE,
-                                na_frente=True)
-        else:
+        else:   # (no só fala também: o campo abre pra você escrever; só a resposta é que não vem em balão)
             self.alternar_entrada()
 
     # ---------- menus (botão direito no mascote e ícone na bandeja) ----------
@@ -3250,6 +3248,8 @@ class Claudinho:
                 self.whats_proprio.desligar()
             self.voz.desligar()
             self.chat.fechar()
+            if self.abaixador.abaixado:   # fechando no meio de uma fala: o som dos outros volta
+                abaixar._com(abaixar._restaurar)
             self.root.destroy()
             return
         self.icone.update_menu()
@@ -4011,12 +4011,35 @@ class Claudinho:
                            botoes=[("Pode", lambda: responder(True), True), ("Não", lambda: responder(False), False),
                                    ("no app", lambda: responder(None), False)])
         self.marcar_assunto()
-        self.dizer(f"Posso? Tô em {projeto}." if not self.cfg["so_fala"] else texto.split("\n")[0][:160], URGENTE)
+        if self.cfg["so_fala"]:   # só fala: a pergunta inteira na voz (você pode nem estar olhando pro balão)
+            self.dizer(texto.split("\n")[0][:160], URGENTE)
+        elif self.cfg["voz_fala"]:
+            self.dizer(f"Posso? Tô em {projeto}.", URGENTE)
         try:
             import winsound
             winsound.MessageBeep(0x30)
         except Exception:
             pass
+
+    def vigiar_permissao(self):
+        """Pode/Não na tela: volta pra frente de quem se pôs por cima (o vídeo em miniatura do navegador também é
+        "sempre no topo" e cobria o balão) e, se ninguém respondeu em 25 s, lembra uma vez na voz."""
+        p = self.permissao
+        if not p or p["evento"].is_set() or not (self.balao and self.balao.tipo == "permissao"):
+            return
+        agora = time.time()
+        p.setdefault("desde", agora)
+        if agora - p.get("subiu", 0) > 1.5:
+            p["subiu"] = agora
+            try:
+                self.balao.win.attributes("-topmost", True)
+                self.balao.win.lift()
+            except tk.TclError:
+                pass
+        if not p.get("lembrou") and agora - p["desde"] > 25 and (self.cfg["voz_fala"] or self.cfg["so_fala"]):
+            p["lembrou"] = True
+            onde = (p.get("fora") or {}).get("projeto")
+            self.dizer(f"Ainda tô esperando você me dizer se pode{f', lá no {onde}' if onde else ''}.", URGENTE)
 
     def conversa_deve_fechar(self):
         """Fecha a conversa se você clicou fora dela, ou se ela chegou sozinha (uma resposta) e ficou
@@ -4044,6 +4067,11 @@ class Claudinho:
         return expirou
 
     def cuidar_dos_baloes(self):
+        try:
+            self.abaixador.falando(self.fala.ocupada, self.cfg["voz_abaixar_outros"])
+        except Exception:
+            pass
+        self.vigiar_permissao()
         if self.permissao and self.permissao["evento"].is_set():  # respondida ou esgotou o tempo
             self.permissao = None
             if self.balao and self.balao.tipo == "permissao":
@@ -4156,7 +4184,10 @@ class Claudinho:
             # acabou de falar algo num balão (até 3 min)? a conversa abre nisso, pra você responder a ele
             recente = self.falas_recentes(minutos=3)
             self.respondendo_a = (time.time(), recente[-1][1]) if recente else None
-            self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
+            if self.cfg["so_fala"]:   # só fala: só o campo, sem a última resposta em cima (ela já foi falada)
+                self.abrir_conversa("", por_clique=True)
+            else:
+                self.abrir_conversa(recente[-1][1] if recente else self.ultima_resposta(), por_clique=True)
 
     # ---------- comandos rápidos da voz (comandos.py): o que tem resposta certa não vai pra IA ----------
     # ---------- modo comandos (meus_comandos.py): regra fixa → comando seu → roteador barato → chat ----------
@@ -4932,10 +4963,13 @@ class Claudinho:
         return random.choice(opcoes).format(n=nome)
 
     def texto_link_voz(self):
-        return "🔊 voz" if self.cfg["voz_fala"] else "🔇 voz"
+        return "🔊 voz" if self.cfg["voz_fala"] or self.cfg["so_fala"] else "🔇 voz"
 
     def alternar_fala(self):
-        """Botão do balão: liga/desliga a voz dele (vale pra qualquer mensagem do chat, digitada ou falada)."""
+        """Botão do balão: liga/desliga a voz dele (vale pra qualquer mensagem do chat, digitada ou falada). No só
+        fala, mutar desliga o só fala junto (senão ele continuaria falando)."""
+        if self.cfg["so_fala"]:
+            return self.calar_de_vez()
         self.aplicar_cfg("voz_fala", not self.cfg["voz_fala"])
 
     def atualizar_link_voz(self):

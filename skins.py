@@ -161,6 +161,56 @@ def cor_do_sapato(visual):
     return a.get("sapato") if a else None
 
 
+def _simples(texto):
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(texto or "").lower())
+    return "".join(c for c in texto if c.isalnum() or c == " ").strip()
+
+
+SORTEAR = ("aleatorio", "qualquer", "surpresa", "sorteia", "sortear", "random")
+SEM_NADA = ("padrao", "sem nada", "pelado", "limpo", "normal", "original")
+
+
+def escolher_visual(pedido, atual, sorteio=None):
+    """O visual que ele pediu em palavras ("pirata", "roxo de coroa", "aleatório", "padrão"). Devolve
+    (visual novo, o que mudou) ou (None, o que dá pra pedir)."""
+    import random
+    sorteio = sorteio or random
+    p = _simples(pedido)
+    if not p or any(s in p for s in SORTEAR):
+        if sorteio.random() < 0.5:
+            nome = sorteio.choice(list(PACOTES))
+            return aplicar_pacote(dict(VISUAL_PADRAO), nome), f"sorteei o pacote {PACOTES[nome]['nome']}"
+        novo = dict(VISUAL_PADRAO, cor=sorteio.choice([c for c in CORES if not CORES[c].get("animada")]))
+        for e in ESPACOS:
+            opcoes = [k for k, a in ADERECOS.items() if a["espaco"] == e]
+            if opcoes and sorteio.random() < 0.45:
+                novo[e] = sorteio.choice(opcoes)
+        return visual_valido(novo), "sorteei um visual"
+    if any(s in p for s in SEM_NADA):
+        return dict(VISUAL_PADRAO), "voltei pro visual padrão"
+    novo, mudou = dict(atual or VISUAL_PADRAO), []
+    for k, v in PACOTES.items():   # pacote primeiro: a cor que vier escrita depois ganha dele
+        if k in p.split() or _simples(v["nome"]) in p:
+            novo = aplicar_pacote(novo, k)
+            mudou.append(f"pacote {v['nome']}")
+            break
+    for k, v in CORES.items():
+        if k in p.split() or _simples(v["nome"]) in p:
+            novo["cor"] = k
+            mudou.append(f"cor {v['nome']}")
+            break
+    for k, a in ADERECOS.items():
+        if _simples(a["nome"]) in p or k.replace("_", " ") in p:
+            novo[a["espaco"]] = k
+            mudou.append(a["nome"])
+    if not mudou:
+        return None, ("não achei esse visual. Pacotes: " + ", ".join(v["nome"] for v in PACOTES.values())
+                      + ". Cores: " + ", ".join(v["nome"] for v in CORES.values())
+                      + ". Adereços: " + ", ".join(a["nome"] for a in ADERECOS.values()) + ". Ou \"aleatório\".")
+    return visual_valido(novo), "troquei: " + ", ".join(mudou)
+
+
 def visual_valido(v):
     """Completa o visual salvo e joga fora o que não existe mais (adereço apagado, espaço trocado)."""
     v = dict(VISUAL_PADRAO, **(v or {}))

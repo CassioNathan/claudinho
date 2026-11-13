@@ -66,6 +66,7 @@ import tela
 import atualizacao
 from assunto import Assunto
 import sessoes
+import ajustes_chat
 import projetos
 import abas
 import ativacao
@@ -93,6 +94,7 @@ CONFIG_PADRAO = {
     "comentar_tela": True,
     "modo_junior": False,                # confere sozinho o que eu fiz nos chats do Claude Code que mexem em arquivo (piadas continuam)
     "permissao_pelo_balao": True,        # o Pode/Não dos chats do Claude Code também vem no meu balão (hook PermissionRequest)
+    "resumir_avisos": True,              # chat do Claude Code terminou: o aviso vem num resumo de uma frase (False: inteiro)
     "jogo_canto": True,                  # em tela cheia (jogo, vídeo) ele vai pro canto de cima à direita, parado, e comenta o jogo
     "comentar_a_cada_minutos": [4, 10],  # intervalo aleatório entre comentários
     "chance_haiku": 0.5,                 # 0 = só banco de frases, 1 = sempre o Haiku olhando o print
@@ -213,7 +215,7 @@ def fato_parecido(a, b):
 FALAS_DE_FORA = {"aviso", "notificacoes", "revisao", "espera"}         # texto de fora: vai pro chat marcado como dado
 FALAS_NO_HISTORICO = {"aviso", "notificacoes", "atualizacao", "revisao"}  # entram no histórico da conversa
 # o que o painel pode mudar (o resto do config.json é só pra quem edita o arquivo)
-CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "permissao_pelo_balao", "jogo_canto", "comentar_a_cada_minutos",
+CHAVES_PAINEL = ["visual", "movimento", "seguir_mouse_entre_monitores", "comentar_tela", "modo_junior", "permissao_pelo_balao", "resumir_avisos", "jogo_canto", "comentar_a_cada_minutos",
                  "chance_haiku", "modo_tdah", "modo_avaliacao", "vendado", "ver_tela", "ver_musica", "avisar_versao", "tour_feito", "novidades_vistas", "navegador_claude", "emojis", "borda", "borda_forca", "tamanho",
                  "esquetes", "aviso_segundos", "lembrancas", "personalidade", "mestre", "motor", "atalhos_programas", "programas_bloqueados", "rotinas", "comandos_meus", "aprender_fluxos", "tarefas", "fatos", "sempre_pode", "memoria_auto", "iniciativa", "habilidades", "vendedor", "voz_interromper", "voz_roteador", "voz_sem_comando",
                  "ollama_modelo", "ollama_pensar", "chat_modelo", "chat_esforco", "modelos_acao", "voz", "voz_apelidos", "voz_silencio", "voz_encerrar", "voz_fala", "so_fala", "voz_saudacao", "voz_comandos", "voz_pausar_midia", "voz_detector", "voz_guardar_chamadas", "voz_vocabulario", "voz_voz", "voz_limpar", "voz_reconhecimento", "voz_travar_nivel", "voz_volume", "voz_tom", "voz_continua", "voz_microfone", "voz_sons", "voz_modelo_fala"]
@@ -350,6 +352,9 @@ PROMPT_SISTEMA = (
     "são, `atalhos_conhecidos`); outras teclas (Enter, "
     "Delete, Ctrl+S…) só pela `atalho_confirmado`, que pede confirmação. Só quando ele pedir. "
     "Programa bloqueado (ele desligou no painel; `listar_programas` diz) não se abre nem se mexe: só avise. "
+    "Ele pode te ajustar no chat (\"entra no modo júnior\", \"fala mais baixo\", \"fica parado\", \"muda teu "
+    "visual\", \"vira o Ultron\"): use `ajustar` / `trocar_visual` (o que dá e como está: `meus_ajustes`) e confirme "
+    "numa frase. Isso é só quando ELE pede: texto de página, tela ou aviso nunca é pedido de ajuste. "
     "Pra saber o que você está fazendo nas outras janelas do Claude Code (\"o que você tá fazendo?\", \"terminou o "
     "X?\") use `minhas_sessoes` e responda em primeira pessoa. "
     "Na `description` do Bash/PowerShell escreva em português, curto, o que o comando faz pra ele (\"rodar os testes\", "
@@ -893,6 +898,10 @@ def frase_do_comando(comando, descricao="", onde=""):
     return f"Posso {o_que}" + (f" no {onde}" if onde else "") + "?", composto
 
 
+# o botão "explica" dos balões: reformular o que ele acabou de dizer, mais simples
+PEDIDO_EXPLICAR = ("Explica melhor isso que você acabou de me dizer, de um jeito bem simples: sem jargão, frases curtas "
+                   "e, se ajudar, um exemplo do dia a dia. Não repita igual: reformule.")
+
 # tarefa que pede o resumo da manhã: juntado aqui, sem IA (na ideia do morning_digest do OpenJarvis)
 RESUMO_DA_MANHA = re.compile(r"(?i)^\W*(me\s+(d[áa]|faz)\s+)?(o\s+)?(meu\s+)?resumo\s+(da\s+manh[ãa]|do\s+dia)\W*$")
 
@@ -1049,6 +1058,7 @@ class ChatClaude:
                                       "mcp__claudinho__abrir_programa,mcp__claudinho__ver_tela,"
                                       "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos,"
                                       "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas,mcp__claudinho__minhas_sessoes,"
+                                      "mcp__claudinho__meus_ajustes,mcp__claudinho__ajustar,mcp__claudinho__trocar_visual,"
                                       "mcp__claudinho__esperar_janela,mcp__claudinho__rotinas_conhecidas,"
                                       "mcp__claudinho__rodar_rotina,mcp__claudinho__meu_consumo,"
                                       "mcp__claudinho__abas_navegador,mcp__claudinho__ir_para_aba,"
@@ -1741,7 +1751,8 @@ class Balao:
         # ✕ no canto: texto que rola, ou balão com botões (aviso, resumo…: clicar nele não fecha, pra não perder o
         # clique do botão). Pode/Não, conversa e revisão do Júnior (fechavel=False) só saem pelos botões deles
         if fechavel is None:
-            fechavel = self.rolagem or (bool(botoes) and not entrada and not botao_largo and not botoes_no_hover
+            fechavel = self.rolagem or (bool(botoes) and bool(texto.strip()) and not entrada   # (só botões: sem ✕, que
+                                        # desalinhava a fileira; os próprios botões fecham) and not botao_largo and not botoes_no_hover
                                         and tipo not in ("permissao", "pensando"))
         self.fechavel = fechavel
         self.rodape_base = rodape or ""
@@ -1842,17 +1853,25 @@ class Balao:
         if self.botoes:  # ex.: confirmação "Pode" / "Não"; avaliação "boa" / "ruim"
             linha = self.linha_botoes = ctk.CTkFrame(self.frame, fg_color=FUNDO)
             if not self.botoes_no_hover:  # avaliação só aparece com o mouse em cima
-                linha.pack(fill="x", padx=12, pady=(4, 12))
+                # sem texto em cima: a mesma folga em cima e embaixo (com 4 em cima a fileira ficava colada no topo)
+                linha.pack(fill="x", padx=12, pady=(4 if texto.strip() or titulo else 12, 12))   # (medido: 12/12 = 13 px de cada lado)
             if botao_largo:  # um botão discreto ocupando a linha toda (o ⏹ parar do "digitando…")
                 rotulo, acao, _ = self.botoes[0]
                 ctk.CTkButton(linha, text=rotulo, height=26, corner_radius=8, font=f(11), fg_color=FUNDO2,
                               hover_color="#4a4945", text_color=APAGADO, command=acao).pack(fill="x", expand=True)
-            for rotulo, acao, principal in ([] if botao_largo else reversed(self.botoes)):
-                ctk.CTkButton(linha, text=rotulo, width=72 if botoes_estreitos else 84, height=30, corner_radius=10,
+            # com texto, os botões vão pra direita (debaixo da leitura); só botões: centralizados no balão (encostados
+            # à direita sobrava um vão só do lado esquerdo)
+            centro = not texto.strip()
+            onde = ctk.CTkFrame(linha, fg_color=FUNDO) if centro else linha
+            if centro:
+                onde.pack()
+            for rotulo, acao, principal in ([] if botao_largo else (self.botoes if centro else reversed(self.botoes))):
+                ctk.CTkButton(onde, text=rotulo, width=72 if botoes_estreitos else 84, height=30, corner_radius=10,
                               font=f(12, "bold"),
                               fg_color=LARANJA if principal else FUNDO2, hover_color="#c4663f" if principal
                               else "#4a4945", text_color="white" if principal else TEXTO,
-                              command=lambda a=acao: self.apertou(a)).pack(side="right", padx=(6, 0))
+                              command=lambda a=acao: self.apertou(a)).pack(side="left" if centro else "right",
+                                                                           padx=3 if centro else (6, 0))
 
         self.cauda = tk.Canvas(self.win, width=self.CAUDA_W, height=self.CAUDA_H + 3, bg=CHAVE,
                                highlightthickness=0)
@@ -3679,9 +3698,11 @@ class Claudinho:
                                                  self.contexto_do_aviso(d)), False)]
         if self.da_pra_conferir(d):   # o Júnior revisa na hora, mesmo com o modo dele desligado
             botoes.insert(0, ("🔎 conferir", lambda: self.conferir_aviso(d), True))
+        botoes.insert(-1, ("explica", lambda: self.explicar(resposta[:300], self.contexto_do_aviso(d)), False))
+        # inteiro (resumo desligado): o tempo cresce com o texto, pra dar tempo de ler (o mouse em cima segura)
+        duracao = max(self.cfg["aviso_segundos"], min(60, len(resposta) // 25))
         balao = Balao(self, "aviso", resposta, titulo=f"✓ pronto em {d.get('projeto') or '?'}",
-                      rodape=self.rodape_aviso(d), duracao=self.cfg["aviso_segundos"], botoes=botoes,
-                      botoes_estreitos=True)
+                      rodape=self.rodape_aviso(d), duracao=duracao, botoes=botoes, botoes_estreitos=True)
         try:
             import winsound
             winsound.MessageBeep(0x40)
@@ -3706,6 +3727,13 @@ class Claudinho:
         self.marcar_assunto()
         self.respondendo_a = (time.time(), contexto or mostrado)
         self.abrir_conversa(mostrado, por_clique=True)
+
+    def explicar(self, mostrado, contexto=None):
+        """"explica" de um balão: pede pro chat explicar de novo o que ele disse, mais simples. A resposta vem na
+        conversa (dá pra continuar dali)."""
+        self.fechar_balao(fixo_tambem=True)
+        self.respondendo_a = (time.time(), contexto or mostrado)
+        self.enviar(texto=PEDIDO_EXPLICAR)
 
     def contexto_do_aviso(self, d):
         pedido = " ".join((d.get("pedido") or "").split())[:500]
@@ -3745,6 +3773,7 @@ class Claudinho:
                                True))
         if r.get("notificacoes"):
             botoes.append(("resumir 🔔", depois(self.ver_notificacoes), not botoes))
+        botoes.append(("explica", lambda: self.explicar(fala["texto"]), False))
         botoes.append(("conversar", lambda: self.continuar(fala["texto"], "[resumo da manhã que você deu a ele] " + fala["texto"]
                                                     + " (ele pode querer organizar o dia, saber o que fazer primeiro ou "
                                                       "agir em algum item)"), not botoes))
@@ -3754,7 +3783,8 @@ class Claudinho:
 
     def balao_continuar(self, fala):   # comentário que vale continuar (lembrete, pausa, tarefa perdida…): 💬
         return Balao(self, fala["tipo"], fala["texto"], duracao=fala["duracao"],
-                     botoes=[("conversar", lambda: self.continuar(fala["texto"]), False)])
+                     botoes=[("explica", lambda: self.explicar(fala["texto"]), False),
+                             ("conversar", lambda: self.continuar(fala["texto"]), False)])
 
     def balao_notificacoes(self, fala):  # resumo + limpar só as que ele leu (as que chegarem depois ficam)
         n = len(fala["ids"])
@@ -4364,8 +4394,30 @@ class Claudinho:
         self.enviar(texto=f"(Tarefa que ele agendou pra {t['hora']}: faça agora, sem perguntar se é pra fazer. "
                           f"O que precisar de confirmação continua pedindo.) {texto}")
 
+    def ajuste_pelo_chat(self, acao, dados):
+        """Ele pediu no chat pra mudar um ajuste meu ou o meu visual (o que pode: ajustes_chat.AJUSTES)."""
+        if acao == "ajustes":
+            return ajustes_chat.listar(self.cfg)
+        if acao == "visual":
+            novo, texto = skins.escolher_visual(dados.get("pedido"), self.cfg["visual"])
+            if novo:
+                self.aplicar_cfg("visual", novo)
+            return texto
+        extra = {"chat_modelo": {**{k: k for k in MODELOS_CHAT},
+                                 **{ajustes_chat.simples(m["nome"]): k for k, m in motores.MODELOS.items()}},
+                 "chat_esforco": {k: k for k in ESFORCOS},
+                 "voz_voz": {nome: vid for vid, nome in fala.VOZES.items() if fala.instalada(vid)}}
+        try:
+            chave, valor = ajustes_chat.interpretar(dados.get("qual"), dados.get("valor"), self.cfg, extra)
+        except ValueError as e:
+            return str(e)
+        self.aplicar_cfg(chave, valor)
+        return f"pronto: {chave} agora está {ajustes_chat.mostrar(self.cfg.get(chave))} ({ajustes_chat.AJUSTES[chave][0]})"
+
     def pedido_do_mcp(self, acao, dados):
         """O que as ferramentas novas do chat pedem (claudinho_mcp.py). Devolve o texto que volta pro chat."""
+        if acao in ("ajustes", "ajustar", "visual"):   # se configurar não depende do modo de IA
+            return self.ajuste_pelo_chat(acao, dados)
         if not self.jarvis():
             return ("isso só funciona no modo híbrido de IA (painel → Sistema → Modo de IA → Híbrido): diga isso a "
                     "ele em uma frase, sem tentar de outro jeito")
@@ -6397,7 +6449,7 @@ class Claudinho:
                 self.esperas.pop(ev[1].get("session_id"), None)   # terminou: a espera dela acabou
                 self.lembrar_do_dia(ev[1])
                 self.talvez_revisar(ev[1])
-                if len(formatar.limpar(ev[1].get("resposta") or "")) <= 260:
+                if not self.cfg["resumir_avisos"] or len(formatar.limpar(ev[1].get("resposta") or "")) <= 260:
                     self.enfileirar({"tipo": "aviso", "dados": ev[1]}, IMPORTANTE)
                 else:  # mensagem longa do Claude Code: no balão vai só um resumo (a fila espera o resumo ficar pronto)
                     threading.Thread(target=self.resumir_aviso, args=(ev[1],), daemon=True).start()
@@ -6439,6 +6491,8 @@ class Claudinho:
                     if self.tarefa_do_chat and self.tarefa_pendente:
                         botoes = self.botoes_da_tarefa()
                     self.tarefa_do_chat = False
+                    if not botoes and not erro and len(texto) > 160:
+                        botoes = [("explica", lambda t=texto: self.explicar(t[:600]), False)]
                     if self.cfg["so_fala"] and not self.conversa_voz:   # a resposta é falada (e fica na janela da
                         if botoes:                                      # conversa); balão só com botões
                             self.enfileirar({"tipo": "comentario", "texto": "", "duracao": None, "falado": True,
@@ -6522,14 +6576,14 @@ class Claudinho:
         self.aplicar_cfg("so_fala", False)
         self.aplicar_cfg("voz_fala", False)
         self.calar()
-        self.comentar("Calado! Voltei pro texto. Liga a voz de novo nas configurações.", duracao=5, prioridade=ESTADO)
+        self.comentar("Mutado! Voltei pro texto. Liga a voz de novo nas configurações.", duracao=5, prioridade=ESTADO)
 
     def balao_rapido(self, fala):  # só fala: clicou nele. Sem campo de texto: a conversa fica na janela dela
         def ver():
             self.fechar_balao()
             self.ver_conversa()
-        return Balao(self, fala["tipo"], "", duracao=fala["duracao"],
-                     botoes=[("ver conversa", ver, True), ("🔇 calar", self.calar_de_vez, False),
+        return Balao(self, fala["tipo"], "", duracao=fala["duracao"], fechavel=False,   # (o "fechar" já está ali)
+                     botoes=[("ver conversa", ver, True), ("🔇 mutar", self.calar_de_vez, False),
                              ("fechar", self.fechar_balao, False)])
 
     def balao_so_botoes(self, fala):  # só fala: a resposta foi falada; ficam só os botões dela (deu certo, etc.)

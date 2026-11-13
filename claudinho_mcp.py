@@ -270,6 +270,32 @@ def cancelar_tarefa(qual: str) -> str:
 
 
 @servidor.tool()
+def meus_ajustes() -> str:
+    """Todos os meus ajustes que dá pra mudar pelo chat, com o valor de agora: modo Júnior, resumir avisos, piadas,
+    frequência, personalidade, movimento, tamanho, voz (volume, tom, qual voz), modelo e esforço do chat… Consulte
+    antes de `ajustar` quando não souber o nome ou os valores."""
+    return _no_claudinho("ajustes")
+
+
+@servidor.tool()
+def ajustar(qual: str, valor: str) -> str:
+    """Muda um ajuste meu quando ELE pede ("entra no modo júnior", "para de resumir", "fala mais baixo", "fica parado",
+    "comenta menos", "vira o Ultron", "pensa mais"). qual: o nome em `meus_ajustes` (ou o jeito dele: "júnior",
+    "piadas", "volume", "ultron"). valor: "ligar"/"desligar", um número ("40"), uma opção ("parado", "high",
+    "de vez em quando") ou texto. Segurança e privacidade (motor, pastas, navegador, programas, Sempre, WhatsApp)
+    não mudam por aqui: só no painel."""
+    return _no_claudinho("ajustar", qual=str(qual)[:40], valor=str(valor)[:300])
+
+
+@servidor.tool()
+def trocar_visual(pedido: str = "aleatório") -> str:
+    """Troca o meu visual quando ele pede: "aleatório", um pacote ("pirata", "gamer", "rei"), uma cor ("roxo",
+    "dourado"), um adereço ("coroa", "óculos escuros") ou junto ("pirata roxo"); "padrão" tira tudo. Use as
+    palavras dele."""
+    return _no_claudinho("visual", pedido=pedido[:100])
+
+
+@servidor.tool()
 def lembrar(fato: str) -> str:
     """Guarda um fato duradouro sobre ele pra lembrar em outras conversas: preferência, rotina, gosto, nome de
     projeto ou pessoa ("prefere respostas curtas", "o daily é às 9h30", "a Ana é a gerente dele"). Use quando ele

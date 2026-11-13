@@ -67,6 +67,7 @@ import atualizacao
 from assunto import Assunto
 import sessoes
 import responder
+import autonomo
 import ajustes_chat
 import abaixar
 import projetos
@@ -190,7 +191,7 @@ CONVERSA, URGENTE, AVISO, PAPO = "conversa", "urgente", "aviso", "papo"
 # falas com balão próprio (botões, título): a chave que a fala traz → método balao_<chave> do Claudinho. Na ordem:
 # se uma fala trouxer duas, vale a primeira. "aviso" e "notificacoes" vêm do tipo da fala; "piada", do modo avaliação
 BALOES_ESPECIAIS = ("login", "espera", "revisar_pasta", "revisao", "atualizacao", "novidades", "vendas", "rapido",
-                    "so_botoes", "resumo", "continuar")
+                    "so_botoes", "resumo", "continuar", "autonoma")
 # o que veio numa atualização e precisa de você escolher (cada uma tem a tela dela no painel, NOVIDADES de lá).
 # Coisa nova sem aviso ninguém usa: quem atualiza ganha um balão "tenho novidade"; quem instala do zero vê no tour
 NOVIDADES = {"modo_hibrido": "o modo híbrido de IA (gasta bem menos do seu plano)",
@@ -362,6 +363,11 @@ PROMPT_SISTEMA = (
     "Pra saber o que você está fazendo nas outras janelas do Claude Code (\"o que você tá fazendo?\", \"terminou o "
     "X?\") use `minhas_sessoes` e responda em primeira pessoa. Resposta sobre um projeto (o que você fez nele, um "
     "aviso, uma revisão) começa pelo nome dele (\"No LC Pedir, …\"): ele ouve sem olhar a tela. "
+    "Quando ele pedir pra você FAZER algo num projeto sozinho, por trás (\"faz isso lá no X\", \"implementa a tela Y\", "
+    "\"roda os testes e vê o que quebrou\", \"faz sozinho\"), monte com ele um plano curto e fechado (passos, o que é "
+    "pronto, o que não mexer) e, quando ele concordar, use `fazer_sozinho`: abre um subchat do Claude Code num "
+    "worktree separado, que você responde sozinho até entregar o branch. O Pode final é dele, no balão. Como estão: "
+    "`minhas_tarefas_sozinho`. "
     "Na `description` do Bash/PowerShell escreva em português, curto, o que o comando faz pra ele (\"rodar os testes\", "
     "\"listar os arquivos da pasta\"): é o que aparece quando você pede licença. "
     "NUNCA feche nem mate programa (taskkill, Stop-Process) pra "
@@ -1063,6 +1069,7 @@ class ChatClaude:
                                       "mcp__claudinho__abrir_programa,mcp__claudinho__ver_tela,"
                                       "mcp__claudinho__atalho,mcp__claudinho__atalhos_conhecidos,"
                                       "mcp__claudinho__abrir_projeto,mcp__claudinho__listar_programas,mcp__claudinho__minhas_sessoes,"
+                                      "mcp__claudinho__fazer_sozinho,mcp__claudinho__minhas_tarefas_sozinho,"
                                       "mcp__claudinho__meus_ajustes,mcp__claudinho__ajustar,mcp__claudinho__trocar_visual,"
                                       "mcp__claudinho__esperar_janela,mcp__claudinho__rotinas_conhecidas,"
                                       "mcp__claudinho__rodar_rotina,mcp__claudinho__meu_consumo,"
@@ -2215,6 +2222,8 @@ class Claudinho:
         # piadas e notas, avisos do dia e conversa ficam no SQLite (memoria.py)
         self.mem = memoria.Memoria(DADOS / "claudinho.db")
         self.permissao = None  # pedido de confirmação esperando resposta
+        self.chats_trabalhando, self.viu_sessoes = False, 0.0
+        self.autonomas = {}   # id → autonomo.Tarefa (subchats trabalhando sozinhos num worktree)
         self.respostas_chat = {}   # session_id → chat do Claude Code esperando você responder pelo balão (responder.py)
         self.respondendo_chat = None   # o campo da conversa está mandando pra um chat do Claude Code: {pedido, entregar, projeto}
         self.permissoes_na_fila = deque()   # outros pedidos (de outro chat) chegaram enquanto um estava na tela
@@ -2374,7 +2383,7 @@ class Claudinho:
 
     def a_toa(self):
         return not (self.movendo or self.balao or self.entrada or self.esquete or self.emoji or self.arrasto
-                    or self.ocupado or self.olhando_forcado or self.lendo_notificacoes or self.notebook > 0 or self.sinal_voz
+                    or self.ocupado or self.olhando_forcado or self.lendo_notificacoes or self.sinal_voz
                     or self.modo != "passeio" or time.time() < self.pouso_ate)
 
     def desenhar_se_mudou(self):
@@ -2616,9 +2625,13 @@ class Claudinho:
 
         # notebook: abre aos poucos quando começa a trabalhar e fecha quando termina (transição)
         nb = esquetes.ESQUETES[esq].get("notebook") if esq else None  # True ou (de, até) na esquete
-        no_notebook = self.ocupado or (nb is True and fase < 0.9) or (isinstance(nb, tuple) and nb[0] <= fase < nb[1])
+        no_notebook = (self.ocupado or self.chats_trabalhando   # (um chat do Claude Code trabalhando = eu trabalhando)
+                       or (nb is True and fase < 0.9) or (isinstance(nb, tuple) and nb[0] <= fase < nb[1]))
         alvo_nb = 1.0 if no_notebook and not self.movendo else 0.0
         self.notebook += max(-0.15, min(0.15, alvo_nb - self.notebook))
+        if carregado:   # levado pelo mouse: o notebook fecha na hora e vai pendurado na mão (lá embaixo)
+            self.notebook = 0.0
+        notebook_na_mao = carregado and (self.ocupado or self.chats_trabalhando)
         digitando = self.notebook >= 0.99
         trabalho = self.esquete.get("acao") if esq == "construindo" and self.esquete.get("montando") else None
         martelando = bool(trabalho) and not self.movendo
@@ -2686,7 +2699,20 @@ class Claudinho:
                 for lin in ((-1, 0) if col == erguido else (3, 4)):
                     px(col, lin, corpo)
         if carregado:  # bracinhos pra cima, sacudindo ("uiii!")
+            mao = (10 if self.frente != -1 else 0) if notebook_na_mao else None
             for col in (0, 10):
+                if col == mao:   # essa segura o notebook fechado, pendurado e balançando com o arrasto
+                    lado = 1 if col == 10 else -1
+                    vx = self.arrasto.get("vx", 0)
+                    atraso = 0 if abs(vx) < 2 else (-1 if vx > 0 else 1)   # fica pra trás do movimento
+                    balanco = atraso + (1 if (self.t // 3) % 4 == 1 else -1 if (self.t // 3) % 4 == 3 else 0)
+                    px(col, 3, corpo)
+                    px(col, 4, corpo)
+                    x0 = col + lado + balanco
+                    for lin in (5, 6, 7):   # de lado: a tampa clara e a base escura, a alça na mão
+                        px(x0, lin, NB_TAMPA)
+                        px(x0 + lado, lin, NB_BASE)
+                    continue
                 topo = 1 if (self.t + col) % 4 < 2 else 2
                 px(col, topo, corpo)
                 px(col, topo + 1, corpo)
@@ -3788,9 +3814,9 @@ class Claudinho:
         self.fechar_balao()
         self.abrir_campo_pro_chat(pedido, lambda texto: responder.entregar(pedido, texto))
 
-    def abrir_campo_pro_chat(self, pedido, entregar, dica=None):
+    def abrir_campo_pro_chat(self, pedido, entregar, dica=None, manter=False):
         self.marcar_assunto()
-        self.abrir_conversa("", por_clique=True, pro_chat={"pedido": pedido, "entregar": entregar,
+        self.abrir_conversa("", por_clique=True, pro_chat={"pedido": pedido, "entregar": entregar, "manter": manter,
                                                            "projeto": pedido.get("projeto") or "?"},
                             dica=dica or f"escreve pro {pedido.get('projeto') or 'chat'} (ou 🎤)…")
 
@@ -3821,6 +3847,154 @@ class Claudinho:
             self.fechar_conversa()
             self.comentar(f"Demorou e o {r['projeto']} seguiu sem a resposta; se quiser, manda lá no app.",
                           duracao=6, prioridade=IMPORTANTE)
+
+    # ---------- fazer sozinho: subchat num worktree, respondido pela IA local (autonomo.py) ----------
+    def achar_projeto_autonomo(self, nome):
+        """(pasta, sessão pra copiar, nome) do projeto: o chat aberto dele (copia a conversa) ou, sem chat, uma pasta
+        que o Claude Code já abriu. Sem nome: o chat mexido por último."""
+        ativas = sorted((s for s in self.sessoes.ativas() if s.get("pasta") and not str(s["sid"]).startswith("auto-")
+                         and "scratch-" not in s["pasta"] and Path(s["pasta"]).is_dir()),
+                        key=lambda s: -s.get("visto", 0))
+        if not nome:
+            return (ativas[0]["pasta"], ativas[0]["sid"], ativas[0]["projeto"]) if ativas else None
+        alvo = programas.normalizar(nome)
+        for s in ativas:
+            projeto = programas.normalizar(s["projeto"])
+            if alvo and projeto and (alvo in projeto or projeto in alvo):
+                return s["pasta"], s["sid"], s["projeto"]
+        melhores = sorted(((programas.pontuar(nome, p.name), p) for p in projetos.do_claude()), key=lambda t: -t[0])
+        if melhores and melhores[0][0] >= 0.72:
+            return str(melhores[0][1]), None, melhores[0][1].name
+        return None
+
+    def propor_autonoma(self, dados):
+        pedido = " ".join(str(dados.get("pedido") or "").split())[:500]
+        plano = str(dados.get("plano") or "").strip()[:4000]
+        if not pedido or not plano:
+            return "faltou o pedido ou o plano: monte o plano com ele primeiro e mande os dois"
+        if not shutil.which("claude"):
+            return "não achei o comando `claude` neste PC: sem ele não dá pra abrir o subchat"
+        if sum(t.estado in ("comecando", "rodando", "esperando_voce") for t in self.autonomas.values()) >= 2:
+            return "já tem 2 tarefas rodando sozinhas: diga a ele pra esperar uma terminar"
+        achado = self.achar_projeto_autonomo(str(dados.get("projeto") or "").strip())
+        if not achado:
+            return ("não achei esse projeto (nem um chat do Claude Code aberto nele, nem uma pasta que o Claude Code já "
+                    "abriu): pergunte a ele qual é")
+        pasta, sid, projeto = achado
+        if not raiz_do_projeto(pasta) or not (Path(raiz_do_projeto(pasta)) / ".git").exists():
+            return f"a pasta de {projeto} não é um repositório git: sem git não dá pra trabalhar num worktree separado"
+        proposta = {"fase": "plano", "pedido": pedido, "plano": plano, "pasta": pasta, "sid": sid,
+                    "projeto": projeto}
+        texto = f"Posso fazer sozinho no {projeto}?\n{pedido}\n\nPlano:\n{plano}"
+        self.enfileirar({"tipo": "comentario", "texto": texto, "duracao": None, "autonoma": proposta,
+                         "dizer": f"Posso fazer sozinho no {projeto}? {pedido[:160]}"}, IMPORTANTE)
+        copia = "uma cópia desta conversa" if sid else "um chat novo (não tem chat aberto nele pra copiar)"
+        return (f"mostrei o plano no balão pra ele aprovar (Pode/Não). Se ele aprovar, eu abro {copia} num worktree "
+                f"separado de {projeto} e vou respondendo sozinho; no fim aviso com o branch pronto. Diga isso a ele em "
+                "uma frase curta, sem repetir o plano.")
+
+    def comecar_autonoma(self, proposta):
+        avisar = lambda tipo, tarefa, **extra: self.eventos.put(("autonoma", tipo, tarefa, extra))  # noqa: E731
+        decidir = lambda prompt: motores.completar(prompt, tarefa="autonomo", max_tokens=200, timeout=120)  # noqa: E731
+        t = autonomo.Tarefa(proposta["pedido"], proposta["plano"], proposta["pasta"], proposta["projeto"],
+                            sid_pai=proposta["sid"], avisar=avisar, decidir=decidir, exe=shutil.which("claude"),
+                            env=motores.env_limpo())
+        self.autonomas[t.id] = t
+        threading.Thread(target=t.rodar, daemon=True).start()
+        self.comentar(f"Bora! Tô fazendo no {t.projeto}, num canto separado. Te aviso quando acabar.", duracao=6,
+                      prioridade=ESTADO)
+
+    def evento_autonoma(self, tipo, t, extra):
+        sid = f"auto-{t.id}"
+        base = {"session_id": sid, "projeto": f"{t.projeto} 🤖", "pasta": str(t.worktree)}
+        if tipo == "comecou":
+            self.sessoes.registrar(dict(base, evento="pedido", pedido=t.pedido))
+        elif tipo == "rodada":
+            self.sessoes.registrar(dict(base, evento="ferramenta", ferramenta="Task",
+                                        entrada={"description": f"rodada {t.rodadas} sozinho"}))
+        elif tipo == "pergunta":
+            self.sessoes.registrar(dict(base, evento="espera", mensagem=extra.get("motivo") or ""))
+            pedido = extra["pedido"]
+            pedido["projeto"] = t.projeto
+            self.enfileirar({"tipo": "comentario", "duracao": None, "dizer": (
+                f"No {t.projeto}, trabalhando sozinho, preciso de você: {extra.get('motivo') or ''}"),
+                "texto": (f"🤖 {t.projeto}: preciso de você ({extra.get('motivo') or ''})\n\n"
+                          + (t.ultima[-700:] or "(ele não disse nada)")),
+                "autonoma": {"fase": "pergunta", "tarefa": t, "pedido": pedido,
+                             "negados": extra.get("negados") or []}}, IMPORTANTE)
+        elif tipo == "pronta":
+            m = extra.get("mudancas") or {}
+            self.sessoes.registrar(dict(base, evento="fim", resumo=t.resumo[:200]))
+            detalhe = (f"Branch {t.branch}: {len(m.get('commits') or [])} commit(s), "
+                       f"{len(m.get('arquivos') or [])} arquivo(s)" + (", e ficou coisa sem commit" if m.get("sem_commit")
+                                                                       else "") + ".")
+            resumo = formatar.limpar(t.resumo)
+            self.enfileirar({"tipo": "comentario", "duracao": None,
+                             "texto": f"✓ {t.projeto}, sozinho: {resumo[:600]}\n\n{detalhe}",
+                             "dizer": f"Pronto, no {t.projeto}! Terminei sozinho. {resumo[:200]}",
+                             "autonoma": {"fase": "pronta", "tarefa": t}}, IMPORTANTE)
+        elif tipo in ("falhou", "parada"):
+            self.sessoes.registrar(dict(base, evento="fim", resumo=extra.get("motivo") or tipo))
+            verbo = "deu erro" if tipo == "falhou" else "parei"
+            self.comentar(f"No {t.projeto}, sozinho: {verbo} ({extra.get('motivo') or '?'}). O que ele fez está no "
+                          f"branch {t.branch}.", duracao=20, prioridade=IMPORTANTE)
+
+    def balao_autonoma(self, fala):
+        a = fala["autonoma"]
+        if a["fase"] == "plano":
+            def sim():
+                self.fechar_balao()
+                self.comecar_autonoma(a)
+            return Balao(self, "comentario", fala["texto"], titulo="🤖 fazer sozinho?", botoes=[
+                ("Pode", sim, True), ("Não", self.fechar_balao, False)])
+        t = a["tarefa"]
+        if a["fase"] == "pergunta":
+            pedido = a["pedido"]
+
+            def responder_com(texto, liberar=False):
+                pedido.update(texto=texto, liberar=liberar)
+                pedido["evento"].set()
+
+            def escrever():
+                self.fechar_balao()
+                self.abrir_campo_pro_chat(pedido, responder_com, manter=True,
+                                          dica=f"o que eu digo pro {t.projeto}? (ou 🎤)")
+
+            def depois(funcao, *args):
+                def fazer():
+                    self.fechar_balao()
+                    funcao(*args)
+                return fazer
+            botoes = [("responder", escrever, True)]
+            comandos = [n["comando"] for n in a["negados"] if n.get("comando")]
+            if comandos:
+                botoes.append(("deixa rodar", depois(responder_com, "Liberei: " + "; ".join(comandos)
+                                                     + ". Pode rodar e seguir o plano.", True), False))
+            botoes += [("segue o plano", depois(responder_com, "Siga o plano. O que for detalhe, decida você mesmo "
+                                                               "sem perguntar."), False),
+                       ("parar", depois(self.parar_autonoma, t, pedido), False)]
+            return Balao(self, "comentario", fala["texto"], titulo=f"🤖 {t.projeto}: posso seguir?", botoes=botoes,
+                         botoes_estreitos=True)
+        # pronta: conferir com o Júnior (no worktree) ou abrir a pasta; juntar o branch é com você
+        def conferir():
+            self.fechar_balao()
+            self.revisar_projeto({"pasta": str(t.worktree), "projeto": t.projeto, "pedido": t.pedido,
+                                  "resposta": t.resumo, "session_id": f"auto-{t.id}"}, pedido=True)
+
+        def abrir_pasta():
+            self.fechar_balao()
+            try:
+                os.startfile(str(t.worktree))
+            except OSError:
+                pass
+        return Balao(self, "comentario", fala["texto"], titulo=f"🤖 pronto em {t.projeto}", botoes=[
+            ("🔎 conferir", conferir, True), ("abrir pasta", abrir_pasta, False), ("ok", self.fechar_balao, False)],
+            botoes_estreitos=True)
+
+    def parar_autonoma(self, t, pedido=None):
+        t.parar.set()
+        if pedido:
+            pedido["evento"].set()
 
     # ---------- linha de raciocínio: um assunto por vez ----------
     def marcar_assunto(self):
@@ -4266,6 +4440,10 @@ class Claudinho:
             pass
         self.vigiar_permissao()
         self.vigiar_respostas_chat()
+        if time.time() - self.viu_sessoes > 1:   # algum chat do Claude Code trabalhando? (ele saca o notebook)
+            self.viu_sessoes = time.time()
+            self.chats_trabalhando = bool(self.sessoes.trabalhando()) or any(
+                t.estado in ("comecando", "rodando") for t in self.autonomas.values())
         if self.permissao and self.permissao["evento"].is_set():  # respondida ou esgotou o tempo
             self.permissao = None
             if self.balao and self.balao.tipo == "permissao":
@@ -4338,7 +4516,7 @@ class Claudinho:
     def desistir_de_responder(self):
         """Fechou o campo que ia pra um chat do Claude Code sem mandar: o chat segue sem esperar."""
         r, self.respondendo_chat = self.respondendo_chat, None
-        if r:
+        if r and not r.get("manter"):   # (subchat sozinho: fechou o campo, a pergunta continua no balão dele)
             responder.desistir(r["pedido"])
 
     def fechar_conversa(self, manter_print=False, pela_mao=False):
@@ -4651,6 +4829,10 @@ class Claudinho:
         """O que as ferramentas novas do chat pedem (claudinho_mcp.py). Devolve o texto que volta pro chat."""
         if acao in ("ajustes", "ajustar", "visual"):   # se configurar não depende do modo de IA
             return self.ajuste_pelo_chat(acao, dados)
+        if acao == "autonoma":   # fazer sozinho num subchat (autonomo.py): o plano vai pro Pode/Não do balão
+            return self.propor_autonoma(dados)
+        if acao == "autonomas":
+            return "\n".join(t.descrever() for t in self.autonomas.values()) or "nenhuma tarefa sozinho agora"
         if not self.jarvis():
             return ("isso só funciona no modo híbrido de IA (painel → Sistema → Modo de IA → Híbrido): diga isso a "
                     "ele em uma frase, sem tentar de outro jeito")
@@ -6691,6 +6873,8 @@ class Claudinho:
                     self.desistir_resposta_chat(str(ev[1].get("session_id") or ev[1].get("pasta") or "?"))
             elif ev[0] == "resposta_chat":
                 self.chegou_resposta_chat(ev[1])
+            elif ev[0] == "autonoma":
+                self.evento_autonoma(ev[1], ev[2], ev[3])
             elif ev[0] == "aviso" and ev[1].get("evento") == "espera":
                 self.sessoes.registrar(ev[1])
                 self.sessao_esperando(ev[1])

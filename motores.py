@@ -59,7 +59,7 @@ def modelo_auto(texto):
     return "sonnet" if pontos >= 2 else "haiku"
 # qual modelo faz cada coisa (painel → Motor de IA → "Modelo por ação"); o chat tem o seletor dele
 TAREFAS_PADRAO = {"piadas": "haiku", "junior_chat": "sonnet", "revisao": "sonnet",
-                  "resumo": "sonnet", "avisos": "local", "roteador": "local"}
+                  "resumo": "sonnet", "avisos": "local", "roteador": "local", "autonomo": "local"}
 OLLAMA = "http://127.0.0.1:11434"
 # modelos locais que o painel oferece: o leve só lê texto; o maior também enxerga o print da tela
 MODELOS_OLLAMA = {
@@ -71,7 +71,7 @@ MODELOS_OLLAMA = {
 # Só onde o modelo pequeno dá conta: escolher comando, resumir aviso, piada. Revisão e resumo de tela precisam ler
 # direito (e enxergar o print): ficam na nuvem
 LOCAL = "local"
-TAREFAS_LOCAL = ("piadas", "avisos", "roteador")
+TAREFAS_LOCAL = ("piadas", "avisos", "roteador", "autonomo")   # autonomo: responder o subchat (autonomo.py)
 MODELO_HIBRIDO = "qwen3:1.7b"   # o leve (~1,4 GB): o híbrido usa ele mesmo com o "Só local" no modelo maior
 
 CONFIG = {"motor": "claude_code", "ollama_modelo": "qwen3:1.7b", "modelos": dict(TAREFAS_PADRAO),
@@ -88,7 +88,10 @@ def modelos_validos(modelos):
     modelos = modelos if isinstance(modelos, dict) else {}
     def valido(t, m):
         return isinstance(m, str) and (m in MODELOS_CLAUDE or (m == LOCAL and t in TAREFAS_LOCAL))
-    return {t: modelos[t] if valido(t, modelos.get(t)) else padrao for t, padrao in TAREFAS_PADRAO.items()}
+    validos = {t: modelos[t] if valido(t, modelos.get(t)) else padrao for t, padrao in TAREFAS_PADRAO.items()}
+    if not valido("autonomo", modelos.get("autonomo")):   # (config de antes dela: vai junto com os avisos, sem mudar
+        validos["autonomo"] = "local" if validos["avisos"] == LOCAL else "haiku"   # o modo de IA de ninguém)
+    return validos
 
 
 def modelo_da(tarefa):

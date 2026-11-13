@@ -130,6 +130,24 @@ def minhas_sessoes() -> str:
 
 
 @servidor.tool()
+def fazer_sozinho(pedido: str, plano: str, projeto: str = "") -> str:
+    """Faço um trabalho SOZINHO num subchat do Claude Code: uma cópia da conversa do projeto, num worktree do git
+    separado (não atrapalha o trabalho dele), que eu mesmo vou respondendo até entregar o branch pronto. Use quando
+    ele pedir pra fazer algo num projeto por trás ("implementa a tela X lá no LC Pedir", "roda os testes e vê o que
+    quebrou"), DEPOIS de montar com ele um plano fechado. pedido: o que ele pediu, numa frase. plano: os passos, o que
+    conta como pronto e o que não mexer. projeto: o nome (vazio = o chat do Claude Code mexido por último). Ele
+    aprova no balão (Pode/Não) antes de começar."""
+    return _no_claudinho("autonoma", pedido=str(pedido)[:500], plano=str(plano)[:4000], projeto=str(projeto)[:80])
+
+
+@servidor.tool()
+def minhas_tarefas_sozinho() -> str:
+    """As tarefas que estou fazendo sozinho (fazer_sozinho): projeto, pedido, se está trabalhando, esperando ele,
+    pronta ou parada, e o branch."""
+    return _no_claudinho("autonomas")
+
+
+@servidor.tool()
 def meu_consumo() -> str:
     """Consumo do Claude dele: quanto do limite de 5 horas e do semanal do plano já foi usado (e quando resetam), e
     quanto o próprio Claudinho gastou hoje e no total. Use quando ele perguntar de consumo, limite ou gasto."""

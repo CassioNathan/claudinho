@@ -1751,9 +1751,10 @@ const ACOES_MODELO = [
   ["resumo", "Resumir a janela 📄", ""],
   ["avisos", "Avisos e notificações 🔔", ""],
   ["roteador", "Roteador de comandos 🧭", ""],
+  ["autonomo", "Responder o subchat que trabalha sozinho 🤖", ""],
 ];
 // o que o modelo local (Ollama) dá conta: o resto precisa ler direito ou enxergar o print
-const ACOES_LOCAL = ["piadas", "avisos", "roteador"];
+const ACOES_LOCAL = ["piadas", "avisos", "roteador", "autonomo"];
 function tabelaAcoes(m) {
   const linhas = ACOES_MODELO.map(([id, nome, desc]) => {
     const opcoes = m.modelos.filter(([mid]) => mid !== "auto").concat(ACOES_LOCAL.includes(id) ? [["local", "Local 🏠"]] : []);
@@ -2078,7 +2079,7 @@ const MODOS_IA = [
   {id: "nuvem", nome: "☁️ Só nuvem", desc: "tudo no Claude. Não pesa no PC, gasta mais do plano"},
   {id: "local", nome: "🏠 Só local", desc: "tudo no PC, de graça. Pesa na placa e é menos esperto"},
 ];
-const TAREFAS_LOCAIS = ["avisos", "roteador"];   // o que o híbrido manda pro local (as piadas o modelo pequeno faz mal)
+const TAREFAS_LOCAIS = ["avisos", "roteador", "autonomo"];   // o que o híbrido manda pro local (as piadas o modelo pequeno faz mal)
 let tourVigia = null;
 function modoIA() {
   const m = estado.motor;

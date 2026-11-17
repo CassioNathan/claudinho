@@ -74,6 +74,28 @@ def ultimos(transcript):
     return pedido, resposta, mexeu[:30]
 
 
+def entrega_do_agente(transcript):
+    """O relatório que o subagente entregou pela ferramenta SubagentHandback (nas versões novas a última mensagem
+    dele é só um fecho; o relatório de verdade vai nela). "" se não tiver."""
+    try:
+        with open(transcript, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 1_000_000))
+            linhas = f.read().decode("utf-8-sig", "replace").splitlines()
+    except Exception:
+        return ""
+    for linha in reversed(linhas):
+        try:
+            conteudo = (json.loads(linha).get("message") or {}).get("content")
+        except Exception:
+            continue
+        for b in reversed(conteudo if isinstance(conteudo, list) else []):
+            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("name") == "SubagentHandback":
+                entrada = b.get("input") if isinstance(b.get("input"), dict) else {}
+                return str(entrada.get("message") or "").strip()
+    return ""
+
+
 # Notification que vale avisar: a sessão travou esperando você. O "idle_prompt" (parado esperando a próxima
 # mensagem) não entra: quando termina, o aviso do Stop já veio
 ESPERANDO = ("permission_prompt", "elicitation_dialog")
@@ -93,7 +115,7 @@ CAMPOS_PERMISSAO = CAMPOS_LEVES + ("command", "old_string", "new_string", "conte
 # pedido de permissão que não dá pra responder com Pode/Não nem com opções (aprovar plano): fica no chat
 SO_NO_CHAT = ("ExitPlanMode",)
 PERGUNTA = "AskUserQuestion"
-ESPERA_PERMISSAO_S = 100   # quanto o hook espera sua resposta no balão (o timeout dele no settings é maior)
+ESPERA_PERMISSAO_S = 900   # quanto o hook espera no máximo (o Claudinho decide: 95 s, ou mais com o escritório aberto)
 ESPERA_RESPOSTA_S = 900    # responder/escolher pelo balão (quem decide o tempo de verdade é o Claudinho)
 
 
@@ -172,6 +194,29 @@ def main():
     base = {"projeto": projeto, "pasta": cwd, "session_id": dados.get("session_id")}
     if evento == "PermissionRequest":
         return pedir_permissao(dados, base)
+    if evento == "PostToolUse":   # recado seu (mandado pelo escritório) com o chat trabalhando: entra já, no meio
+        try:
+            recados = json.loads(enviar("/recados", base, espera=3) or b"{}").get("recados") or []
+        except Exception:
+            recados = []
+        if recados:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": (
+                "Mensagem nova do usuário, mandada pelo balão/escritório do Claudinho enquanto você trabalhava (é dele, "
+                "leve em conta agora, responda/ajuste o que estiver fazendo): " + "\n\n".join(map(str, recados)))}}))
+        return
+    if evento in ("SubagentStart", "SubagentStop"):   # o escritório (ClaudCorp): agente contratado e o relatório dele
+        corpo = dict(base, agent_id=dados.get("agent_id"), agent_type=dados.get("agent_type") or "",
+                     evento="subagente_inicio" if evento == "SubagentStart" else "subagente_fim")
+        if evento == "SubagentStop":
+            caminho = dados.get("agent_transcript_path", "")
+            resultado = (entrega_do_agente(caminho) or dados.get("last_assistant_message")
+                         or ultimos(caminho)[1])
+            corpo["resultado"] = str(resultado or "")[:6000]
+        try:
+            enviar("/aviso", corpo, espera=3)
+        except Exception:
+            pass
+        return
     if evento in ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse"):
         if evento == "SessionStart":
             corpo = dict(base, evento="inicio")

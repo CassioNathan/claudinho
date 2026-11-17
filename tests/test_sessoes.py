@@ -144,3 +144,26 @@ def test_ligar_aviso_poe_os_eventos_novos(tmp_path, monkeypatch):
     antes = (tmp_path / "settings.json").read_text(encoding="utf-8")
     sistema.atualizar_aviso()
     assert (tmp_path / "settings.json").read_text(encoding="utf-8") == antes
+
+
+def test_relatorio_do_subagente_vem_da_entrega(tmp_path, monkeypatch, capsys):
+    transcript = tmp_path / "agente.jsonl"
+    linhas = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Grep", "input": {}}]}},
+              {"type": "assistant", "message": {"content": [
+                  {"type": "tool_use", "name": "SubagentHandback", "input": {"message": "Achei em a.py:10"}}]}}]
+    transcript.write_text("\n".join(json.dumps(item) for item in linhas), encoding="utf-8")
+    dados = {"hook_event_name": "SubagentStop", "session_id": "s1", "cwd": "D:/x", "agent_id": "ag1",
+             "agent_type": "Explore", "agent_transcript_path": str(transcript), "last_assistant_message": "Feito."}
+    enviados, saida = rodar_hook(monkeypatch, capsys, dados, None)
+    assert enviados[0][1]["evento"] == "subagente_fim" and enviados[0][1]["resultado"] == "Achei em a.py:10"
+    assert saida == ""
+
+
+def test_recado_entra_no_meio_do_trabalho(monkeypatch, capsys):
+    dados = {"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "D:/x", "tool_name": "Bash"}
+    enviados, saida = rodar_hook(monkeypatch, capsys, dados, {"recados": ["para tudo e roda os testes"]})
+    assert enviados[0][0] == "/recados"
+    extra = json.loads(saida)["hookSpecificOutput"]
+    assert extra["hookEventName"] == "PostToolUse" and extra["additionalContext"].endswith("para tudo e roda os testes")
+    assert rodar_hook(monkeypatch, capsys, dados, {"recados": []})[1] == ""
+    assert rodar_hook(monkeypatch, capsys, dados, None)[1] == ""   # Claudinho fechado

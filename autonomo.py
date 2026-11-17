@@ -106,19 +106,32 @@ def ler_decisao(texto):
     return "usuario", "não entendi direito o que ele quer"
 
 
+def git(pasta, *args, espera=60):
+    """(deu certo, saída) de um comando git na pasta."""
+    try:
+        r = subprocess.run(["git", "-C", str(pasta), *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=espera, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return r.returncode == 0, (r.stdout.strip() or r.stderr.strip())
+    except Exception as erro:
+        return False, str(erro)
+
+
 class Tarefa:
     """Uma tarefa autônoma. `avisar(tipo, tarefa, **extra)` conta pra tela o que aconteceu ("comecou", "rodada",
     "pergunta" (com `pedido` pra você responder), "pronta", "falhou", "parada"). `rodar_claude(cmd, cwd, entrada)` e
     `decidir(prompt)` são trocáveis nos testes."""
 
     def __init__(self, pedido, plano, pasta, projeto, sid_pai=None, avisar=None, rodar_claude=None, decidir=None,
-                 exe="claude", env=None):
+                 exe="claude", env=None, titulo=None, no_lugar=None, contexto=""):
+        """`titulo`: o nome da parte (num Grupo). `no_lugar`: trabalha nessa pasta que já existe (o worktree de
+        integração do Grupo), num chat novo, sem criar worktree. `contexto`: vai junto da primeira mensagem."""
         self.id = secrets.token_hex(4)
         self.pedido, self.plano = pedido.strip(), plano.strip()
         self.pasta, self.projeto, self.sid_pai = Path(pasta), projeto, sid_pai
-        self.nome = nome_curto(pedido)
+        self.titulo, self.no_lugar, self.contexto = titulo, Path(no_lugar) if no_lugar else None, contexto
+        self.nome = nome_curto(titulo or pedido)
         self.branch = f"worktree-{self.nome}"
-        self.worktree = self.pasta / ".claude" / "worktrees" / self.nome
+        self.worktree = self.no_lugar or self.pasta / ".claude" / "worktrees" / self.nome
         self.sid = None
         self.estado = "comecando"
         self.rodadas, self.custo = 0, 0.0
@@ -137,9 +150,11 @@ class Tarefa:
     def comando(self, primeira):
         cmd = [self.exe, "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
                "--allowedTools", ",".join(self.permitidos), "--disallowedTools", ",".join(self.proibidos)]
-        if primeira:
-            cmd += (["--resume", self.sid_pai, "--fork-session"] if self.sid_pai else []) + ["-w", self.nome,
-                                                                                         "-n", f"🤖 {self.pedido[:40]}"]
+        if primeira and self.no_lugar:
+            cmd += ["-n", f"🤖 {(self.titulo or self.pedido)[:40]}"]
+        elif primeira:
+            cmd += (["--resume", self.sid_pai, "--fork-session"] if self.sid_pai else []) + [
+                "-w", self.nome, "-n", f"🤖 {(self.titulo or self.pedido)[:40]}"]
         else:
             cmd += ["--resume", self.sid]
         return cmd
@@ -155,11 +170,12 @@ class Tarefa:
 
     def rodada(self, mensagem):
         primeira = self.sid is None
-        d = self.rodar_claude(self.comando(primeira), str(self.pasta if primeira else self.worktree), mensagem)
+        cwd = self.pasta if primeira and not self.no_lugar else self.worktree
+        d = self.rodar_claude(self.comando(primeira), str(cwd), mensagem)
         if d.get("is_error"):
             raise RuntimeError(str(d.get("result") or "erro do Claude Code")[:300])
         self.sid = d.get("session_id") or self.sid
-        if primeira:   # o Claude Code cria o worktree na raiz do repositório (a pasta do chat pode ser uma subpasta)
+        if primeira and not self.no_lugar:   # o worktree fica na raiz do repositório (o chat pode estar numa subpasta)
             self.worktree = self.achar_worktree() or self.worktree
         self.rodadas += 1
         self.custo += float(d.get("total_cost_usd") or 0)
@@ -202,9 +218,9 @@ class Tarefa:
 
     def _rodar(self):
         self.estado = "rodando"
-        self.base = self.git(self.pasta, "rev-parse", "HEAD") or None
+        self.base = self.base or self.git(self.pasta, "rev-parse", "HEAD") or None
         self.avisar("comecou", self)
-        mensagem = REGRAS + self.plano + f"\n\nPEDIDO ORIGINAL DO USUÁRIO: {self.pedido}"
+        mensagem = REGRAS + self.plano + f"\n\nPEDIDO ORIGINAL DO USUÁRIO: {self.pedido}" + self.contexto
         while True:
             if self.parar.is_set():
                 self.estado = "parada"
@@ -272,12 +288,7 @@ class Tarefa:
 
     @staticmethod
     def git(pasta, *args):
-        try:
-            return subprocess.run(["git", "-C", str(pasta), *args], capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=30,
-                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.strip()
-        except Exception:
-            return ""
+        return git(pasta, *args)[1]
 
     def mudancas(self):
         """Commits e arquivos do branch dele (o que você vai juntar), e se sobrou algo sem commit."""
@@ -291,5 +302,122 @@ class Tarefa:
     def descrever(self):
         estados = {"comecando": "começando", "rodando": "trabalhando", "esperando_voce": "esperando você",
                    "pronta": "pronta", "falhou": "falhou", "parada": "parada"}
-        return (f"🤖 {self.projeto}: {self.pedido[:80]} ({estados.get(self.estado, self.estado)}, "
+        nome = f"{self.pedido[:60]} · {self.titulo[:40]}" if self.titulo else self.pedido[:80]
+        return (f"🤖 {self.projeto}: {nome} ({estados.get(self.estado, self.estado)}, "
                 f"{self.rodadas} rodada{'s' if self.rodadas != 1 else ''}, branch {self.branch})")
+
+
+MAX_PARTES = 4
+
+CONTEXTO_PARTE = """
+
+[Você é a parte "{titulo}" de um trabalho maior] Outras partes rodam ao mesmo tempo, cada uma no seu worktree: {outras}.
+Faça SÓ a sua parte e mexa o mínimo fora dela, pra não dar conflito quando eu juntar tudo no fim."""
+
+PLANO_JUNTAR = """Este é o worktree de integração do trabalho "{pedido}". Eu estava juntando os branches das partes com
+git merge e o branch {branch} deu conflito (o merge está em andamento: veja `git status`).
+1. Resolva os conflitos mantendo o que as duas partes queriam (o plano de cada uma está abaixo).
+2. Rode os testes do projeto, se tiver.
+3. Conclua o merge com git add e git commit.
+Pronto = merge concluído com commit e testes passando. Não mexa em nada além do necessário pro conflito.
+
+Planos das partes:
+{planos}"""
+
+
+class Grupo:
+    """Várias partes de um trabalho, cada uma num subchat no seu worktree, em paralelo; no fim eu junto os branches
+    num worktree de integração (branch claudinho/<nome>). Conflito: um subchat novo resolve ali. Os avisos das
+    partes passam pra tela como os de uma Tarefa; o fim de cada parte vira "parte_fim", e o do grupo "grupo_pronto",
+    "grupo_juntando" ou "grupo_falhou"."""
+
+    def __init__(self, pedido, partes, pasta, projeto, sid_pai=None, avisar=None, **kw):
+        self.id = secrets.token_hex(4)
+        self.pedido, self.pasta, self.projeto = pedido.strip(), Path(pasta), projeto
+        self.avisar = avisar or (lambda *a, **k: None)
+        self.kw = kw   # rodar_claude, decidir, exe, env (os mesmos pras partes e pra quem resolve conflito)
+        self.estado = "comecando"
+        self.parar = threading.Event()
+        self.nome = nome_curto(pedido)
+        self.branch = f"claudinho/{self.nome}"
+        self.integracao = None
+        self.juntou, self.faltou = [], []
+        partes = [p for p in partes if p.get("titulo") and p.get("plano")][:MAX_PARTES]
+        titulos = [p["titulo"].strip() for p in partes]
+        self.partes = []
+        for p in partes:
+            titulo = p["titulo"].strip()
+            outras = ", ".join(f'"{t}"' for t in titulos if t != titulo) or "nenhuma"
+            t = Tarefa(self.pedido, p["plano"], pasta, projeto, sid_pai=sid_pai, avisar=self._da_parte,
+                       titulo=titulo, contexto=CONTEXTO_PARTE.format(titulo=titulo, outras=outras), **kw)
+            t.parar = self.parar   # parar o grupo para todas
+            self.partes.append(t)
+
+    def _da_parte(self, tipo, tarefa, **extra):
+        if tipo in ("pronta", "falhou", "parada"):
+            self.avisar("parte_fim", tarefa, fim=tipo, **extra)
+        else:
+            self.avisar(tipo, tarefa, **extra)
+
+    def rodar(self):
+        try:
+            self._rodar()
+        except Exception as erro:
+            self.estado = "falhou"
+            self.avisar("grupo_falhou", self, motivo=str(erro)[:300])
+
+    def _rodar(self):
+        self.estado = "rodando"
+        base = git(self.pasta, "rev-parse", "HEAD")[1] or None
+        for t in self.partes:
+            t.base = base
+        threads = [threading.Thread(target=t.rodar, daemon=True) for t in self.partes]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        prontas = [t for t in self.partes if t.estado == "pronta"]
+        self.faltou = [t for t in self.partes if t.estado != "pronta"]
+        if self.parar.is_set() or not prontas:
+            self.estado = "parada" if self.parar.is_set() else "falhou"
+            return self.avisar("grupo_falhou", self, motivo="você mandou parar" if self.parar.is_set()
+                               else "nenhuma parte terminou")
+        self.estado = "juntando"
+        self.avisar("grupo_juntando", self)
+        self.juntar(prontas, base)
+
+    def juntar(self, prontas, base):
+        raiz = Path(git(self.pasta, "rev-parse", "--show-toplevel")[1] or self.pasta)
+        self.integracao = raiz / ".claude" / "worktrees" / f"{self.nome}-junto"
+        ok, saida = git(raiz, "worktree", "add", "-b", self.branch, str(self.integracao), base or "HEAD")
+        if not ok:
+            raise RuntimeError(f"não consegui criar o worktree de integração: {saida[-200:]}")
+        for t in prontas:
+            ok, _ = git(self.integracao, "merge", "--no-ff", "--no-edit", t.branch, espera=120)
+            if not ok and not self.resolver(t, prontas):
+                self.estado = "parada"
+                return self.avisar("grupo_falhou", self, motivo=f"o conflito com a parte \"{t.titulo}\" ficou "
+                                   f"sem resolver (o merge está em andamento em {self.integracao})")
+            self.juntou.append(t)
+        self.estado = "pronta"
+        self.avisar("grupo_pronto", self, mudancas=self.mudancas(base))
+
+    def resolver(self, t, prontas):
+        """Conflito no merge da parte `t`: um subchat novo, no worktree de integração, resolve e conclui."""
+        planos = "\n\n".join(f"[{p.titulo}]\n{p.plano}" for p in prontas)
+        quem = Tarefa(self.pedido, PLANO_JUNTAR.format(pedido=self.pedido, branch=t.branch, planos=planos[:6000]),
+                      self.integracao, self.projeto, avisar=self._da_parte, titulo=f"juntar {t.titulo}"[:40],
+                      no_lugar=self.integracao, **self.kw)
+        quem.parar = self.parar
+        quem.rodar()
+        return quem.estado == "pronta" and not git(self.integracao, "status", "--porcelain")[1]
+
+    def mudancas(self, base):
+        commits = git(self.integracao, "log", "--oneline", f"{base}..HEAD")[1] if base else ""
+        arquivos = git(self.integracao, "diff", "--name-only", f"{base}..HEAD")[1] if base else ""
+        return {"commits": [c for c in commits.splitlines() if c][:30],
+                "arquivos": [a for a in arquivos.splitlines() if a][:80]}
+
+    def descrever(self):
+        partes = "; ".join(f"{t.titulo}: {t.estado}" for t in self.partes)
+        return f"🤖🤖 {self.projeto}: {self.pedido[:80]} ({self.estado}; partes: {partes}; branch {self.branch})"

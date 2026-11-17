@@ -54,12 +54,16 @@ class Sessoes:
             self.gravar()
             return None
         s = self.por_id.setdefault(sid, {"sid": sid, "projeto": d.get("projeto") or "?", "pasta": d.get("pasta") or "",
-                                         "estado": "aberta", "pedido": "", "fazendo": "", "desde": agora})
+                                         "estado": "aberta", "pedido": "", "fazendo": "", "desde": agora,
+                                         "criada": agora})   # criada: o tempo de casa (cargo no escritório)
         s["projeto"] = d.get("projeto") or s["projeto"]
         s["pasta"] = d.get("pasta") or s["pasta"]
+        antes = s["estado"]
         if evento == "pedido":
             s.update(estado="trabalhando", pedido=" ".join(str(d.get("pedido") or "").split())[:200], fazendo="",
                      desde=agora)
+            if not s.get("assunto") and s["pedido"] and not s["pedido"].startswith("<"):
+                s["assunto"] = s["pedido"][:90]   # o assunto do chat: o primeiro pedido (o escritório mostra)
         elif evento == "ferramenta":
             s.update(estado="trabalhando", fazendo=o_que_faz(d.get("ferramenta"), d.get("entrada")))
         elif evento in ("espera", "permissao"):
@@ -68,9 +72,22 @@ class Sessoes:
             s.update(estado="pronto", fazendo="", resumo=str(d.get("resumo") or "")[:200])
             if d.get("pedido") and not s["pedido"]:
                 s["pedido"] = " ".join(str(d["pedido"]).split())[:200]
+        self.contar_tempo(s, antes, agora)
         s["visto"] = agora
         self.gravar()
         return s
+
+    @staticmethod
+    def contar_tempo(s, antes, agora):
+        """Tempo trabalhado hoje (o escritório mostra na ficha): soma enquanto o estado é "trabalhando"."""
+        hoje = time.strftime("%Y-%m-%d", time.localtime(agora))
+        if s.get("trab_dia") != hoje:
+            s.update(trab_dia=hoje, trab_hoje=0)
+        if antes == "trabalhando" and s["estado"] != "trabalhando" and s.get("trab_desde"):
+            s["trab_hoje"] += max(0, agora - s["trab_desde"])
+            s["trab_desde"] = None
+        elif s["estado"] == "trabalhando" and (antes != "trabalhando" or not s.get("trab_desde")):
+            s["trab_desde"] = agora
 
     def ativas(self, agora=None):
         """As sessões que valem mostrar, as que precisam de você primeiro, depois as trabalhando."""

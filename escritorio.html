@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaudCorp</title>
+<style>
+  :root {
+    --fundo: #1c1b19; --painel: #262522; --painel2: #302f2b; --linha: #3d3b36; --texto: #ece9e1; --apagado: #9b978d;
+    --laranja: #d97757; --piso: #2a2925; --piso2: #2e2d29; --parede: #4a463e; --mesa: #8a6a48; --mesa2: #6e5238;
+    --junior: #5fb97a; --pleno: #5a9be0; --senior: #e0b04a; --estagiario: #a8a39a; --freela: #a07be0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--fundo); color: var(--texto);
+    font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 1fr 360px; grid-template-rows: auto 1fr; height: 100%; }
+  header { grid-column: 1 / 3; display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+    border-bottom: 1px solid var(--linha); background: var(--painel); }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: .3px; }
+  header h1 b { color: var(--laranja); }
+  .contagem { color: var(--apagado); font-size: 13px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .contagem span b { color: var(--texto); }
+  .legenda { margin-left: auto; display: flex; gap: 10px; font-size: 12px; color: var(--apagado); flex-wrap: wrap; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; color: #1c1b19; }
+  #salao { position: relative; min-width: 0; min-height: 0; }
+  canvas#mundo { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; cursor: default; }
+  #balaoChefe { position: absolute; width: max-content; min-width: 150px; max-width: 300px; display: none; background: #2b2a27; border: 2px solid var(--laranja);
+    border-radius: 14px; padding: 10px 12px 12px; font-size: 13px; line-height: 1.4; z-index: 2;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45); }
+  #balaoChefe::after { content: ""; position: absolute; left: var(--cauda, 50%); bottom: -9px; margin-left: -8px;
+    border: 8px solid transparent; border-top-color: var(--laranja); border-bottom: 0; }
+  #balaoChefe.embaixo::after { bottom: auto; top: -9px; border: 8px solid transparent; border-bottom-color: var(--laranja); border-top: 0; }
+  #balaoChefe .t { color: var(--laranja); font-weight: 700; font-size: 12px; margin-bottom: 3px; padding-right: 16px; }
+  #balaoChefe .x { position: absolute; right: 8px; top: 5px; color: var(--apagado); cursor: pointer; font-size: 12px; }
+  #balaoChefe .txt { white-space: pre-wrap; max-height: 170px; overflow-y: auto; color: var(--texto); }
+  #balaoChefe .bts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 9px; }
+  #balaoChefe.so-botoes .bts { justify-content: center; margin-top: 2px; padding-right: 14px; }
+  #balaoChefe .txt:empty { display: none; }
+  #balaoChefe button { border: 0; border-radius: 9px; padding: 6px 12px; font: 600 12px "Segoe UI"; cursor: pointer;
+    background: #3d3b37; color: var(--texto); }
+  #balaoChefe button.p { background: var(--laranja); color: #fff; }
+  #balaoChefe button:hover { filter: brightness(1.12); }
+  #balaoChefe .campo { display: flex; gap: 6px; margin-top: 8px; }
+  #balaoChefe input { flex: 1; min-width: 0; border: 0; border-radius: 9px; padding: 7px 9px; background: #3d3b37;
+    color: var(--texto); font: 13px "Segoe UI"; outline: none; }
+  .botoes-topo { display: flex; gap: 6px; margin-left: 12px; }
+  .botoes-topo button { border: 1px solid var(--linha); background: var(--painel2); color: var(--texto); border-radius: 8px;
+    padding: 5px 10px; font: 600 12px "Segoe UI"; cursor: pointer; }
+  .botoes-topo button:hover { border-color: var(--laranja); }
+  #modal { position: fixed; inset: 0; background: rgba(10,9,8,.6); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  #modal[hidden] { display: none; }
+  #modal .caixa { position: relative; background: var(--painel); border: 1px solid var(--linha); border-radius: 14px;
+    width: min(760px, 94vw); max-height: 86vh; overflow-y: auto; padding: 16px 18px 18px; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  #modal h3 { margin: 0 0 12px; font-size: 16px; }
+  #modal .fechar { position: absolute; right: 14px; top: 12px; cursor: pointer; color: var(--apagado); }
+  .ficha-topo { display: flex; gap: 14px; align-items: center; }
+  .ficha-topo canvas { width: 66px; height: 60px; image-rendering: pixelated; }
+  .numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .numeros div { background: var(--painel2); border-radius: 10px; padding: 8px 10px; }
+  .numeros b { display: block; font-size: 18px; }
+  .numeros span { color: var(--apagado); font-size: 11px; }
+  .entrega { border-top: 1px solid var(--linha); padding: 10px 0; }
+  .entrega .t { font-weight: 600; font-size: 13px; }
+  .entrega .q { color: var(--apagado); font-size: 11px; }
+  .entrega .x { white-space: pre-wrap; font-size: 12.5px; color: #cfcabe; margin-top: 4px; max-height: 160px; overflow-y: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .chips span { background: #3d3b37; border-radius: 6px; padding: 1px 6px; font-size: 11px; color: #cfcabe; }
+  .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kanban .col { background: var(--painel2); border-radius: 10px; padding: 8px; min-height: 120px; }
+  .kanban h4 { margin: 0 0 8px; font-size: 13px; }
+  .postit { border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; color: #2a2520; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.3); }
+  .postit b { display: block; font-size: 11px; opacity: .7; }
+  .trofeu { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--linha); }
+  .trofeu .i { font-size: 22px; width: 30px; text-align: center; }
+  .trofeu.nao { opacity: .45; }
+  .trofeu small { color: var(--apagado); display: block; }
+  .form label { display: block; font-size: 12px; color: var(--apagado); margin: 10px 0 4px; }
+  .form input, .form select, .form textarea { width: 100%; border: 1px solid #4a4741; border-radius: 8px; padding: 7px 9px;
+    background: #2b2a27; color: var(--texto); font: 13px "Segoe UI"; outline: none; }
+  .form textarea { min-height: 80px; resize: vertical; }
+  .form .acoes { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; align-items: center; }
+  .form button { border: 0; border-radius: 9px; padding: 8px 16px; font: 600 13px "Segoe UI"; cursor: pointer; background: var(--laranja); color: #fff; }
+  .form .resultado { color: var(--apagado); font-size: 12px; margin-right: auto; }
+  #dica { position: absolute; pointer-events: none; background: var(--painel2); border: 1px solid var(--linha);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 280px; display: none; line-height: 1.4;
+    box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+  #dica .n { font-weight: 700; font-size: 13px; }
+  aside { border-left: 1px solid var(--linha); background: var(--painel); display: flex; flex-direction: column; min-height: 0; }
+  aside h2 { margin: 0; padding: 12px 14px 8px; font-size: 14px; }
+  aside h2 small { color: var(--apagado); font-weight: 400; }
+  aside h2 { display: flex; align-items: center; gap: 6px; }
+  #limpar { margin-left: auto; border: 0; background: transparent; color: var(--apagado); font: 12px "Segoe UI";
+    cursor: pointer; padding: 3px 6px; border-radius: 6px; }
+  #limpar:hover { background: var(--painel2); color: var(--texto); }
+  .rel { position: relative; }
+  .rel .apagar { position: absolute; right: 8px; top: 6px; color: var(--apagado); font-size: 12px; cursor: pointer;
+    padding: 2px 4px; border-radius: 5px; opacity: 0; transition: opacity .15s; }
+  .rel:hover .apagar { opacity: 1; }
+  .rel .apagar:hover { background: #45423c; color: var(--texto); }
+  .rel .resp { display: flex; gap: 6px; margin-top: 8px; }
+  .rel .resp input { flex: 1; min-width: 0; border: 1px solid var(--laranja); border-radius: 8px; padding: 6px 8px;
+    background: #2b2a27; color: var(--texto); font: 12px "Segoe UI"; outline: none; }
+  .rel .resp button { border: 0; border-radius: 8px; padding: 0 10px; background: var(--laranja); color: #fff;
+    font: 600 12px "Segoe UI"; cursor: pointer; }
+  .rel .esperando { margin-top: 6px; font-size: 11px; color: var(--laranja); font-weight: 600; }
+  .cel-caixa { padding: 4px 4px 10px; font-size: 13px; line-height: 1.45; }
+  .cel-caixa p { color: #cfcabe; margin: 8px 0; }
+  .cel-status { font-weight: 700; }
+  .cel-status.on { color: #8fe0a8; }
+  .cel-op { display: block; margin: 10px 0; }
+  .cel-op small { display: block; color: var(--apagado); margin-left: 22px; }
+  .cel-botao { border: 0; border-radius: 9px; padding: 8px 18px; background: var(--laranja); color: #fff; font: 600 13px "Segoe UI"; cursor: pointer; }
+  .cel-botao.desligar { background: #4a4741; }
+  .cel-qr { background: #fff; border-radius: 12px; padding: 10px; margin: 12px auto 6px; width: fit-content; }
+  .cel-qr svg { display: block; width: 220px; height: 220px; }
+  .cel-codigo { text-align: center; margin: 8px 0 10px; }
+  .cel-codigo b { display: block; font: 800 30px monospace; letter-spacing: 6px; color: var(--laranja); }
+  .cel-codigo small { color: var(--apagado); }
+  .cel-url { font-size: 11px; color: var(--apagado); word-break: break-all; text-align: center; }
+  .cel-aviso { color: var(--apagado); font-size: 11.5px; padding-left: 18px; margin-top: 12px; }
+  .cel-aviso li { margin-bottom: 4px; }
+  /* no celular (aberto pelo QR): sem a aba Celular e, se for só olhar, sem os campos de responder */
+  body.no-celular #abaCel, body.no-celular #bAjustes { display: none; }
+  body.so-olhar .resp, body.so-olhar .pedido .po, body.so-olhar #bNova, body.so-olhar #balaoChefe .bts,
+  body.so-olhar #balaoChefe .campo, body.so-olhar #balaoChefe .x { display: none !important; }
+  @media (max-width: 900px) {
+    header { flex-wrap: wrap; gap: 8px; }
+    .botoes-topo { margin-left: 0; }
+    .contagem { gap: 8px; font-size: 12px; }
+  }
+  .abas { display: flex; gap: 4px; padding: 10px 10px 0; border-bottom: 1px solid var(--linha); }
+  .abas button { flex: 1; border: 0; background: transparent; color: var(--apagado); font: 600 13px "Segoe UI";
+    padding: 8px 6px 9px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .abas button.on { color: var(--texto); border-bottom-color: var(--laranja); }
+  .abas small { font-weight: 400; color: var(--apagado); }
+  .lista { overflow-y: auto; padding: 10px 10px 16px; flex: 1; }
+  .lista[hidden] { display: none; }
+  .func { background: var(--painel2); border: 1px solid var(--linha); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; }
+  .func.espera { border-color: var(--laranja); }
+  .func .topo { display: flex; align-items: center; gap: 8px; }
+  .func canvas { width: 33px; height: 30px; image-rendering: pixelated; flex: none; }
+  .func .quem { font-weight: 700; font-size: 13px; }
+  .func .estado { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 9px; background: #3d3b37; color: var(--apagado); white-space: nowrap; }
+  .func .estado.trabalhando { background: #2f4a39; color: #8fe0a8; }
+  .func .estado.esperando { background: #5a3a28; color: #ffb08a; }
+  .func .onde { font-size: 11px; color: var(--apagado); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .func .faz { font-size: 11px; color: #cfcabe; margin-top: 3px; }
+  .func .ultima { font-size: 12.5px; color: var(--texto); margin-top: 7px; white-space: pre-wrap; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  .func .ultima.aberta { display: block; max-height: 360px; overflow-y: auto; }
+  .func .ultima.nada { color: var(--apagado); font-style: italic; cursor: default; }
+  .func .resp { display: flex; gap: 6px; margin-top: 8px; }
+  .func .resp input { flex: 1; min-width: 0; border: 1px solid #4a4741; border-radius: 8px; padding: 6px 8px;
+    background: #2b2a27; color: var(--texto); font: 12px "Segoe UI"; outline: none; }
+  .func .resp input:focus { border-color: var(--laranja); }
+  .func .resp button { border: 0; border-radius: 8px; padding: 0 10px; background: var(--laranja); color: #fff; font: 600 12px "Segoe UI"; cursor: pointer; }
+  .func .dica2 { font-size: 11px; color: var(--apagado); margin-top: 4px; }
+  .func .pedido { margin-top: 8px; background: #3a2a22; border: 1px solid var(--laranja); border-radius: 9px; padding: 8px 9px; }
+  .func .pedido .pq { font-size: 12.5px; white-space: pre-wrap; max-height: 140px; overflow-y: auto; }
+  .func .pedido .po { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .func .pedido button { border: 0; border-radius: 8px; padding: 6px 12px; font: 600 12px "Segoe UI"; cursor: pointer;
+    background: #4a4741; color: var(--texto); }
+  .func .pedido button.p { background: var(--laranja); color: #fff; }
+  .func.espera .dica2 { color: var(--laranja); font-weight: 600; }
+  .rel .pediu { font-size: 11.5px; color: var(--apagado); margin-top: 6px; }
+  .rel .pediu b { color: #b9b3a6; font-weight: 600; }
+  #gaveta { overflow-y: auto; padding: 4px 10px 16px; flex: 1; }
+  .rel { background: var(--painel2); border: 1px solid var(--linha); border-radius: 10px; padding: 9px 10px;
+    margin-bottom: 8px; cursor: pointer; transition: border-color .3s, background .3s; }
+  .rel:hover { border-color: #57534b; }
+  .rel.novo { border-color: var(--laranja); background: #3a2f28; }
+  .rel .topo { display: flex; align-items: center; gap: 8px; }
+  .rel canvas { width: 33px; height: 30px; image-rendering: pixelated; flex: none; }
+  .rel .quem { font-weight: 700; font-size: 13px; }
+  .rel .meta { color: var(--apagado); font-size: 11px; }
+  .rel .titulo { font-size: 12px; margin-top: 6px; color: var(--texto); font-weight: 600; }
+  .rel .texto { font-size: 12px; color: #cfcabe; margin-top: 4px; white-space: pre-wrap; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .rel.aberto .texto { display: block; -webkit-line-clamp: unset; max-height: 420px; overflow-y: auto; }
+  .vazio { color: var(--apagado); font-size: 13px; padding: 20px 6px; text-align: center; line-height: 1.5; }
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    #salao { aspect-ratio: 960 / 576; }   /* no celular: a maquete inteira, sem faixa vazia */
+    header { grid-column: 1; }
+    aside { border-left: 0; border-top: 1px solid var(--linha); }
+    .legenda { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🏢 <b>Claud</b>Corp</h1>
+    <div class="contagem" id="contagem"></div>
+    <div class="botoes-topo">
+      <button id="bNova" title="contratar uma tarefa: um freela faz sozinho num worktree">➕ nova tarefa</button>
+      <button id="bQuadro" title="o quadro de tarefas da firma">📋 quadro</button>
+      <button id="bTrofeus" title="as conquistas da firma">🏆 <span id="nTrofeus"></span></button>
+      <button id="bAjustes" title="sons e clima">⚙️</button>
+    </div>
+    <div class="legenda">
+      <span><span class="tag" style="background:var(--junior)">júnior</span></span>
+      <span><span class="tag" style="background:var(--pleno)">pleno</span></span>
+      <span><span class="tag" style="background:var(--senior)">sênior</span></span>
+      <span><span class="tag" style="background:var(--estagiario)">estagiário</span></span>
+      <span><span class="tag" style="background:var(--freela)">freela</span></span>
+    </div>
+  </header>
+  <div id="modal" hidden><div class="caixa"><span class="fechar" title="fechar">✕</span><h3></h3><div class="corpo"></div></div></div>
+  <div id="salao"><canvas id="mundo"></canvas><div id="balaoChefe"></div><div id="dica"></div></div>
+  <aside>
+    <nav class="abas">
+      <button data-aba="funcs" class="on">👥 Funcionários <small id="qf"></small></button>
+      <button data-aba="gaveta">📁 Relatórios <small id="qtd"></small></button>
+      <button data-aba="cel" id="abaCel">📱 Celular</button>
+    </nav>
+    <div id="funcs" class="lista"><div class="vazio">Ninguém no escritório agora.<br>Quando um chat do Claude Code abrir, ele aparece aqui.</div></div>
+    <div id="cel" class="lista" hidden>
+      <div class="cel-caixa">
+        <div class="cel-status" id="celStatus">Desligado.</div>
+        <p>Abre este escritório no celular, no mesmo Wi-Fi do PC: liga aqui e aponta a câmera pro QR code.</p>
+        <label class="cel-op"><input type="checkbox" id="celAcoes"> deixar responder pelo celular
+          <small>(Pode/Não, mensagens pros chats e contratar tarefa; sem marcar, o celular só olha)</small></label>
+        <button id="celBotao" class="cel-botao">Ligar</button>
+        <div id="celQr" class="cel-qr" hidden></div>
+        <div id="celCodigo" class="cel-codigo" hidden></div>
+        <div id="celUrl" class="cel-url"></div>
+        <ul class="cel-aviso">
+          <li>Duas etapas: o link do QR e o código de 6 dígitos que só aparece aqui. 5 códigos errados desligam na hora.</li>
+          <li>Desliga sozinho em 2 h. Cada vez que liga, o endereço, a chave e o código mudam (os antigos param de funcionar).</li>
+          <li>Só funciona no mesmo Wi-Fi e só mostra o escritório (nada do painel ou das configurações).</li>
+          <li>A conexão não é criptografada: use no Wi-Fi de casa ou do trabalho, não em rede pública.</li>
+          <li>Na primeira vez, o Windows pode perguntar se libera o Claudinho no firewall (rede privada).</li>
+        </ul>
+      </div>
+    </div>
+    <div id="gaveta" class="lista" hidden><div class="vazio">Ninguém entregou relatório ainda.<br>Quando um chat ou agente terminar, o resultado aparece aqui.</div></div>
+  </aside>
+</div>
+<script>
+const TOKEN = "__TOKEN__";
+const CARGOS = {"chefe": "--laranja", "júnior": "--junior", "pleno": "--pleno", "sênior": "--senior", "estagiário": "--estagiario", "freela": "--freela"};
+const CORPO = [".XXXXXXXXX.", ".XXXXXXXXX.", ".XXXXXXXXX.", "XXXXXXXXXXX", "XXXXXXXXXXX", ".XXXXXXXXX."];
+const PERNAS = [1, 3, 7, 9];
+const OLHOS_X = {"-1": [2, 6], "0": [3, 7], "1": [4, 8]};
+const P = 3;                          // pixel do bonequinho
+const VEL = 110;                      // px por segundo andando
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const canvas = document.getElementById("mundo"), ctx = canvas.getContext("2d");
+const dica = document.getElementById("dica");
+let W = 0, H = 0, dados = {funcionarios: [], projetos: [], sprites: {}, relatorios: []};
+const gente = new Map();             // chave → bonequinho na tela (posição, caminho, estado)
+let layout = null, vistosRel = null, ultimoRel = null, abertos = new Set();
+
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+// ---------- a planta do escritório ----------
+function montarLayout() {
+  const margem = 14, topo = 12;
+  // o corredor fica no meio: em cima a sala de trabalho; embaixo copa, reunião e arquivo (as duas metades iguais)
+  const corrAlto = Math.max(70, Math.min(120, H * 0.14));
+  const metade = Math.max(150, (H - corrAlto - topo - 10 - 12) / 2);
+  const sw = W - margem * 2, portas = [margem + sw * 0.3, margem + sw * 0.7];   // duas portas pro corredor
+  const salas = {trabalho: {x: margem, y: topo, w: sw, h: metade, nome: "Sala de trabalho",
+    porta: {x: portas[0], lado: "baixo", dentro: {x: portas[0], y: topo + metade - 16}, fora: {x: portas[0], y: topo + metade + 14}},
+    porta2: {x: portas[1], lado: "baixo"}}};
+  const quadroRect = {x: margem + sw * 0.16, y: topo + metade - 70, w: 52, h: 36};
+  const fimSalas = topo + metade;
+  const corrTopo = fimSalas + 6, corredor = corrTopo + corrAlto / 2;
+  const baixoY = corrTopo + corrAlto + 6, baixoH = Math.max(120, H - baixoY - 10);
+  const embaixo = (nome, x, w, px) => ({x, y: baixoY, w, h: baixoH, nome,
+    porta: {x: px, lado: "cima", dentro: {x: px, y: baixoY + ALTO_PAREDE + 14}, fora: {x: px, y: baixoY - 14}}});
+  const wc = W * 0.36, wr = W * 0.34;
+  const copa = embaixo("☕ Copa", margem, wc, margem + 86);
+  const rx = margem * 2 + wc, reuniao = embaixo("🤝 Sala de reunião", rx, wr, rx + wr / 2 + 58);
+  const ax = rx + wr + margem, aw = W - ax - margem, arquivo = embaixo("📁 Arquivo", ax, aw, ax + aw - 44);
+  const entrada = {x: -26, y: corredor};   // a porta da rua: na ponta esquerda do corredor
+  // copa de lazer: onde cada atividade acontece (o ponto é onde a pessoa fica, de frente pra coisa)
+  const cy0 = copa.y + ALTO_PAREDE;
+  copa.lazer = {
+    cafe: {x: copa.x + copa.w - 94, y: cy0 + 40}, lanche: {x: copa.x + copa.w - 146, y: cy0 + 40},
+    fliper: {x: copa.x + 118, y: cy0 + 42},
+    mesa: {x: copa.x + copa.w * 0.55, y: copa.y + copa.h * 0.52},
+    sofa: {x: copa.x + Math.min(120, copa.w * 0.35), y: copa.y + copa.h - 26},
+  };
+  const aquario = {x: W - 120, y: corrTopo + Math.min(48, corrAlto * 0.42)};
+  const banco = {x: W * 0.42, y: corrTopo + corrAlto - 8};   // (longe das portas: ninguém tropeça)
+  layout = {salas, copa, reuniao, arquivo, corredor, corrTopo, corrAlto, porta: entrada, entrada, aquario, banco, quadroRect,
+            vazio: !dados.funcionarios.length};
+}
+
+function assento(sala, i) {     // as mesas em fileiras pela sala toda; o assento fica atrás da mesa
+  const cols = Math.max(2, Math.min(8, Math.floor((sala.w - 60) / 118))), porLinha = cols;
+  const c = i % porLinha, l = Math.floor(i / porLinha);
+  const dx = (sala.w - 40) / cols, x = sala.x + 20 + dx * (c + 0.5);
+  const y = sala.y + 62 + l * 70;
+  return {x, y: Math.min(y, sala.y + sala.h - 20), mesa: {x: x - 26, y: y - 10}};
+}
+
+function lugarDe(g) {
+  if (!layout) return {x: W / 2, y: H / 2};
+  if (g.chave === "claudinho") return lugarDoChefe();
+  if (g.saindo) return layout.porta;
+  const hora = new Date().getHours();
+  if (g.chave !== "claudinho" && (hora >= 20 || hora < 6) && !["trabalhando", "esperando"].includes(g.estado) && !g.levando) {
+    g.emCasa = true; return layout.porta;   // fim do expediente: quem está à toa foi pra casa (volta quando tiver trabalho)
+  }
+  g.emCasa = false;
+  if (g.levando) return {x: layout.arquivo.x + 34, y: layout.arquivo.y + layout.arquivo.h - 18};
+  const trabalhando = g.estado === "trabalhando" || g.estado === "esperando";
+  if (trabalhando && g.sala === "reuniao") {
+    const r = layout.reuniao, i = g.lugar, ang = (i / 6) * Math.PI * 2 + 0.4;
+    return {x: r.x + r.w / 2 + Math.cos(ang) * Math.min(r.w, 180) * 0.36, y: r.y + r.h / 2 + 8 + Math.sin(ang) * Math.min(r.h, 120) * 0.32};
+  }
+  if (trabalhando && g.sala === "mesa") return assento(layout.salas.trabalho, g.lugar);
+  g.atividade = atividadeDe(g);   // à toa: café, lanche, fliperama, aquário, conversa na mesinha ou sofá
+  return pontoDaAtividade(g.atividade, g);
+}
+
+// ---------- o que fazer à toa ----------
+const ATIVIDADES = ["cafe", "lanche", "fliper", "aquario", "mesa", "sofa", "banco"];
+function atividadeDe(g) {
+  if (g.estado === "parada") return "sofa";                   // parado faz tempo: cochilando no sofá
+  const hora = new Date().getHours();
+  if (hora >= 7 && hora < 10 && hash(g.chave + new Date().toDateString()) % 3 !== 0) return "cafe";   // de manhã: café primeiro
+  if (g.atividade_ia && ATIVIDADES.includes(g.atividade_ia)) return g.atividade_ia;   // a IA local escolheu
+  const minuto = Math.floor(Date.now() / 60000);               // troca de atividade a cada minuto
+  return ATIVIDADES[hash(g.chave + ":" + minuto) % ATIVIDADES.length];
+}
+function pontoDaAtividade(a, g) {
+  const L = layout.copa.lazer, k = (hash(g.chave) % 3) - 1;   // (dois na mesma coisa: um do lado do outro)
+  if (a === "aquario") return {x: layout.aquario.x + k * 18, y: layout.aquario.y + 18};
+  if (a === "banco") return {x: layout.banco.x + k * 20, y: layout.banco.y - 6};
+  if (a === "mesa") return {x: L.mesa.x + (k >= 0 ? 34 : -34), y: L.mesa.y + 10};
+  if (a === "sofa") return {x: L.sofa.x + k * 28, y: L.sofa.y - 8};
+  const p = L[a];
+  return {x: p.x + k * 10, y: p.y};
+}
+function efeitoDaAtividade(g, t) {   // o que aparece em quem chegou na atividade
+  const a = g.atividade, x = g.x, y = g.y;
+  if (a === "sofa") {                                             // zzz subindo
+    ctx.fillStyle = "#ece9e1"; ctx.font = "bold 10px Segoe UI";
+    for (let i = 0; i < 3; i++) { const f = (t / 40 + i / 3) % 1; ctx.globalAlpha = 1 - f;
+      ctx.fillText("z", x + 10 + f * 10 + i * 3, y - 28 - f * 18); }
+    ctx.globalAlpha = 1;
+  } else if (a === "cafe" || a === "lanche") {                    // caneca (ou salgadinho) na mão
+    ret(ctx, x + 12, y - 14, 6, 6, a === "cafe" ? "#f4efe4" : "#f2c94c");
+    if (a === "cafe" && t % 40 < 30) ret(ctx, x + 14, y - 20 - (t % 40) / 10, 2, 4, "rgba(255,255,255,.5)");
+  } else if (a === "fliper") {                                    // notinhas de joguinho
+    if (t % 60 < 40) { ctx.fillStyle = "#ff9cc4"; ctx.font = "bold 11px Segoe UI"; ctx.fillText("♪", x + 10, y - 30 - (t % 60) / 8); }
+  } else if (a === "mesa") {                                      // papo: reticências
+    if (t % 90 < 60) { ctx.fillStyle = "rgba(244,239,228,.9)"; ctx.beginPath(); ctx.roundRect(x - 10, y - 46, 20, 11, 5); ctx.fill();
+      for (let i = 0; i < 3; i++) ret(ctx, x - 6 + i * 5, y - 41, 2, 2, "#3a2f25"); }
+  } else if (a === "danca") {                                     // dancinha: notas subindo dos dois lados
+    ctx.fillStyle = "#ffd23f"; ctx.font = "bold 11px Segoe UI";
+    ctx.fillText("♪", x - 18, y - 26 - (t % 30) / 5); ctx.fillText("♫", x + 12, y - 34 + (t % 30) / 6);
+  } else if (a === "aquario") {                                   // olhando os peixes: um coraçãozinho às vezes
+    if (t % 120 < 30) { ctx.fillStyle = "#e58fb0"; ctx.font = "10px Segoe UI"; ctx.fillText("♥", x + 8, y - 34); }
+  }
+}
+
+function paredeDaFirma(t) {
+  const sala = layout.salas.trabalho, f = dados.firma;
+  if (f && f.do_mes && dados.sprites[f.do_mes.chave]) {   // o quadro do funcionário do mês, na parede
+    const x = sala.x + sala.w - 190, y = sala.y + 2;
+    ret(ctx, x, y, 24, 22, "#d4a72c"); ret(ctx, x + 2, y + 2, 20, 18, "#f7f5ef");
+    bonequinho(ctx, dados.sprites[f.do_mes.chave], x + 12, y + 19, {escala: 1.5});
+    ctx.fillStyle = "#4a3a2a"; ctx.font = "700 8px Segoe UI"; ctx.fillText("do mês: " + f.do_mes.nome.split(" ")[0], x + 28, y + 15);
+  }
+  if (f) {                                               // a prateleira de troféus (um por conquista)
+    const ganhas = f.conquistas.filter(c => c.quando).length, x = sala.x + sala.w - 110, y = sala.y + ALTO_PAREDE + 4;
+    ret(ctx, x, y + 10, 80, 3, "#7a5233");
+    for (let i = 0; i < Math.min(ganhas, 10); i++) {
+      const tx = x + 4 + i * 8;
+      ret(ctx, tx, y + 2, 5, 4, "#f2c94c"); ret(ctx, tx + 1, y + 6, 3, 2, "#d4a72c"); ret(ctx, tx, y + 8, 5, 2, "#9a7a3c");
+    }
+  }
+  const reuniao = (dados.reuniao || [])[0];             // o plano do trabalho em partes no quadro branco da reunião
+  if (reuniao) {
+    const r = layout.reuniao, qx = r.x + r.w / 2 - 34;
+    ret(ctx, qx + 2, r.y + 5, 64, 16, "#f7f7f4");
+    ctx.fillStyle = "#2f4f6f"; ctx.font = "700 7px Segoe UI";
+    ctx.fillText(reuniao.pedido.slice(0, 18), qx + 4, r.y + 12);
+    ctx.fillStyle = "#d97757"; ctx.fillText(reuniao.partes.map(p => p.titulo).join(" · ").slice(0, 20), qx + 4, r.y + 19);
+  }
+  if (new Date().getMonth() === 11) {                   // pisca-pisca de Natal no corredor
+    const cores = ["#e8452c", "#ffd23f", "#5fb466", "#4f86d9"];
+    for (let x = 8, k = 0; x < W; x += 16, k++) ret(ctx, x, layout.corrTopo + 3, 3, 3, (k + Math.floor(t / 20)) % 2 ? cores[k % 4] : "#4a4741");
+  }
+}
+
+function cenarioVivo(t) {   // o que mexe no cenário: vapor do café, tela do fliperama, peixes, luz à noite
+  const L = layout.copa.lazer, by = layout.copa.y + ALTO_PAREDE - 6;
+  for (let i = 0; i < 2; i++) { const f = ((t / 50) + i / 2) % 1;
+    ctx.fillStyle = `rgba(255,255,255,${0.45 * (1 - f)})`; ctx.fillRect(L.cafe.x - 2 + i * 3, by - 16 - f * 14, 2, 4); }
+  const a = L.fliper, cores = ["#4f86d9", "#ff5e9a", "#5fb466", "#ffd23f"];   // a tela do fliperama piscando
+  for (let i = 0; i < 4; i++) ret(ctx, a.x - 8 + ((t / 4 + i * 5) % 16), by - 6 + i * 3, 3, 2, cores[i]);
+  const aq = layout.aquario;
+  for (let i = 0; i < 3; i++) {                                                 // peixinhos
+    const f = ((t / (160 + i * 40)) + i * 0.3) % 2, ida = f < 1, px = ida ? f : 2 - f;
+    const x = aq.x - 34 + px * 62, y = aq.y - 40 + i * 5 + Math.sin(t / 20 + i) * 1.5;
+    ret(ctx, x, y, 5, 3, ["#f5932b", "#ffd23f", "#e58fb0"][i]); ret(ctx, ida ? x - 2 : x + 5, y, 2, 3, ["#d97757", "#d4a72c", "#c9709a"][i]);
+  }
+  if (t % 50 === 0) bolhas.push({x: aq.x - 20 + Math.random() * 40, y: aq.y - 26});
+  for (const b of bolhas) { b.y -= 0.25; ret(ctx, b.x, b.y, 2, 2, "rgba(220,240,255,.7)"); }
+  while (bolhas.length && bolhas[0].y < aq.y - 43) bolhas.shift();
+  paredeDaFirma(t);
+  const ar = layout.arquivo;                                                    // luzinha da impressora
+  ret(ctx, ar.x + 55, ar.y + ar.h - 34, 3, 2, t % 80 < 40 ? "#5fb466" : "#2f6b3c");
+  gato(t);
+  if (ceu()[2]) {                                                               // noite: o escritório fica mais escuro
+    ctx.fillStyle = "rgba(10,14,40,.22)"; ctx.fillRect(0, 0, W, H);
+  }
+}
+const bolhas = [];
+
+// ---------- o gato da firma: passeia, para pra se lamber e às vezes cochila ----------
+const bichano = {x: 200, y: 300, alvo: null, ate: 0, dorme: false, frente: 1};
+function gato(t) {
+  if (!layout) return;
+  const agora = performance.now();
+  if (!bichano.alvo || agora > bichano.ate) {   // escolhe outro lugar (ou cochila um pouco)
+    const c = layout.copa, salas = Object.values(layout.salas);
+    const lugares = [{x: c.lazer.sofa.x + 30, y: c.lazer.sofa.y - 2}, {x: layout.aquario.x - 50, y: layout.aquario.y + 16},
+      {x: W * 0.3, y: layout.corredor + 20}, {x: W * 0.75, y: layout.corredor - 18}, {x: c.lazer.mesa.x, y: c.lazer.mesa.y + 30},
+      ...salas.map(r => ({x: r.x + r.w * 0.5, y: r.y + r.h - 40}))];
+    bichano.alvo = lugares[Math.floor(Math.random() * lugares.length)];
+    bichano.dorme = Math.random() < 0.3;
+    bichano.ate = agora + 9000 + Math.random() * 12000;
+    bichano.caminho = (() => { const de = salaDe(bichano), para = salaDe(bichano.alvo), cy = layout.corredor, cam = [];
+      if (de && de !== para) cam.push(de.porta.dentro, de.porta.fora);
+      if (de !== para) { cam.push({x: cam.length ? cam[cam.length - 1].x : bichano.x, y: cy + 14});
+        cam.push({x: para ? para.porta.fora.x : bichano.alvo.x, y: cy + 14}); if (para) cam.push(para.porta.fora, para.porta.dentro); }
+      cam.push(bichano.alvo); return cam; })();
+  }
+  const p = bichano.caminho[0];
+  let andando = false;
+  if (p) {
+    const dx = p.x - bichano.x, dy = p.y - bichano.y, d = Math.hypot(dx, dy);
+    if (Math.abs(dx) > 1) bichano.frente = dx > 0 ? 1 : -1;
+    if (d < 1.2) bichano.caminho.shift(); else { bichano.x += dx / d * 1.2; bichano.y += dy / d * 1.2; andando = true; }
+  }
+  const x = Math.round(bichano.x), y = Math.round(bichano.y), f = bichano.frente, laranja = "#f2994a", escuro = "#c96f2a";
+  ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.fillRect(x - 8, y, 16, 3);
+  if (!andando && bichano.dorme) {                // enroladinho dormindo
+    ret(ctx, x - 7, y - 6, 14, 6, laranja); ret(ctx, x - 7, y - 6, 14, 2, escuro); ret(ctx, x + 4 * f - 2, y - 8, 5, 4, laranja);
+    ctx.fillStyle = "#ece9e1"; ctx.font = "bold 8px Segoe UI"; ctx.fillText("z", x + 6, y - 12 - (Math.floor(t / 30) % 2) * 3);
+    return;
+  }
+  const passo = andando && Math.floor(t / 6) % 2;
+  ret(ctx, x - 6, y - 7, 12, 5, laranja); ret(ctx, x - 4, y - 7, 2, 5, escuro); ret(ctx, x + 1, y - 7, 2, 5, escuro);   // corpo listrado
+  ret(ctx, x + 5 * f - (f < 0 ? 4 : 0), y - 11, 5, 5, laranja);                // cabeça
+  ret(ctx, x + 5 * f - (f < 0 ? 4 : 0), y - 13, 1, 2, laranja); ret(ctx, x + 5 * f - (f < 0 ? 4 : 0) + 4, y - 13, 1, 2, laranja);   // orelhas
+  ret(ctx, x + 7 * f - (f < 0 ? 2 : 0), y - 9, 1, 1, "#1f1e1d");               // olho
+  const rabo = Math.floor(t / 10) % 2;
+  ret(ctx, x - 7 * f - (f > 0 ? 2 : 0), y - 10 - rabo, 2, 5, laranja);         // rabo balançando
+  for (const [k, dx] of [[0, -5], [1, -2], [2, 2], [3, 4]]) ret(ctx, x + dx, y - 2 - ((passo + k) % 2 && andando ? 1 : 0), 2, 2, laranja);
+}
+
+// ---------- chegam os dados ----------
+async function buscar() {
+  try {
+    const visivel = document.visibilityState === "visible" ? "?visivel=1" : "";   // aberto e na tela: o Claudinho vem pra cá
+    const r = await fetch("/api/escritorio" + visivel, {headers: {"X-Token": TOKEN}, cache: "no-store"});
+    if (!r.ok) return;
+    dados = await r.json();
+    sincronizar();
+    montarBalao(dados.claudinho && dados.claudinho.balao);
+    funcionarios();
+    gaveta();
+  } catch (e) { /* o Claudinho reiniciando: tenta de novo */ }
+}
+
+const ESCADA = ["estagiário", "júnior", "pleno", "sênior"];
+let cargosVistos = {};
+try { cargosVistos = JSON.parse(localStorage.getItem("claudcorp_cargos") || "{}"); } catch (e) {}
+function promocao(g, antes) {   // subiu de cargo (júnior → pleno → sênior): confete e "fui promovido!"
+  const visto = cargosVistos[g.chave] || antes;
+  if (visto && ESCADA.indexOf(g.cargo) > ESCADA.indexOf(visto) && ESCADA.indexOf(visto) >= 1) { g.promovido = performance.now(); som("entrega"); }
+  if (cargosVistos[g.chave] !== g.cargo) {
+    cargosVistos[g.chave] = g.cargo;
+    try { localStorage.setItem("claudcorp_cargos", JSON.stringify(cargosVistos)); } catch (e) {}
+  }
+}
+
+let entregasVistas = null;
+function falarEntregas() {   // relatório novo na gaveta: quem entregou conta, num balão, o que fez (uns 12 s)
+  const lista = dados.relatorios || [];
+  if (entregasVistas === null) { entregasVistas = new Set(lista.map(r => r.id)); return; }
+  for (const r of lista) {
+    if (entregasVistas.has(r.id)) continue;
+    entregasVistas.add(r.id);
+    const g = gente.get(r.chave);
+    if (!g) continue;
+    const limpo = String(r.texto || "").replace(/\s+/g, " ").trim();
+    const frase = (limpo.match(/^.{20,140}?[.!?](\s|$)/) || [limpo.slice(0, 120)])[0].trim();
+    g.entregaFala = (frase.length < limpo.length && !/[.!?]$/.test(frase) ? frase + "…" : frase) || "Entreguei!";
+    g.entregaAte = performance.now() + 12000;
+  }
+}
+
+function sincronizar() {
+  const agora = new Set();
+  const ocupados = {};
+  for (const f of dados.funcionarios) {
+    agora.add(f.chave);
+    let g = gente.get(f.chave);
+    if (!g) {
+      g = {chave: f.chave, x: -26, y: layout ? layout.corredor + (Math.random() * 20 - 10) : H / 2, caminho: [], frente: 1, passo: 0};
+      if (dados.relatorios !== undefined && gente.size) som("porta");
+      gente.set(f.chave, g);
+    }
+    const antes = g.estado, cargoAntes = g.cargo;
+    for (const k of ["fala", "reacao", "atividade_ia"]) delete g[k];   // (o que expirou no servidor não vem mais)
+    Object.assign(g, f, {saindo: false});
+    if (f.estado === "esperando" && antes !== "esperando") g.esperaDesde = Date.now();
+    if (f.estado !== "esperando") g.esperaDesde = 0;
+    promocao(g, cargoAntes);
+    g.sp = dados.sprites[f.chave] || g.sp;   // guarda o rosto: quem vai embora some dos dados
+    if (antes === "trabalhando" && (f.estado === "pronto" || f.estado === "aberta")) g.levando = true;  // vai entregar o relatório
+  }
+  chefe(agora);
+  for (const g of gente.values()) {
+    if (!agora.has(g.chave) && !g.saindo) {   // foi embora (chat fechado / agente que terminou)
+      g.levando = g.estado === "trabalhando";  // agente terminou trabalhando: passa no arquivo antes de sair
+      g.saindo = !g.levando; g.sumir = true; g.estado = "pronto";
+    }
+  }
+  // um lugar por sala, na ordem de chegada (quem já estava sentado continua no mesmo)
+  const porSala = {};
+  for (const g of gente.values()) {
+    const k = g.sala === "reuniao" ? "#reuniao" : g.sala === "mesa" ? "#mesa" : "#outros";
+    (porSala[k] = porSala[k] || []).push(g);
+  }
+  for (const lista of Object.values(porSala)) {
+    const usados = new Set(lista.filter(g => g.lugar !== undefined).map(g => g.lugar));
+    for (const g of lista) if (g.lugar === undefined) { let i = 0; while (usados.has(i)) i++; g.lugar = i; usados.add(i); }
+  }
+  montarLayout();
+  for (const g of gente.values()) rota(g);
+  contagem();
+  falarEntregas();
+}
+
+// ---------- o Claudinho: o chefe, andando pelo escritório ----------
+let visitando = null, visitaDesde = 0;
+function chefe(agora) {
+  const c = dados.claudinho;
+  if (!c) return;
+  agora.add("claudinho");
+  let g = gente.get("claudinho");
+  if (!g) { g = {chave: "claudinho", x: -26, y: layout ? layout.corredor : H / 2, caminho: [], frente: 1}; gente.set("claudinho", g); }
+  Object.assign(g, {nome: "Claudinho", cargo: "chefe", projeto: "ClaudCorp", estado: "chefe", sala: "chefe",
+                    sp: c.sprite, falando: c.falando, balao: c.balao, pensando: c.pensando, lugar: 0,
+                    tarefa: c.balao ? (c.balao.texto || c.balao.titulo || "").slice(0, 120) : "de olho em todo mundo", fazendo: ""});
+}
+
+// a agenda dele: dá uma olhada rápida em alguém (de longe), depois vai fazer as coisas dele
+const agenda = {plano: null, ate: 0, visto: {}};
+function lugarDoChefe() {
+  const agora = performance.now(), g = gente.get("claudinho");
+  const chegou = g && !g.caminho.length;
+  if (agenda.plano && !(chegou && agora > agenda.ate) && !(agenda.plano.alvo && !gente.has(agenda.plano.alvo.chave)))
+    return agenda.plano.ponto;
+  const outros = [...gente.values()].filter(o => o.chave !== "claudinho" && !o.saindo);
+  const esperando = outros.find(o => o.estado === "esperando" && agora - (agenda.visto[o.chave] || 0) > 40000);
+  const trabalhando = outros.filter(o => o.estado === "trabalhando" && agora - (agenda.visto[o.chave] || 0) > 30000);
+  let plano;
+  if (esperando || (trabalhando.length && Math.random() < 0.3)) {   // passa pra ver, a uns passos, e não fica
+    const alvo = esperando || trabalhando[Math.floor(Math.random() * trabalhando.length)];
+    agenda.visto[alvo.chave] = agora;
+    const p = lugarDe(alvo), lado = Math.random() < 0.5 ? -1 : 1;
+    plano = {tipo: "olhar", alvo, ponto: {x: p.x + lado * 70, y: p.y + 40}, dura: 5000};
+  } else {
+    const r = Math.random();
+    if (r < 0.6) {                                    // as coisas dele: café, fliperama, aquário, banco, sofá…
+      const a = ["cafe", "lanche", "fliper", "aquario", "banco", "sofa", "mesa"][Math.floor(Math.random() * 7)];
+      plano = {tipo: "atividade", atividade: a, ponto: pontoDaAtividade(a, {chave: "claudinho"}), dura: 12000 + Math.random() * 10000};
+    } else if (r < 0.8) {                             // dancinha no corredor
+      plano = {tipo: "danca", ponto: {x: W * (0.2 + Math.random() * 0.6), y: layout.corredor + 10}, dura: 6000};
+    } else {                                          // só uma volta por aí
+      plano = {tipo: "volta", ponto: {x: W * (0.1 + Math.random() * 0.8), y: layout.corredor + (Math.random() * 30 - 15)}, dura: 1500};
+    }
+  }
+  agenda.plano = plano;
+  agenda.ate = agora + 1e9;   // o tempo só começa a contar quando ele chegar (no laço)
+  if (g) g.atividade = plano.tipo === "atividade" ? plano.atividade : (plano.tipo === "danca" ? "danca" : null);
+  return plano.ponto;
+}
+
+function salaDe(p) {
+  if (!layout) return null;
+  for (const r of [...Object.values(layout.salas), layout.copa, layout.reuniao, layout.arquivo])
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return r;
+  return null;
+}
+
+function rota(g) {          // sai pela porta da sala, anda pelo corredor e entra pela porta da outra
+  const alvo = lugarDe(g);
+  if (g.alvo && Math.abs(g.alvo.x - alvo.x) < 1 && Math.abs(g.alvo.y - alvo.y) < 1) return;
+  g.alvo = alvo;
+  const cy = layout ? layout.corredor : H / 2;
+  const de = salaDe(g), para = salaDe(alvo);
+  if (de && de === para) { g.caminho = [alvo]; return; }
+  const c = [];
+  if (de) c.push(de.porta.dentro, de.porta.fora);
+  c.push({x: c.length ? c[c.length - 1].x : g.x, y: cy + ((hash(g.chave) % 21) - 10)});   // cada um na sua faixa
+  c.push({x: para ? para.porta.fora.x : alvo.x, y: cy + ((hash(g.chave) % 21) - 10)});
+  if (para) c.push(para.porta.fora, para.porta.dentro);
+  c.push(alvo);
+  g.caminho = c;
+}
+
+function contagem() {
+  const f = dados.funcionarios;   // (o Claudinho, o chefe, não entra na conta)
+  const n = e => f.filter(g => g.estado === e).length;
+  document.getElementById("contagem").innerHTML =
+    `<span><b>${f.length}</b> no escritório</span><span><b>${n("trabalhando")}</b> trabalhando</span>` +
+    `<span><b>${n("esperando")}</b> esperando você</span><span><b>${dados.relatorios.length}</b> relatórios</span>`;
+}
+
+// ---------- desenho ----------
+function bonequinho(c, sp, x, y, opts = {}) {
+  // (x, y) = o pé do bonequinho, no meio
+  if (!sp) return;
+  const s = opts.escala || P, frente = opts.frente || 1, andando = opts.andando, t = opts.t || 0;
+  const ox = Math.round(x - 5.5 * s), oy = Math.round(y - 8 * s) - (andando && t % 2 ? s : 0);
+  const px = (col, lin, cor) => { c.fillStyle = cor; c.fillRect(ox + col * s, oy + lin * s, s, s); };
+  CORPO.forEach((linha, lin) => [...linha].forEach((ch, col) => { if (ch === "X") px(col, lin, sp.corpo); }));
+  const olhos = OLHOS_X[opts.olhando ?? 0];
+  for (const col of olhos) { if (!opts.piscando) px(col, 1, sp.olho); px(col, 2, sp.olho); }
+  for (const [col, lin, cor] of (frente === 1 ? sp.direita : sp.esquerda)) px(col, lin, cor);
+  PERNAS.forEach((col, i) => {
+    const noChao = !andando || i % 2 === t % 2;
+    px(col, 6, noChao || !sp.sapato ? sp.corpo : sp.sapato);
+    if (noChao) px(col, 7, sp.sapato || sp.corpo);
+  });
+}
+
+// ---------- o cenário (piso, paredes, móveis): desenhado uma vez numa tela escondida, só muda com a planta ----------
+const MADEIRA = ["#9a683f", "#8f5f38", "#a37046", "#875933", "#966540"];
+const TAPETES = [["#3f5f73", "#4f7389"], ["#5d4b73", "#705c89"], ["#4c6b4c", "#5e8160"], ["#734b4b", "#8a5c5c"],
+                 ["#6b5a3c", "#82704d"], ["#3c6b68", "#4d8380"]];
+const PAREDE = "#d8cdb9", PAREDE2 = "#c4b79f", RODAPE = "#5e3c22", ALTO_PAREDE = 26;
+let cenario = null, assinaturaCenario = "";
+
+function rnd(semente) { let s = semente >>> 0 || 1; return () => (s = Math.imul(s ^ (s >>> 15), 2246822507) ^ Math.imul(s ^ (s >>> 13), 3266489909), ((s >>>= 0) % 10000) / 10000); }
+function ret(c, x, y, w, h, cor) { c.fillStyle = cor; c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+
+function pisoMadeira(c, x0, y0, w, h) {   // tábuas na horizontal, emendas desencontradas e veio da madeira
+  const alto = 12, sorte = rnd(7);
+  for (let y = y0, linha = 0; y < y0 + h; y += alto, linha++) {
+    let x = x0 - sorte() * 80;
+    while (x < x0 + w) {
+      const comp = 70 + sorte() * 90, cor = MADEIRA[Math.floor(sorte() * MADEIRA.length)];
+      ret(c, x, y, comp, alto, cor);
+      ret(c, x, y + alto - 1, comp, 1, "#6a4426");             // fresta entre as tábuas
+      ret(c, x + comp - 1, y, 1, alto, "#6a4426");             // emenda
+      for (let v = 0; v < 2; v++) ret(c, x + 6 + sorte() * (comp - 20), y + 3 + v * 4, 10 + sorte() * 18, 1, "rgba(60,35,15,.18)");
+      if (sorte() < 0.08) ret(c, x + sorte() * comp, y + 4, 3, 3, "rgba(60,35,15,.25)");   // nó da madeira
+      x += comp;
+    }
+  }
+}
+
+function planta(c, x, y, grande) {   // vasinho com folhas (x, y = base do vaso)
+  const s = grande ? 1.4 : 1;
+  ret(c, x - 7 * s, y - 10 * s, 14 * s, 10 * s, "#b5653f"); ret(c, x - 8 * s, y - 11 * s, 16 * s, 3 * s, "#c97a52");
+  const folhas = [[-9, -22, "#3f8a4a"], [3, -26, "#4f9e57"], [-3, -32, "#5fb466"], [-12, -16, "#4f9e57"],
+                  [6, -18, "#3f8a4a"], [-6, -26, "#3f8a4a"]];
+  for (const [fx, fy, cor] of folhas) ret(c, x + fx * s, y + fy * s, 8 * s, 8 * s, cor);
+}
+
+function ceu() {
+  const h = new Date().getHours();
+  if (clima.tipo === "chuva" || clima.tipo === "trovoada") return h >= 6 && h < 19 ? ["#7d8a99", "#97a3b0", false] : ["#1a2235", "#26304a", true];
+  if (clima.tipo === "nublado" && h >= 6 && h < 19) return ["#a9b8c6", "#c4d0db", false];
+  if (h >= 7 && h < 17) return ["#8fcaf0", "#b6def7", false];
+  if (h >= 17 && h < 19) return ["#e8956a", "#f2c58a", false];
+  if (h >= 5 && h < 7) return ["#c9a3c4", "#f2c58a", false];
+  return ["#1f2a4a", "#2e3d66", true];
+}
+
+function janela(c, x, y, w) {
+  const [cor, claro, noite] = ceu();
+  ret(c, x - 2, y + 2, w + 4, 20, "#7a5233");                                    // moldura de madeira
+  ret(c, x, y + 4, w, 16, "#f1ece2");
+  ret(c, x + 2, y + 6, w - 4, 12, cor); ret(c, x + 2, y + 6, w - 4, 4, claro);
+  if (noite && !clima.tipo.match(/chuva|trovoada/)) { ret(c, x + 6, y + 9, 1, 1, "#fff"); ret(c, x + w - 9, y + 13, 1, 1, "#fff"); ret(c, x + w - 8, y + 8, 3, 3, "#f4efe4"); }
+  if (clima.tipo === "chuva" || clima.tipo === "trovoada") for (let i = 4; i < w - 4; i += 5) ret(c, x + i, y + 8 + (i % 3) * 2, 1, 4, "rgba(220,235,255,.7)");
+  if (clima.tipo === "neve") for (let i = 4; i < w - 4; i += 6) ret(c, x + i, y + 8 + (i % 4) * 2, 2, 2, "#fff");
+  if (clima.tipo === "nublado") { ret(c, x + 4, y + 8, 12, 4, "#eef1f4"); ret(c, x + 8, y + 6, 8, 3, "#eef1f4"); }
+  ret(c, x - 3, y + 19, w + 6, 3, "#9a683f");                                    // parapeito
+  ret(c, x + w / 2 - 1, y + 6, 2, 12, "#f1ece2");
+  ret(c, x + 4, y + 8, 6, 2, "rgba(255,255,255,.7)");          // reflexo
+}
+
+function quadroParede(c, x, y, tipo) {
+  if (tipo === 0) {        // relógio
+    c.fillStyle = "#f1ece2"; c.beginPath(); c.arc(x, y + 12, 7, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#5e3c22"; c.lineWidth = 1.5; c.stroke();
+    ret(c, x - 0.5, y + 7, 1, 5, "#1f1e1d"); ret(c, x, y + 11.5, 4, 1, "#1f1e1d");
+  } else if (tipo === 1) { // quadrinho com paisagem
+    ret(c, x - 10, y + 5, 20, 14, "#5e3c22"); ret(c, x - 8, y + 7, 16, 10, "#9fd3ff");
+    ret(c, x - 8, y + 13, 16, 4, "#5fb466"); ret(c, x + 2, y + 8, 3, 3, "#ffd23f");
+  } else {                 // pôster "SHIP IT"
+    ret(c, x - 9, y + 4, 18, 16, "#d97757"); ret(c, x - 6, y + 8, 12, 2, "#fff4ea"); ret(c, x - 5, y + 12, 10, 2, "#fff4ea");
+  }
+}
+
+function paredes(c, r, titulo) {
+  const pp = r.papel || ["#d8cdb9", "#cfc3ad"];
+  ret(c, r.x, r.y, r.w, ALTO_PAREDE, pp[0]);                           // parede do fundo, com papel listrado
+  for (let x = r.x + 6; x < r.x + r.w; x += 12) ret(c, x, r.y + 4, 5, ALTO_PAREDE - 8, pp[1]);
+  ret(c, r.x, r.y, r.w, 4, "#efe6d6"); ret(c, r.x, r.y + 4, r.w, 1, "#b8ab96");          // moldura de cima
+  ret(c, r.x, r.y + ALTO_PAREDE - 5, r.w, 5, RODAPE); ret(c, r.x, r.y + ALTO_PAREDE - 5, r.w, 1, "#7a5233");   // rodapé
+  const g = c.createLinearGradient(0, r.y + ALTO_PAREDE, 0, r.y + ALTO_PAREDE + 16);   // sombra da parede no chão
+  g.addColorStop(0, "rgba(0,0,0,.28)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  c.fillStyle = g; c.fillRect(r.x, r.y + ALTO_PAREDE, r.w, 16);
+  // paredes dos lados e a da frente vistas de cima: grossas, com o topo claro e a borda escura
+  for (const [x, y, w, h] of [[r.x, r.y, 7, r.h], [r.x + r.w - 7, r.y, 7, r.h], [r.x, r.y + r.h - 7, r.w, 7]]) {
+    ret(c, x, y, w, h, "#e9dfcc"); ret(c, x + (w === 7 ? 6 : 0), y + (h === 7 ? 6 : 0), w === 7 ? 1 : w, h === 7 ? 1 : h, "#9a8c74");
+  }
+  c.fillStyle = "#4a3a2a"; c.font = "700 11px Segoe UI"; c.fillText(titulo, r.x + 12, r.y + 17);
+}
+
+function bloco(c, x, y, w, alto, fundo, topo, frente, lado) {   // móvel com volume: tampo (de cima) e frente
+  c.fillStyle = "rgba(0,0,0,.22)"; c.fillRect(x + 3, y + fundo + alto - 2, w, 5);   // sombra no chão
+  ret(c, x, y, w, fundo, topo); ret(c, x, y + fundo, w, alto, frente);
+  ret(c, x, y + fundo, w, 1, "rgba(255,255,255,.15)");
+  if (lado) ret(c, x + w - 3, y + fundo, 3, alto, lado);
+}
+
+function tapete(c, r, cores, margem = 12, alto = null) {
+  const x = r.x + margem, y = r.y + ALTO_PAREDE + 8, w = r.w - margem * 2;
+  const h = Math.min(alto ?? 1e9, r.h - ALTO_PAREDE - 8 - margem);
+  if (w < 20 || h < 20) return;
+  ret(c, x, y, w, h, cores[1]); ret(c, x + 4, y + 4, w - 8, h - 8, cores[0]);
+  for (let yy = y + 12; yy < y + h - 8; yy += 16)                                // desenho de losangos
+    for (let xx = x + 12 + ((yy - y) / 16 % 2) * 8; xx < x + w - 10; xx += 16) ret(c, xx, yy, 3, 3, "rgba(255,255,255,.08)");
+  for (let i = x + 6; i < x + w - 6; i += 8) { ret(c, i, y - 2, 2, 2, cores[1]); ret(c, i, y + h, 2, 2, cores[1]); }   // franja
+}
+
+function estante(c, x, y) {
+  ret(c, x, y, 26, 40, "#6e4a2c"); ret(c, x + 2, y + 2, 22, 36, "#4a3020");
+  const cores = ["#d97757", "#4f86d9", "#9ccc3c", "#e58fb0", "#d4a72c", "#8e6cc8"], sorte = rnd(x * 31 + y);
+  for (let p = 0; p < 3; p++) {
+    let bx = x + 3;
+    while (bx < x + 22) { const lw = 2 + Math.floor(sorte() * 3); ret(c, bx, y + 4 + p * 12, lw, 9, cores[Math.floor(sorte() * cores.length)]); bx += lw + 1; }
+    ret(c, x + 2, y + 13 + p * 12, 22, 2, "#6e4a2c");
+  }
+}
+
+function puff(c, x, y, cor) {
+  c.fillStyle = "rgba(0,0,0,.2)"; c.beginPath(); c.ellipse(x, y + 3, 13, 6, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = cor; c.beginPath(); c.ellipse(x, y - 4, 12, 9, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "rgba(255,255,255,.18)"; c.beginPath(); c.ellipse(x - 3, y - 7, 5, 3, 0, 0, Math.PI * 2); c.fill();
+}
+
+function luminaria(c, x, y) {   // de pé, com a luzinha
+  ret(c, x - 6, y - 2, 12, 3, "#2e2d2b"); ret(c, x - 1, y - 34, 2, 33, "#2e2d2b");
+  ret(c, x - 8, y - 42, 16, 9, "#f1d89a"); c.fillStyle = "rgba(255,230,150,.12)";
+  c.beginPath(); c.arc(x, y - 30, 22, 0, Math.PI * 2); c.fill();
+}
+
+const PAPEIS = [["#d8cdb9", "#cfc3ad"], ["#c9d3dc", "#bcc8d3"], ["#dccbc4", "#d1bcb3"], ["#d3d8c4", "#c7cdb5"]];
+function salaDeTrabalho(c, r, i) {
+  r.papel = PAPEIS[hash(r.nome) % PAPEIS.length];   // cada sala com o seu papel de parede
+  tapete(c, r, TAPETES[0], 60, Math.max(90, r.h * 0.5));   // tapete debaixo das mesas
+  paredes(c, r, "💻 " + r.nome);
+  const vagas = Math.max(1, Math.floor((r.w - 120) / 90));
+  for (let k = 0; k < vagas; k++) {   // janelas na parede, com um quadro ou relógio entre elas
+    const x = r.x + 110 + k * ((r.w - 130) / vagas);
+    if (k % 2 === 0) janela(c, x, r.y, 36); else quadroParede(c, x + 18, r.y, (k + i) % 3);
+  }
+  planta(c, r.x + 18, r.y + r.h - 8, true);
+  if (r.h > 150) estante(c, r.x + r.w - 34, r.y + ALTO_PAREDE + 6);
+  if (r.w > 220) planta(c, r.x + r.w - 18, r.y + r.h - 8, false);
+  if (r.h > 170) {   // quadro de tarefas (post-its) e cabideiro
+    const qx = r.x + r.w * 0.16, qy = r.y + r.h - 70, notas = ["#ffd23f", "#9ccc3c", "#e58fb0", "#8fcaf0"], sorte = rnd(hash(r.nome));
+    ret(c, qx + 4, qy + 34, 2, 14, "#5e3c22"); ret(c, qx + 46, qy + 34, 2, 14, "#5e3c22");
+    c.fillStyle = "rgba(0,0,0,.2)"; c.fillRect(qx + 2, qy + 46, 50, 4);
+    ret(c, qx, qy, 52, 36, "#7a5233"); ret(c, qx + 2, qy + 2, 48, 32, "#f7f5ef");
+    ret(c, qx + 17, qy + 3, 1, 30, "#d6d0c4"); ret(c, qx + 34, qy + 3, 1, 30, "#d6d0c4");   // colunas: a fazer / fazendo / feito
+    for (let col = 0; col < 3; col++) for (let k = 0; k < 1 + Math.floor(sorte() * 3); k++)
+      ret(c, qx + 4 + col * 17, qy + 5 + k * 9, 10, 7, notas[Math.floor(sorte() * 4)]);
+    const cx = r.x + r.w - 70, cy = r.y + r.h - 22;                               // cabideiro com casaco
+    ret(c, cx - 6, cy, 12, 3, "#4a3020"); ret(c, cx - 1, cy - 40, 2, 40, "#5e3c22");
+    ret(c, cx - 7, cy - 40, 14, 2, "#5e3c22"); ret(c, cx - 9, cy - 38, 7, 18, "#4f86d9"); ret(c, cx + 3, cy - 38, 5, 8, "#d97757");
+  }
+  if (r.h > 200) {   // cantinho de descanso embaixo: pufes, luminária e bebedouro
+    const y = r.y + r.h - 26, cores = ["#d97757", "#4f86d9", "#9ccc3c", "#8e6cc8"];
+    puff(c, r.x + r.w * 0.5, y, cores[i % 4]); puff(c, r.x + r.w * 0.5 + 30, y + 4, cores[(i + 1) % 4]);
+    luminaria(c, r.x + r.w * 0.5 + 58, y + 8);
+    estante(c, r.x + 10, r.y + ALTO_PAREDE + 6);
+    if (r.w > 260) { ret(c, r.x + r.w - 52, y - 22, 12, 24, "#d6dbe0"); ret(c, r.x + r.w - 50, y - 30, 8, 10, "#8fcaf0"); }
+  }
+}
+
+function copa(c, r) {
+  for (let y = r.y + ALTO_PAREDE; y < r.y + r.h; y += 14)             // piso de cerâmica (a copa não é de madeira)
+    for (let x = r.x, k = 0; x < r.x + r.w; x += 14, k++)
+      ret(c, x, y, 14, 14, (k + Math.floor((y - r.y) / 14)) % 2 ? "#e8e2d6" : "#d6cfc1");
+  r.papel = ["#c9dccf", "#bcd1c2"];
+  paredes(c, r, r.nome);
+  const L = r.lazer;
+  const by = r.y + ALTO_PAREDE - 6;
+  bloco(c, L.cafe.x - 30, by, 90, 14, 8, "#9a7a5c", "#7a5a3c", "#5e3c22");       // bancada
+  ret(c, L.cafe.x - 8, by - 14, 16, 20, "#2e2d2b"); ret(c, L.cafe.x - 5, by - 10, 4, 2, "#ff5e4e");   // cafeteira
+  ret(c, L.cafe.x - 4, by + 2, 7, 6, "#f4efe4");                                // caneca
+  ret(c, L.cafe.x + 22, by + 2, 22, 5, "#a9b3bd"); ret(c, L.cafe.x + 31, by - 3, 3, 6, "#c9d1d8");   // pia e torneira
+  bloco(c, r.x + r.w - 30, by - 10, 22, 34, 6, "#f7f9fa", "#e6eaee", "#c9d1d8");   // geladeira
+  ret(c, r.x + r.w - 26, by + 4, 2, 10, "#9aa4ad"); ret(c, r.x + r.w - 26, by + 20, 2, 8, "#9aa4ad");
+  const v = L.lanche;                                                          // máquina de lanches
+  bloco(c, v.x - 14, by - 14, 28, 42, 6, "#c0392b", "#a53125", "#7d241b");
+  ret(c, v.x - 10, by - 4, 17, 26, "#1f2a3a");
+  const cores = ["#f2c94c", "#5fb466", "#e58fb0", "#4f86d9"];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) ret(c, v.x - 8 + j * 5, by - 2 + i * 6, 3, 3, cores[(i + j) % 4]);
+  ret(c, v.x + 9, by + 2, 3, 8, "#f1ece2");
+  const a = L.fliper;                                                          // fliperama
+  bloco(c, a.x - 13, by - 16, 26, 44, 5, "#3f2a6a", "#4f3a86", "#2e1f50");
+  ret(c, a.x - 9, by - 7, 18, 13, "#101018");
+  ret(c, a.x - 10, by + 9, 20, 4, "#2e1f50"); ret(c, a.x - 6, by + 8, 3, 3, "#ff5e4e"); ret(c, a.x + 2, by + 9, 2, 2, "#ffd23f");
+  ret(c, a.x - 11, by - 15, 22, 4, "#ff5e9a");                                  // letreirinho
+  const m = L.mesa;                                                            // mesinha redonda com 2 cadeiras
+  ret(c, m.x - 30, m.y - 6, 9, 12, "#5e3c22"); ret(c, m.x + 22, m.y - 6, 9, 12, "#5e3c22");
+  c.fillStyle = "rgba(0,0,0,.2)"; c.beginPath(); c.ellipse(m.x + 2, m.y + 6, 16, 6, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#7a5a3c"; c.beginPath(); c.arc(m.x, m.y + 2, 15, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#9a7a5c"; c.beginPath(); c.arc(m.x, m.y, 15, 0, Math.PI * 2); c.fill();
+  ret(c, m.x - 5, m.y - 3, 5, 5, "#f4efe4");
+  const sf = L.sofa;                                                           // sofá com almofadas e mesinha de centro
+  bloco(c, sf.x - 50, sf.y - 14, 100, 14, 10, "#7f60a0", "#6e4f8a", "#5a3f73");
+  ret(c, sf.x - 54, sf.y - 16, 6, 26, "#5a3f73"); ret(c, sf.x + 48, sf.y - 16, 6, 26, "#5a3f73");
+  ret(c, sf.x - 42, sf.y - 12, 18, 8, "#a084c4"); ret(c, sf.x + 24, sf.y - 12, 18, 8, "#e58fb0");
+  bloco(c, sf.x - 22, sf.y - 48, 44, 6, 8, "#b0814f", "#8a5a34");                 // mesinha de centro
+  ret(c, sf.x - 6, sf.y - 46, 10, 4, "#4f86d9");                                  // revista
+  planta(c, r.x + 22, r.y + r.h - 12, true);
+}
+
+function reuniao(c, r) {
+  tapete(c, r, ["#3f4a5a", "#556377"], 22);
+  paredes(c, r, r.nome);
+  const qx = r.x + r.w / 2 - 34;                                               // quadro branco com rabiscos
+  ret(c, qx, r.y + 3, 68, 20, "#f7f7f4"); ret(c, qx, r.y + 21, 68, 2, "#9aa4ad");
+  ret(c, qx + 6, r.y + 7, 22, 2, "#4f86d9"); ret(c, qx + 6, r.y + 11, 30, 2, "#d97757"); ret(c, qx + 40, r.y + 7, 2, 12, "#3f8a4a");
+  ret(c, qx + 44, r.y + 13, 16, 2, "#3f8a4a");
+  ret(c, r.x + r.w - 44, r.y + 5, 30, 17, "#1f1e1d"); ret(c, r.x + r.w - 42, r.y + 7, 26, 13, "#2f4f6f");   // TV
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2 + 8, rx = Math.max(10, Math.min(r.w, 180) * 0.26), ry = Math.max(8, Math.min(r.h, 120) * 0.2);
+  for (let k = 0; k < 6; k++) {                                                 // cadeiras em volta
+    const ang = (k / 6) * Math.PI * 2 + 0.4;
+    ret(c, cx + Math.cos(ang) * (rx + 12) - 5, cy + Math.sin(ang) * (ry + 10) - 5, 10, 10, "#2e2d2b");
+  }
+  c.fillStyle = "#7a5233"; c.beginPath(); c.ellipse(cx, cy + 3, rx, ry, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = "#9a683f"; c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); c.fill();
+  ret(c, cx - 6, cy - 4, 5, 6, "#f4efe4"); ret(c, cx + 8, cy - 2, 8, 5, "#f4efe4");   // papéis e caneca
+  planta(c, r.x + r.w - 18, r.y + r.h - 8, false);
+}
+
+function arquivo(c, r) {
+  tapete(c, r, ["#4b4b52", "#5d5d66"], 60, 70);
+  paredes(c, r, r.nome);
+  for (let k = 0; k < 2; k++) {                                                 // armários de gaveta
+    const x = r.x + 12 + k * 46, y = r.y + ALTO_PAREDE;
+    ret(c, x, y, 40, 62, "#7d8792"); ret(c, x, y, 40, 3, "#9aa4ad");
+    for (let g = 0; g < 3; g++) { ret(c, x + 3, y + 5 + g * 19, 34, 16, "#8d97a2"); ret(c, x + 15, y + 11 + g * 19, 10, 3, "#d6dbe0"); }
+  }
+  ret(c, r.x + r.w - 40, r.y + r.h - 34, 26, 20, "#b07d4f"); ret(c, r.x + r.w - 40, r.y + r.h - 26, 26, 3, "#e0c08f");   // caixas
+  ret(c, r.x + r.w - 34, r.y + r.h - 50, 20, 16, "#c08d5f"); ret(c, r.x + r.w - 34, r.y + r.h - 44, 20, 3, "#e0c08f");
+  const ix = r.x + 22, iy = r.y + r.h - 46;                                     // impressora / copiadora
+  bloco(c, ix, iy, 40, 20, 10, "#d6dbe0", "#b8c0c8", "#9aa4ad");
+  ret(c, ix + 6, iy + 2, 28, 5, "#5d6670"); ret(c, ix + 8, iy - 4, 22, 6, "#f7f5ef");
+  ret(c, r.x + r.w - 20, r.y + ALTO_PAREDE + 4, 4, 30, "#2e2d2b"); ret(c, r.x + r.w - 26, r.y + ALTO_PAREDE, 16, 6, "#ffd23f");   // luminária
+}
+
+function montarCenario() {
+  const assinatura = [W, H, vista.zoom, new Date().getHours(), clima.tipo, new Date().getMonth(), ...Object.keys(layout.salas)].join("|");
+  if (cenario && assinatura === assinaturaCenario) return;
+  assinaturaCenario = assinatura;
+  const dpr = window.devicePixelRatio || 1;
+  cenario = document.createElement("canvas");
+  const escala = dpr * vista.zoom;
+  cenario.width = Math.round(W * escala); cenario.height = Math.round(H * escala);
+  const c = cenario.getContext("2d");
+  c.setTransform(escala, 0, 0, escala, 0, 0); c.imageSmoothingEnabled = false;
+  pisoMadeira(c, 0, 0, W, H);
+  logoNoTapete(c, W / 2, layout.corredor);   // no corredor, só o tapete com a logo (o piso de madeira aparece)
+  Object.values(layout.salas).forEach((r, i) => salaDeTrabalho(c, r, i));
+  copa(c, layout.copa); reuniao(c, layout.reuniao); arquivo(c, layout.arquivo);
+  for (const r of [...Object.values(layout.salas), layout.copa, layout.reuniao, layout.arquivo]) portaDa(c, r);
+  entradaDaRua(c);
+  const aq = layout.aquario;                                                   // aquário (os peixes nadam no quadro)
+  bloco(c, aq.x - 40, aq.y - 26, 80, 6, 6, "#3d3b37", "#2e2d2b");
+  ret(c, aq.x - 38, aq.y - 44, 76, 20, "#2a6f8f"); ret(c, aq.x - 38, aq.y - 44, 76, 3, "#9fd3ff");
+  for (let k = 0; k < 5; k++) ret(c, aq.x - 30 + k * 14, aq.y - 30, 3, 6, "#3f8a4a");   // plantinhas do fundo
+  ret(c, aq.x - 38, aq.y - 26, 76, 2, "#d6cfa0");
+  const bc = layout.banco;                                                     // banco do corredor
+  bloco(c, bc.x - 34, bc.y - 10, 68, 6, 6, "#a87648", "#7a5233", "#5e3c22");
+  planta(c, W - 18, layout.corrTopo + layout.corrAlto - 4, true);
+  decoracaoDaEpoca(c);
+}
+
+function portaDa(c, r) {
+  if (r.porta2) portaDa(c, {...r, porta: r.porta2, porta2: null});
+  const px = r.porta.x;
+  if (r.porta.lado === "baixo") {   // sala de trabalho: vão na parede de baixo, com a porta aberta pra dentro
+    ret(c, px - 17, r.y + r.h - 4, 34, 4, "#7a5233");                            // soleira
+    ret(c, px - 20, r.y + r.h - 8, 4, 10, RODAPE); ret(c, px + 16, r.y + r.h - 8, 4, 10, RODAPE);   // batentes
+    ret(c, px - 17, r.y + r.h - 32, 5, 28, "#9a683f"); ret(c, px - 16, r.y + r.h - 31, 3, 26, "#a87648");   // a porta aberta
+    ret(c, px - 13, r.y + r.h - 19, 2, 3, "#e0c08f");                            // maçaneta
+  } else {                          // salas de baixo: porta na parede do fundo (a que dá pro corredor)
+    ret(c, px - 16, r.y + 2, 32, ALTO_PAREDE - 2, "#3a2a1c");                    // o vão escuro
+    ret(c, px - 18, r.y, 3, ALTO_PAREDE, RODAPE); ret(c, px + 15, r.y, 3, ALTO_PAREDE, RODAPE); ret(c, px - 18, r.y, 36, 3, RODAPE);
+    ret(c, px + 18, r.y + 4, 7, ALTO_PAREDE - 6, "#9a683f"); ret(c, px + 20, r.y + 13, 2, 3, "#e0c08f");   // a porta aberta, de lado
+    ret(c, px - 16, r.y + ALTO_PAREDE - 4, 32, 4, "#7a5233");                     // soleira
+  }
+}
+
+function entradaDaRua(c) {   // a porta de vidro da ClaudCorp, na ponta do corredor
+  const y = layout.corredor, alto = Math.min(56, layout.corrAlto - 10);
+  ret(c, 0, y - alto / 2 - 4, 12, alto + 8, RODAPE);
+  ret(c, 2, y - alto / 2, 8, alto, "#8fcaf0"); ret(c, 2, y - 1, 8, 2, "#5e3c22");
+  ret(c, 3, y - alto / 2 + 3, 2, alto / 3, "rgba(255,255,255,.7)");
+  ret(c, 14, y - 16, 22, 32, "#5a6b3c"); ret(c, 16, y - 14, 18, 28, "#71844b");   // capacho
+}
+
+function decoracaoDaEpoca(c) {   // Natal, festa junina e Halloween, pela data de hoje
+  const hoje = new Date(), mes = hoje.getMonth() + 1, dia = hoje.getDate();
+  if (mes === 12) {                                    // árvore de Natal na copa
+    const cp = layout.copa, x = cp.x + cp.w - 40, y = cp.y + cp.h - 14;
+    ret(c, x - 3, y - 6, 6, 6, "#6e4a2c");
+    for (let k = 0; k < 4; k++) ret(c, x - 16 + k * 4, y - 12 - k * 9, 32 - k * 8, 9, ["#2f6b3c", "#3f8a4a", "#2f6b3c", "#3f8a4a"][k]);
+    ret(c, x - 3, y - 54, 6, 6, "#ffd23f");
+  }
+  if (mes === 6 || (mes === 7 && dia <= 31)) {         // bandeirinhas atravessando o corredor
+    const y = layout.corrTopo + 6, cores = ["#e8452c", "#ffd23f", "#4f86d9", "#5fb466", "#e58fb0", "#f28c28"];
+    c.strokeStyle = "#5e3c22"; c.lineWidth = 1; c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+    for (let x = 10, k = 0; x < W; x += 22, k++) { c.fillStyle = cores[k % cores.length];
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x + 12, y); c.lineTo(x + 6, y + 10); c.closePath(); c.fill(); }
+  }
+  if (mes === 10 && dia >= 24) {                       // abóboras na entrada
+    for (const [x, y] of [[30, layout.corrTopo + layout.corrAlto - 6], [50, layout.corrTopo + layout.corrAlto - 4]]) {
+      ret(c, x - 6, y - 8, 12, 8, "#f28c28"); ret(c, x - 1, y - 11, 2, 3, "#3f8a4a");
+      ret(c, x - 4, y - 6, 2, 2, "#2e2d2b"); ret(c, x + 2, y - 6, 2, 2, "#2e2d2b"); ret(c, x - 3, y - 3, 6, 1, "#2e2d2b");
+    }
+  }
+}
+
+function logoNoTapete(c, x, y) {   // a logo da firma estampada na passadeira
+  const alto = Math.max(16, Math.min(26, layout.corrAlto * 0.26));
+  c.save();
+  c.font = `italic 800 ${alto}px 'Segoe UI'`; c.textAlign = "center"; c.textBaseline = "middle";
+  const w = c.measureText("ClaudCorp").width;
+  const tx = x - w / 2 - 26, ty = y - alto * 0.95, tw = w + 52, th = alto * 1.9;
+  c.fillStyle = "rgba(0,0,0,.25)"; c.fillRect(tx + 3, ty + 4, tw, th);                            // sombra no chão
+  c.fillStyle = "#c96b4f";                                                                          // franjinha dos lados
+  for (let k = ty + 3; k < ty + th - 2; k += 4) { c.fillRect(tx - 4, k, 4, 2); c.fillRect(tx + tw, k, 4, 2); }
+  c.fillStyle = "#9c3d3d"; c.fillRect(tx, ty, tw, th);
+  c.fillStyle = "#7a2f2f"; c.fillRect(x - w / 2 - 18, y - alto * 0.75, w + 36, alto * 1.5);       // a moldura bordada
+  c.strokeStyle = "#e0c08f"; c.lineWidth = 2; c.strokeRect(x - w / 2 - 14, y - alto * 0.62, w + 28, alto * 1.24);
+  c.fillStyle = "#5e1f1f"; c.fillText("ClaudCorp", x + 1, y + 2);                                 // sombra do fio
+  c.fillStyle = "#e0c08f"; c.fillText("Claud", x - c.measureText("Corp").width / 2, y);
+  c.fillStyle = "#f2c94c"; c.textAlign = "left"; c.fillText("Corp", x + w / 2 - c.measureText("Corp").width, y);
+  c.restore();
+}
+
+function neon(t) {   // o letreiro da firma, em neon, na parede do corredor (acima da porta da rua)
+  const x = 46, y = layout.corrTopo + Math.min(26, layout.corrAlto * 0.25) - 4;
+  const pisca = (t % 600) > 590 || ((t % 600) > 575 && (t % 600) < 580);   // de vez em quando ele falha, como neon de verdade
+  ctx.save();
+  ctx.font = "italic 800 20px 'Segoe UI'";
+  const w = ctx.measureText("ClaudCorp").width;
+  ctx.fillStyle = "#1a1412"; ctx.fillRect(x - 10, y - 21, w + 20, 27);            // a placa escura atrás
+  ctx.strokeStyle = "#3a2a24"; ctx.lineWidth = 2; ctx.strokeRect(x - 10, y - 21, w + 20, 27);
+  if (!pisca) { ctx.shadowColor = "#ff8a5c"; ctx.shadowBlur = 14 + 3 * Math.sin(t / 25); }
+  ctx.fillStyle = pisca ? "#5a3a30" : "#ffb08a";
+  ctx.fillText("Claud", x, y);
+  if (!pisca) ctx.shadowColor = "#ff5e9a";
+  ctx.fillStyle = pisca ? "#4a2a38" : "#ff9cc4";
+  ctx.fillText("Corp", x + ctx.measureText("Claud").width, y);
+  ctx.restore();
+}
+
+function cadeira(x, y) {   // a cadeira da mesa (atrás de quem senta)
+  ret(ctx, x - 9, y - 26, 18, 14, "#2e2d2b"); ret(ctx, x - 7, y - 24, 14, 10, "#3d3b37");
+  ret(ctx, x - 8, y - 12, 16, 6, "#2e2d2b");
+}
+
+function mesa(m, ocupada, t, projeto) {
+  // a mesa fica NA FRENTE de quem senta (desenhada depois dele): o notebook virado pra ele, a gente vê a tampa
+  ret(ctx, m.x - 2, m.y + 2, 56, 22, "rgba(0,0,0,.18)");                       // sombra
+  ret(ctx, m.x, m.y + 12, 52, 10, "#6e4a2c"); ret(ctx, m.x, m.y, 52, 14, "#b0814f"); ret(ctx, m.x, m.y, 52, 2, "#c9996a");
+  ret(ctx, m.x + 2, m.y + 22, 3, 4, "#4a3020"); ret(ctx, m.x + 47, m.y + 22, 3, 4, "#4a3020");   // pés
+  ret(ctx, m.x + 17, m.y - 8, 18, 11, "#a8a59d");                               // tampa do notebook
+  ret(ctx, m.x + 24, m.y - 4, 4, 3, ocupada ? (t % 30 < 15 ? "#d97757" : "#e58f70") : "#7d7a73");
+  if (ocupada) ret(ctx, m.x + 15, m.y - 10, 22, 2, "rgba(159,211,255,.45)");   // brilho da tela
+  ret(ctx, m.x + 42, m.y + 2, 6, 6, "#f4efe4"); ret(ctx, m.x + 43, m.y + 3, 4, 2, "#5e3c22");   // caneca de café
+  if (projeto) {   // plaquinha do projeto na frente da mesa
+    ctx.font = "600 8px Segoe UI";
+    const nome = projeto.length > 12 ? projeto.slice(0, 11) + "…" : projeto, w = ctx.measureText(nome).width + 6;
+    ret(ctx, m.x + 26 - w / 2, m.y + 13, w, 9, "#2e2d2b"); ctx.fillStyle = "#f2c94c"; ctx.fillText(nome, m.x + 29 - w / 2, m.y + 20);
+  }
+}
+
+function noMundo(e) {   // o ponto do mouse em coordenadas do escritório
+  const b = canvas.getBoundingClientRect();
+  return {x: (e.clientX - b.left - vista.ox) / vista.zoom, y: (e.clientY - b.top - vista.oy) / vista.zoom,
+          tx: e.clientX - b.left, ty: e.clientY - b.top};
+}
+
+function desenhar(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#1c1b19"; ctx.fillRect(0, 0, canvas.width, canvas.height);   // em volta da maquete
+  const z = vista.zoom * vista.dpr;
+  ctx.setTransform(z, 0, 0, z, vista.ox * vista.dpr, vista.oy * vista.dpr);
+  ctx.imageSmoothingEnabled = false;
+  if (!layout) return;
+  montarCenario();
+  ctx.drawImage(cenario, 0, 0, W, H);
+  cenarioVivo(t);
+  if (layout.vazio) {
+    ctx.fillStyle = "rgba(20,19,17,.75)"; ctx.fillRect(W / 2 - 300, 100, 600, 32);
+    ctx.fillStyle = "#ece9e1"; ctx.font = "14px Segoe UI"; ctx.textAlign = "center";
+    ctx.fillText("Ninguém trabalhando agora. Quando um chat do Claude Code começar, ele chega aqui.", W / 2, 121);
+    ctx.textAlign = "left";
+  }
+  for (const r of Object.values(layout.salas)) {
+    const ocupantes = [...gente.values()].filter(g => g.sala === "mesa");
+    const n = Math.max(4, ...ocupantes.map(g => (g.lugar ?? 0) + 1));
+    for (let i = 0; i < n; i++) {   // cadeira atrás; mesa vazia aqui; a ocupada sai junto de quem senta (na frente dele)
+      const a = assento(r, i), g = ocupantes.find(o => o.lugar === i);
+      cadeira(a.x, a.y);
+      if (!sentado(g)) mesa(a.mesa, false, t, g && g.estado !== "trabalhando" ? g.projeto : "");
+    }
+  }
+  const a = layout.arquivo;          // a gaveta de cima abre quando alguém entrega um relatório
+  if ([...gente.values()].some(g => g.entregando)) {
+    ret(ctx, a.x + 13, a.y + ALTO_PAREDE + 19, 42, 10, "#8d97a2"); ret(ctx, a.x + 16, a.y + ALTO_PAREDE + 21, 36, 6, "#e9d8a6");
+  }
+
+  const ordem = [...gente.values()].sort((p, q) => p.y - q.y);
+  for (const g of ordem) {
+    const sp = g.sp || dados.sprites[g.chave];
+    const andando = g.caminho.length > 0;
+    const dancando = !andando && g.chave === "claudinho" && g.atividade === "danca";
+    if (dancando) g.frente = Math.floor(t / 15) % 2 ? 1 : -1;
+    if (!andando && g.chave === "claudinho" && agenda.plano && agenda.plano.tipo === "olhar") g.frente = agenda.plano.alvo.x > g.x ? 1 : -1;
+    bonequinho(ctx, sp, g.x, g.y - (dancando && Math.floor(t / 8) % 2 ? 3 : 0), {frente: g.frente, andando: andando || dancando, t: Math.floor(t / 6) + (hash(g.chave) % 2),
+      olhando: andando || (g.chave === "claudinho" && agenda.plano && agenda.plano.tipo === "olhar") ? g.frente : 0,
+      piscando: (t + hash(g.chave)) % 180 < 4});
+    if (sentado(g)) {
+      mesa(assento(layout.salas.trabalho, g.lugar).mesa, g.estado === "trabalhando", t, g.projeto);
+      if (g.estado === "trabalhando") pensamento(g, t);   // o que ele está fazendo, num balão de pensamento
+    }
+    if (g.estado === "esperando" && !andando) {   // esperando você: "?" na cabeça
+      ctx.fillStyle = "#ffd23f"; ctx.font = "bold 16px Segoe UI"; ctx.textAlign = "center";
+      ctx.fillText("?", g.x, g.y - 32 - (Math.floor(t / 20) % 2) * 2); ctx.textAlign = "left";
+    }
+    if (g.chave === "claudinho" && !g.balao && g.pensando) balaozinho(g, t);
+    if (g.entregaAte > performance.now()) falinha(g, g.entregaFala);   // a entrega dele, na boca dele
+    else if (g.fala && g.chave !== "claudinho" && !andando) falinha(g);
+    reacao(g, t, andando);   // pensando: "..." (o balão de verdade é HTML)
+    if (g.sala === "reuniao" && g.estado === "trabalhando" && !andando) pensamento(g, t);
+    if (!andando && g.atividade && !g.levando && !g.saindo
+        && (g.chave === "claudinho" || !["trabalhando", "esperando"].includes(g.estado))) efeitoDaAtividade(g, t);
+    if (g.levando) {                               // o relatório na mão
+      ctx.fillStyle = "#f4efe4"; ctx.fillRect(g.x + 14 * g.frente - 4, g.y - 14, 8, 10);
+      ctx.fillStyle = "#9b978d"; ctx.fillRect(g.x + 14 * g.frente - 2, g.y - 11, 4, 1);
+    }
+    cracha(g);
+  }
+}
+
+function pensamento(g, t) {
+  const texto = String(g.fazendo || "").trim();
+  if (!texto) {                                       // sem saber o quê: só os pontinhos de digitando
+    for (let i = 0; i < 3; i++) ret(ctx, g.x - 8 + i * 6, g.y - 34 - ((Math.floor(t / 8) + i) % 3 === 0 ? 2 : 0), 3, 3, "#ece9e1");
+    return;
+  }
+  ctx.font = "600 10px Segoe UI";
+  const curto = texto.length > 26 ? texto.slice(0, 25) + "…" : texto;
+  const w = ctx.measureText(curto).width + 14, h = 17;
+  const x = Math.max(4, Math.min(W - w - 4, g.x - w / 2 + 10)), y = g.y - 62 - (Math.floor(t / 40) % 2);
+  ctx.fillStyle = "#f4efe4"; ctx.strokeStyle = "#b8ab96"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill(); ctx.stroke();
+  for (const [dx, dy, r] of [[4, h + 5, 3], [1, h + 11, 2]]) {   // as bolinhas do pensamento, descendo até a cabeça
+    ctx.beginPath(); ctx.arc(g.x + dx, y + dy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.fillStyle = "#3a2f25"; ctx.fillText(curto, x + 7, y + 12);
+}
+
+function reacao(g, t, andando) {
+  const x = g.x, y = g.y - (sentado(g) ? 70 : 40);
+  if (g.reacao === "chuva") {                            // deu ruim: nuvenzinha chovendo em cima dele
+    ret(ctx, x - 12, y - 8, 24, 7, "#7d828c"); ret(ctx, x - 8, y - 12, 14, 5, "#8d929c");
+    for (let i = 0; i < 4; i++) ret(ctx, x - 9 + i * 6, y + ((t / 3 + i * 4) % 12), 1, 3, "#8fcaf0");
+  } else if (g.reacao === "festa" || (g.promovido && performance.now() - g.promovido < 6000)) {   // entregou / promovido
+    const cores = ["#e8452c", "#ffd23f", "#4f86d9", "#5fb466", "#e58fb0"];
+    for (let i = 0; i < 14; i++) {
+      const a = i * 0.9 + t / 12, r = 12 + ((t + i * 7) % 24);
+      ret(ctx, x + Math.cos(a) * r, y + 8 + Math.sin(a) * r * 0.6, 2, 2, cores[i % 5]);
+    }
+    if (g.promovido && performance.now() - g.promovido < 6000) { g.fala = "Fui promovido a " + g.cargo + "! 🎉"; }
+  }
+  if (g.estado === "esperando" && g.esperaDesde && Date.now() - g.esperaDesde > 120000 && !andando && t % 600 < 120) {
+    ctx.fillStyle = "#cfcabe"; ctx.font = "italic 10px Segoe UI"; ctx.fillText("ai ai…", x + 12, y + 6);   // suspirando
+  }
+}
+
+function falinha(g, texto) {   // um balãozinho de fala (a entrega dele, ou o comentário da IA local)
+  ctx.font = "11px Segoe UI";
+  const palavras = String(texto || g.fala).split(" "), linhas = [];
+  let atual = "";
+  for (const p of palavras) { const tenta = atual ? atual + " " + p : p;
+    if (ctx.measureText(tenta).width > 150 && atual) { linhas.push(atual); atual = p; } else atual = tenta; }
+  if (atual) linhas.push(atual);
+  linhas.splice(3);
+  const w = Math.max(...linhas.map(l => ctx.measureText(l).width)) + 14, h = linhas.length * 13 + 9;
+  const x = Math.max(4, Math.min(W - w - 4, g.x - w / 2)), y = g.y - (sentado(g) ? 84 : 48) - h;
+  ctx.fillStyle = "#fffaf0"; ctx.strokeStyle = "#d97757"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.x - 4, y + h); ctx.lineTo(g.x + 4, y + h); ctx.lineTo(g.x, y + h + 6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#3a2f25";
+  linhas.forEach((l, i) => ctx.fillText(l, x + 7, y + 14 + i * 13));
+}
+
+function balaozinho(g, t) {   // pensando: "..."
+  const texto = [".", "..", "..."][Math.floor(t / 20) % 3];
+  ctx.font = "12px Segoe UI";
+  const palavras = texto.split(" "), linhas = [];
+  let atual = "";
+  for (const p of palavras) {
+    const tenta = atual ? atual + " " + p : p;
+    if (ctx.measureText(tenta).width > 190 && atual) { linhas.push(atual); atual = p; } else atual = tenta;
+    if (linhas.length === 3) break;
+  }
+  if (linhas.length < 3 && atual) linhas.push(atual);
+  if (palavras.join(" ").length > linhas.join(" ").length + 1) linhas[linhas.length - 1] += "…";
+  const w = Math.max(...linhas.map(l => ctx.measureText(l).width)) + 16, h = linhas.length * 15 + 10;
+  const x = Math.max(4, Math.min(W - w - 4, g.x - w / 2)), y = g.y - 40 - h;
+  ctx.fillStyle = "#2b2a27"; ctx.strokeStyle = "#d97757"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.x - 5, y + h); ctx.lineTo(g.x + 5, y + h); ctx.lineTo(g.x, y + h + 7); ctx.closePath();
+  ctx.fillStyle = "#d97757"; ctx.fill();
+  ctx.fillStyle = "#ece9e1";
+  linhas.forEach((l, i) => ctx.fillText(l, x + 8, y + 17 + i * 15));
+}
+
+function sentado(g) {
+  return !!g && !g.caminho.length && !g.levando && !g.saindo && g.sala !== "reuniao"
+    && (g.estado === "trabalhando" || g.estado === "esperando");
+}
+
+function cracha(g) {
+  const cor = css(CARGOS[g.cargo] || "--estagiario");
+  ctx.font = "600 11px Segoe UI"; ctx.textAlign = "center";
+  const primeiro = (g.nome || "?").split(" ").slice(0, 2).join(" ");
+  const w = ctx.measureText(primeiro).width + 12;
+  const y = g.y + (sentado(g) ? 18 : 4);   // sentado: o crachá vai pra baixo da mesa
+  ctx.fillStyle = "rgba(20,19,17,.82)"; ctx.fillRect(g.x - w / 2, y, w, 15);
+  ctx.fillStyle = cor; ctx.fillRect(g.x - w / 2, y, 3, 15);
+  ctx.fillStyle = "#ece9e1"; ctx.fillText(primeiro, g.x + 1, y + 11);
+  ctx.textAlign = "left";
+}
+
+// ---------- o balão do Claudinho (o mesmo da tela: Pode/Não, responder, conversa) ----------
+const caixa = document.getElementById("balaoChefe");
+let balaoMontado = "", balaoSumiu = "";
+function montarBalao(b) {
+  const marca = b ? JSON.stringify([b.id, b.texto, b.titulo, b.botoes, b.campo]) : "";
+  if (!b || b.id === balaoSumiu) { caixa.style.display = "none"; balaoMontado = ""; return; }
+  if (marca === balaoMontado) return;   // (não remonta: não perde o que você está digitando)
+  balaoMontado = marca;
+  caixa.innerHTML = `<span class="x" title="fechar">✕</span>${b.titulo ? `<div class="t">${esc(b.titulo)}</div>` : ""}
+    ${b.texto ? `<div class="txt">${esc(b.texto)}</div>` : ""}
+    ${b.campo ? `<div class="campo"><input placeholder="${esc(b.dica || "escreve aqui…")}"><button class="p">↵</button></div>` : ""}
+    ${b.botoes.length ? `<div class="bts">${b.botoes.map((x, i) => `<button data-i="${i}" class="${x.principal ? "p" : ""}">${esc(x.rotulo)}</button>`).join("")}</div>` : ""}`;
+  caixa.classList.toggle("so-botoes", !b.texto && !b.titulo && !b.campo);
+  caixa.style.display = "block";
+  caixa.querySelector(".x").onclick = () => mandar({id: b.id, fechar: true});
+  caixa.querySelectorAll(".bts button").forEach(el => el.onclick = () => mandar({id: b.id, botao: +el.dataset.i}));
+  const campo = caixa.querySelector("input");
+  if (campo) {
+    const enviar = () => { const v = campo.value.trim(); if (v) mandar({id: b.id, texto: v}); };
+    campo.onkeydown = e => { if (e.key === "Enter") enviar(); };
+    caixa.querySelector(".campo button").onclick = enviar;
+    campo.focus();
+  }
+}
+async function mandar(corpo) {
+  balaoSumiu = corpo.id; caixa.style.display = "none"; balaoMontado = "";
+  try {
+    await fetch("/api/escritorio/balao", {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+                                         body: JSON.stringify(corpo)});
+  } catch (e) { /* o Claudinho reiniciando */ }
+  setTimeout(buscar, 300);
+}
+function posicionarBalao() {
+  const g = gente.get("claudinho");
+  if (!g || caixa.style.display === "none") return;
+  const w = caixa.offsetWidth, h = caixa.offsetHeight;
+  const gx = vista.ox + g.x * vista.zoom, gy = vista.oy + g.y * vista.zoom;   // ele na tela (com o zoom)
+  const x = Math.max(6, Math.min(vista.cw - w - 6, gx - w / 2));
+  let y = gy - 30 * vista.zoom - 12 - h, embaixo = false;
+  if (y < 6) { y = gy + 18 * vista.zoom; embaixo = true; }   // sem espaço em cima: vai pra baixo dele
+  caixa.classList.toggle("embaixo", embaixo);
+  caixa.style.left = x + "px"; caixa.style.top = y + "px";
+  caixa.style.setProperty("--cauda", Math.max(16, Math.min(w - 16, gx - x)) + "px");
+}
+
+// ---------- andar ----------
+let antes = performance.now(), quadro = 0;
+function laco(agora) {
+  requestAnimationFrame(laco);   // (primeiro: um quadro com erro não para a animação)
+  if (!vista.cw) ajustar();
+  if (!W || !H || !vista.cw) return;
+  const dt = Math.min(0.1, (agora - antes) / 1000); antes = agora; quadro++;
+  if (quadro % 9 === 0 && [...gente.values()].some(g => sentado(g) && g.estado === "trabalhando") && Math.random() < 0.5) som("tecla");
+  const ch = gente.get("claudinho");
+  if (ch && !ch.caminho.length && agenda.plano && agenda.ate > performance.now() + 1e8) agenda.ate = performance.now() + agenda.plano.dura;
+  if (ch && !ch.caminho.length && quadro % 20 === 0) rota(ch);
+  if (quadro % 120 === 0) for (const g of gente.values()) if (!g.caminho.length && !g.levando && !g.saindo) rota(g);
+  for (const g of [...gente.values()]) {
+    if (g.caminho.length) {
+      const p = g.caminho[0], dx = p.x - g.x, dy = p.y - g.y, d = Math.hypot(dx, dy), passo = VEL * dt;
+      if (Math.abs(dx) > 1) g.frente = dx > 0 ? 1 : -1;
+      if (d <= passo) { g.x = p.x; g.y = p.y; g.caminho.shift(); } else { g.x += dx / d * passo; g.y += dy / d * passo; }
+    } else if (g.levando) {   // chegou no arquivo: abre a gaveta, guarda, e segue
+      if (!g.entregando) { g.entregando = agora; destacar(g.chave); som("entrega"); }
+      else if (agora - g.entregando > 900) {
+        g.entregando = 0; g.levando = false; g.alvo = null;
+        if (g.sumir) g.saindo = true;
+        rota(g);
+      }
+    } else if (g.emCasa && !g.saindo && g.x < -10) {
+      // em casa: fica fora da tela até ter trabalho
+    } else if (g.saindo && g.x < -10) {
+      gente.delete(g.chave);
+    }
+  }
+  desenhar(quadro);
+  posicionarBalao();
+}
+
+// ---------- gaveta (sidebar) ----------
+function quandoFoi(seg) {
+  const d = dados.agora - seg;
+  if (d < 60) return "agora há pouco";
+  if (d < 3600) return `há ${Math.round(d / 60)} min`;
+  if (d < 86400) return `há ${Math.round(d / 3600)} h`;
+  return new Date(seg * 1000).toLocaleDateString("pt-BR");
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+// ---------- lateral: abas ----------
+document.querySelectorAll(".abas button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".abas button").forEach(x => x.classList.toggle("on", x === b));
+  for (const id of ["funcs", "gaveta", "cel"]) document.getElementById(id).hidden = b.dataset.aba !== id;
+  if (b.dataset.aba === "cel") celular();
+});
+
+// ---------- aba Celular: liga o mini servidor e mostra o QR code ----------
+if (window.CELULAR) {   // esta é a tela aberta no celular
+  document.body.classList.add("no-celular");
+  if (!window.CELULAR.acoes) document.body.classList.add("so-olhar");
+}
+async function celular(acao) {
+  let e = {ligado: false};
+  try {
+    e = await (await fetch("/api/escritorio/celular", {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+      body: JSON.stringify({acao: acao || "estado", acoes: document.getElementById("celAcoes").checked})})).json();
+  } catch (err) { e = {ligado: false, erro: "o Claudinho não respondeu"}; }
+  const st = document.getElementById("celStatus"), qr = document.getElementById("celQr"), bt = document.getElementById("celBotao");
+  st.classList.toggle("on", !!e.ligado);
+  st.textContent = e.ligado ? `Ligado até ${new Date(e.ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"})}` +
+    (e.acoes ? " · o celular pode responder" : " · o celular só olha") : (e.erro ? "Não deu pra ligar: " + e.erro : "Desligado.");
+  qr.hidden = !e.ligado; qr.innerHTML = e.ligado ? e.qr : "";
+  document.getElementById("celUrl").textContent = e.ligado ? e.url : "";
+  const cod = document.getElementById("celCodigo");
+  cod.hidden = !e.ligado;
+  cod.innerHTML = e.ligado ? `<small>código pra digitar no celular</small><b>${esc(String(e.codigo).replace(/(\d{3})(\d{3})/, "$1 $2"))}</b>
+    <small>${e.aparelhos ? `${e.aparelhos} aparelho(s) entraram` : "ninguém entrou ainda"}</small>` : "";
+  bt.textContent = e.ligado ? "Desligar" : "Ligar"; bt.classList.toggle("desligar", !!e.ligado);
+  if (e.ligado) document.getElementById("celAcoes").checked = !!e.acoes;
+}
+document.getElementById("celBotao").onclick = () =>
+  celular(document.getElementById("celBotao").textContent === "Ligar" ? "ligar" : "desligar");
+document.getElementById("celAcoes").onchange = () => {   // mudou a permissão com ele ligado: liga de novo (chave nova)
+  if (document.getElementById("celBotao").textContent === "Desligar") celular("ligar");
+};
+
+const ESTADOS = {trabalhando: "trabalhando", esperando: "esperando você", pronto: "terminou", aberta: "à toa", parada: "parado"};
+let ultimoFuncs = null, ultimasAbertas = new Set();
+function escrevendoEm(seletor) {
+  const a = document.activeElement;
+  return a && a.tagName === "INPUT" && a.closest(seletor) && a.value;
+}
+
+const cards = new Map();   // chave → o card dele (atualizado no lugar: o campo de mensagem nunca é recriado)
+function funcionarios() {   // aba Funcionários: os chats (e os agentes de agora), com a última resposta e o campo
+  const ordem = {esperando: 0, trabalhando: 1, pronto: 2, aberta: 3, parada: 4};
+  const lista = [...dados.funcionarios].sort((a, b) => (ordem[a.estado] ?? 5) - (ordem[b.estado] ?? 5) || (a.sid ? 0 : 1) - (b.sid ? 0 : 1));
+  const ultima = {};
+  for (const r of dados.relatorios || []) if (!(r.chave in ultima)) ultima[r.chave] = r;
+  document.getElementById("qf").textContent = lista.length ? `(${lista.length})` : "";
+  const caixa = document.getElementById("funcs");
+  const vazio = caixa.querySelector(".vazio");
+  if (!lista.length) {
+    for (const el of cards.values()) el.remove();
+    cards.clear();
+    if (!vazio) caixa.innerHTML = '<div class="vazio">Ninguém no escritório agora.<br>Quando um chat do Claude Code abrir, ele aparece aqui.</div>';
+    return;
+  }
+  if (vazio) vazio.remove();
+  const presentes = new Set(lista.map(f => f.chave));
+  for (const [chave, el] of cards) if (!presentes.has(chave)) { el.remove(); cards.delete(chave); }
+  const focado = document.activeElement && document.activeElement.closest && document.activeElement.closest(".func");
+  lista.forEach((f, i) => {
+    let el = cards.get(f.chave);
+    if (!el) { el = novoCard(f); cards.set(f.chave, el); }
+    el.dados = f;
+    atualizarCard(el, f, ultima[f.chave]);
+    if (!focado && caixa.children[i] !== el) caixa.insertBefore(el, caixa.children[i] || null);   // (não mexe na ordem com você escrevendo)
+    else if (!el.parentNode) caixa.appendChild(el);
+  });
+}
+
+function novoCard(f) {
+  const el = document.createElement("div");
+  el.className = "func";
+  el.innerHTML = `<div class="topo"><canvas width="33" height="30"></canvas><div><div class="quem"></div></div>
+      <span class="estado"></span></div>
+    <div class="onde"></div><div class="faz"></div><div class="pedido" hidden></div><div class="ultima"></div>
+    ${f.sid ? `<div class="resp"><input><button title="mandar">↵</button></div><div class="dica2"></div>` : ""}`;
+  bonequinho(el.querySelector("canvas").getContext("2d"), dados.sprites[f.chave], 16.5, 28, {escala: 2.4});
+  const ult = el.querySelector(".ultima");
+  ult.onclick = () => { if (ult.classList.contains("nada")) return; ult.classList.toggle("aberta");
+    ultimasAbertas[ult.classList.contains("aberta") ? "add" : "delete"](el.dados.chave); };
+  const campo = el.querySelector(".resp input");
+  if (campo) {
+    campo.placeholder = `mensagem pra ${(f.nome || "?").split(" ")[0]}…`;
+    const enviar = async () => {
+      const v = campo.value.trim();
+      if (!v || campo.disabled) return;
+      campo.disabled = true;
+      const dica = el.querySelector(".dica2");
+      dica.textContent = "mandando…";
+      const r = await mensagem({sid: el.dados.sid, texto: v});
+      campo.disabled = false;
+      if (r && r.status === "agora") { campo.value = ""; dica.textContent = "✓ mandei: ele já está trabalhando nisso"; }
+      else if (r && r.status === "fila") { campo.value = ""; dica.textContent = "📌 recado entregue no próximo passo dele"; }
+      else { dica.textContent = "⚠ não consegui mandar (o Claudinho não respondeu). Tenta de novo."; campo.focus(); }
+      el.mensagemAte = Date.now() + 6000;   // segura essa dica uns segundos
+    };
+    campo.onfocus = () => { if (el.dados.esperando_resposta) mensagem({sid: el.dados.sid, comecou: true}); };
+    campo.onkeydown = e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); enviar(); } };
+    el.querySelector(".resp button").onclick = enviar;
+  }
+  return el;
+}
+
+function atualizarCard(el, f, r) {
+  const cor = css(CARGOS[f.cargo] || "--estagiario");
+  el.classList.toggle("espera", !!f.esperando_resposta);
+  const quem = `${esc(f.nome)} <span class="tag" style="background:${cor}">${esc(f.cargo)}</span>`;
+  if (el.querySelector(".quem").innerHTML !== quem) el.querySelector(".quem").innerHTML = quem;
+  const estado = el.querySelector(".estado");
+  estado.className = "estado " + f.estado; estado.textContent = ESTADOS[f.estado] || f.estado;
+  const onde = el.querySelector(".onde"), assunto = f.assunto || f.tarefa || "";
+  onde.textContent = `📂 ${f.projeto}${assunto ? " · 💬 " + assunto : ""}`; onde.title = assunto;
+  const faz = el.querySelector(".faz");
+  faz.textContent = f.estado === "trabalhando" && f.fazendo ? "⚙️ " + f.fazendo : ""; faz.style.display = faz.textContent ? "" : "none";
+  const ult = el.querySelector(".ultima"), texto = r ? r.texto : "ainda não respondeu nada";
+  if (ult.textContent !== texto) ult.textContent = texto;
+  ult.classList.toggle("nada", !r);
+  ult.classList.toggle("aberta", !!r && ultimasAbertas.has(f.chave));
+  const ped = el.querySelector(".pedido"), marcaPed = f.pedido ? f.pedido.id + f.pedido.texto : "";
+  if (ped.dataset.marca !== marcaPed) {   // esperando você: a pergunta e as opções aqui mesmo
+    ped.dataset.marca = marcaPed;
+    ped.hidden = !f.pedido;
+    if (f.pedido) {
+      ped.innerHTML = `<div class="pq">${f.pedido.tipo === "pergunta" ? "❓" : "🔐"} ${esc(f.pedido.texto)}</div>
+        <div class="po">${f.pedido.opcoes.map((o, i) => `<button class="${i === 0 && f.pedido.tipo === "permissao" ? "p" : ""}"
+          data-o="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+      ped.querySelectorAll("button").forEach(b => b.onclick = async () => {
+        ped.querySelectorAll("button").forEach(x => x.disabled = true);
+        try {
+          await fetch("/api/escritorio/pedido", {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+                                                 body: JSON.stringify({id: f.pedido.id, opcao: b.dataset.o})});
+        } catch (e) {}
+        ped.innerHTML = '<div class="pq">✓ respondido</div>';
+        setTimeout(buscar, 400);
+      });
+    }
+  }
+  const dica = el.querySelector(".dica2");
+  if (dica && !f.pedido && f.estado === "esperando" && !(el.mensagemAte > Date.now())) {
+    dica.textContent = "⚠ esse pedido está só no app (o balão já desistiu): abre o chat pra responder";
+  } else if (dica && !(el.mensagemAte > Date.now())) {
+    dica.textContent = f.esperando_resposta ? "↩ está esperando você: a mensagem vai na hora"
+      : f.recados ? `📌 ${f.recados} recado${f.recados > 1 ? "s" : ""} esperando o próximo passo dele`
+      : f.estado === "trabalhando" ? "trabalhando: a mensagem chega no próximo passo dele"
+      : "parado: a mensagem vai quando ele terminar a próxima resposta (mexa nele no app)";
+  }
+}
+
+async function mensagem(corpo) {
+  try {
+    const r = await fetch("/api/escritorio/mensagem", {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+                                                      body: JSON.stringify(corpo)});
+    setTimeout(buscar, 400);
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+
+function gaveta() {   // aba Relatórios: tudo o que todo mundo entregou (o que você pediu e o que ele respondeu)
+  const lista = dados.relatorios || [];
+  const marca = lista.map(r => r.id).join(",");
+  document.getElementById("qtd").textContent = lista.length ? `(${lista.length})` : "";
+  if (marca === ultimoRel) {    // só atualiza o "há x min"
+    document.querySelectorAll(".rel .quando").forEach(el => el.textContent = quandoFoi(+el.dataset.q));
+    return;
+  }
+  const primeiraVez = vistosRel === null;
+  vistosRel = vistosRel || new Set(lista.map(r => r.id));
+  ultimoRel = marca;
+  const g = document.getElementById("gaveta");
+  if (!lista.length) return;
+  g.innerHTML = "";
+  for (const r of lista) {
+    const novo = !primeiraVez && !vistosRel.has(r.id);
+    const el = document.createElement("div");
+    el.className = "rel" + (novo ? " novo" : "") + (abertos.has(r.id) ? " aberto" : "");
+    el.dataset.chave = r.chave;
+    const cor = css(CARGOS[r.cargo] || "--estagiario");
+    const chat = r.chave.startsWith("chat:");
+    el.innerHTML = `<div class="topo"><canvas width="33" height="30"></canvas><div><div class="quem">${esc(r.nome)}
+      <span class="tag" style="background:${cor}">${esc(r.cargo)}</span></div>
+      <div class="meta">${esc(r.projeto)} · <span class="quando" data-q="${r.quando}">${quandoFoi(r.quando)}</span></div></div></div>
+      ${r.titulo ? `<div class="pediu"><b>${chat ? "você pediu" : "tarefa"}:</b> ${esc(r.titulo)}</div>` : ""}
+      <div class="texto">${esc(r.texto)}</div>`;
+    bonequinho(el.querySelector("canvas").getContext("2d"), dados.sprites[r.chave], 16.5, 28, {escala: 2.4});
+    el.onclick = () => { el.classList.toggle("aberto"); el.classList.remove("novo");
+      abertos[el.classList.contains("aberto") ? "add" : "delete"](r.id); vistosRel.add(r.id); };
+    g.appendChild(el);
+  }
+}
+function destacar(chave) {
+  const el = document.querySelector(`.rel[data-chave="${CSS.escape(chave)}"]`);
+  if (el) { el.classList.add("novo"); el.scrollIntoView({block: "nearest", behavior: "smooth"}); }
+}
+
+// ---------- janelas (modal) ----------
+const modal = document.getElementById("modal");
+function abrirModal(titulo, html) {
+  modal.querySelector("h3").textContent = titulo;
+  modal.querySelector(".corpo").innerHTML = html;
+  modal.hidden = false;
+  return modal.querySelector(".corpo");
+}
+modal.querySelector(".fechar").onclick = () => modal.hidden = true;
+modal.onclick = e => { if (e.target === modal) modal.hidden = true; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") modal.hidden = true; });
+function duracao(seg) {
+  seg = Math.max(0, Math.round(seg || 0));
+  if (seg < 60) return seg + " s";
+  if (seg < 3600) return Math.round(seg / 60) + " min";
+  return Math.floor(seg / 3600) + " h " + String(Math.round(seg % 3600 / 60)).padStart(2, "0");
+}
+
+async function abrirFicha(chave) {
+  if (chave === "claudinho") {
+    return abrirModal("Claudinho, o chefe", `<div class="ficha-topo"><canvas width="66" height="60"></canvas><div>
+      É o Claude Code deste PC, com cara de mascote. Anda pelo escritório de olho em todo mundo, toma café e,
+      quando alguém espera você, vai lá primeiro.</div></div>`), desenharFichaSprite(dados.claudinho.sprite);
+  }
+  const f = dados.funcionarios.find(x => x.chave === chave) || {}, rel = (dados.relatorios || []).find(r => r.chave === chave) || {};
+  const nome = f.nome || rel.nome || "?", cargo = f.cargo || rel.cargo || "";
+  let ficha = {relatorios: [], entregas: 0};
+  try { ficha = await (await fetch("/api/escritorio/ficha?chave=" + encodeURIComponent(chave), {headers: {"X-Token": TOKEN}})).json(); } catch (e) {}
+  const arquivos = [...new Set(ficha.relatorios.flatMap(r => r.mexeu || []))].slice(0, 30);
+  abrirModal(nome, `<div class="ficha-topo"><canvas width="66" height="60"></canvas><div>
+      <div><span class="tag" style="background:${css(CARGOS[cargo] || "--estagiario")}">${esc(cargo)}</span>
+        ${f.estado ? ` · ${esc(ESTADOS[f.estado] || f.estado)}` : " · foi embora"}</div>
+      <div style="margin-top:4px;color:var(--apagado);font-size:12px">📂 ${esc(f.projeto || rel.projeto || "?")}
+        ${f.assunto ? ` · 💬 ${esc(f.assunto)}` : ""}</div>
+      ${f.fazendo && f.estado === "trabalhando" ? `<div style="margin-top:4px;font-size:12px">⚙️ ${esc(f.fazendo)}</div>` : ""}</div></div>
+    <div class="numeros">
+      <div><b>${ficha.entregas}</b><span>entregas</span></div>
+      <div><b>${f.trabalhou_s !== undefined ? duracao(f.trabalhou_s) : "—"}</b><span>trabalhou hoje</span></div>
+      <div><b>${f.casa_s !== undefined ? duracao(f.casa_s) : "—"}</b><span>de casa</span></div>
+      <div><b>${arquivos.length}</b><span>arquivos mexidos</span></div></div>
+    ${arquivos.length ? `<div class="chips">${arquivos.map(a => `<span title="${esc(a)}">${esc(a.split(/[\\/]/).pop())}</span>`).join("")}</div>` : ""}
+    <h4 style="margin:14px 0 4px">Entregas</h4>
+    ${ficha.relatorios.map(r => `<div class="entrega"><div class="t">${esc(r.titulo || "(sem pedido)")}</div>
+      <div class="q">${quandoFoi(r.quando)}</div><div class="x">${esc(r.texto)}</div>
+      ${(r.mexeu || []).length ? `<div class="chips">${r.mexeu.map(a => `<span>${esc(a.split(/[\\/]/).pop())}</span>`).join("")}</div>` : ""}</div>`).join("")
+      || '<div class="vazio">Nenhuma entrega na gaveta ainda.</div>'}
+    <div style="color:var(--apagado);font-size:11px;margin-top:8px">O custo em dinheiro de cada chat não chega pelos ganchos do Claude Code: esse fica no próprio app.</div>`);
+  desenharFichaSprite(dados.sprites[chave]);
+}
+function desenharFichaSprite(sp) {
+  const c = modal.querySelector(".ficha-topo canvas");
+  if (c && sp) bonequinho(c.getContext("2d"), sp, 33, 56, {escala: 5});
+}
+
+const CORES_POSTIT = {fazer: "#ffd23f", fazendo: "#8fcaf0", feito: "#9ccc3c"};
+function abrirQuadro() {
+  const q = dados.quadro || {fazer: [], fazendo: [], feito: []};
+  const col = (id, titulo, lista, vazio) => `<div class="col"><h4>${titulo} <small style="color:var(--apagado)">(${lista.length})</small></h4>
+    ${lista.map(t => `<div class="postit" style="background:${CORES_POSTIT[id]}"><b>${esc(t.nome)}</b>${esc(t.texto || "…")}</div>`).join("")
+      || `<div class="vazio" style="padding:10px 0">${vazio}</div>`}</div>`;
+  const reuniao = (dados.reuniao || []).map(g => `<div class="entrega"><div class="t">🤝 ${esc(g.pedido)}</div>
+    <div class="q">${esc(g.estado)} · branch ${esc(g.branch)}</div>
+    <div class="chips">${g.partes.map(p => `<span>${esc(p.titulo)}: ${esc(p.estado)}</span>`).join("")}</div></div>`).join("");
+  abrirModal("📋 Quadro de tarefas", `<div class="kanban">
+    ${col("fazer", "A fazer", q.fazer, "nenhum recado na fila")}
+    ${col("fazendo", "Fazendo", q.fazendo, "ninguém trabalhando")}
+    ${col("feito", "Feito", q.feito, "nada entregue ainda")}</div>
+    ${reuniao ? `<h4 style="margin:14px 0 4px">Na sala de reunião</h4>${reuniao}` : ""}`);
+}
+
+function abrirTrofeus() {
+  const f = dados.firma || {conquistas: [], entregas: 0};
+  const dm = f.do_mes;
+  abrirModal("🏆 Conquistas da firma", `<div class="numeros" style="grid-template-columns:repeat(3,1fr)">
+      <div><b>${f.entregas}</b><span>entregas no total</span></div>
+      <div><b>${f.conquistas.filter(c => c.quando).length}/${f.conquistas.length}</b><span>conquistas</span></div>
+      <div><b>${dm ? esc(dm.nome.split(" ")[0]) : "—"}</b><span>funcionário do mês${dm ? ` (${dm.entregas})` : ""}</span></div></div>
+    ${f.conquistas.map(c => `<div class="trofeu ${c.quando ? "" : "nao"}"><div class="i">${c.quando ? "🏆" : "🔒"}</div>
+      <div><b>${esc(c.nome)}</b><small>${esc(c.como)}${c.quando ? " · " + new Date(c.quando * 1000).toLocaleDateString("pt-BR") : ""}</small></div></div>`).join("")}`);
+}
+
+function abrirNovaTarefa() {
+  const projetos = dados.projetos_conhecidos || [];
+  const corpo = abrirModal("➕ Nova tarefa", `<div class="form">
+    <div style="color:var(--apagado);font-size:12px">Um freela faz sozinho, num worktree separado (não mexe no seu trabalho).
+      Quando o chat do projeto está aberto, ele começa com a conversa dele. Mandar daqui é o seu "Pode".</div>
+    <label>Projeto</label><select id="nProjeto">${projetos.map(p => `<option>${esc(p)}</option>`).join("")}</select>
+    <label>O que fazer</label><input id="nPedido" placeholder="ex.: implementar a tela de login">
+    <label>Plano (passos, o que é pronto, o que não mexer)</label><textarea id="nPlano" placeholder="1. ...&#10;2. ...&#10;Pronto = testes passando."></textarea>
+    <label>Em partes, ao mesmo tempo? (opcional: uma por linha, "título: o que fazer")</label>
+    <textarea id="nPartes" placeholder="front: a tela&#10;back: a API"></textarea>
+    <div class="acoes"><span class="resultado"></span><button id="nContratar">Contratar</button></div></div>`);
+  corpo.querySelector("#nContratar").onclick = async () => {
+    const pedido = corpo.querySelector("#nPedido").value.trim(), plano = corpo.querySelector("#nPlano").value.trim();
+    const partes = corpo.querySelector("#nPartes").value.split("\n").map(l => l.trim()).filter(Boolean)
+      .map(l => { const i = l.indexOf(":"); return i > 0 ? {titulo: l.slice(0, i).trim(), plano: l.slice(i + 1).trim()} : null; })
+      .filter(Boolean);
+    const res = corpo.querySelector(".resultado");
+    if (!pedido || (!plano && partes.length < 2)) { res.textContent = "Falta o que fazer e o plano (ou pelo menos 2 partes)."; return; }
+    res.textContent = "contratando…";
+    try {
+      const r = await (await fetch("/api/escritorio/tarefa", {method: "POST", headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+        body: JSON.stringify({projeto: corpo.querySelector("#nProjeto").value, pedido, plano, partes})})).json();
+      res.textContent = r.texto;
+    } catch (e) { res.textContent = "O Claudinho não respondeu."; }
+  };
+}
+
+function abrirAjustes() {
+  const corpo = abrirModal("⚙️ Ajustes do escritório", `<div class="form">
+    <label><input type="checkbox" id="aSom" style="width:auto"> Sons do escritório (porta, entrega, teclado baixinho)</label>
+    <label>Cidade pro clima na janela (vazio = sem clima de verdade)</label>
+    <input id="aCidade" placeholder="ex.: Curitiba">
+    <div style="color:var(--apagado);font-size:11px;margin-top:6px">Com a cidade preenchida, o escritório consulta o
+      Open-Meteo (grátis, sem cadastro) só com o nome da cidade, a cada 15 min, pra saber se está chovendo.</div>
+    <div class="acoes"><span class="resultado"></span><button id="aSalvar">Salvar</button></div></div>`);
+  corpo.querySelector("#aSom").checked = ajustes.som;
+  corpo.querySelector("#aCidade").value = ajustes.cidade || "";
+  corpo.querySelector("#aSalvar").onclick = () => {
+    ajustes.som = corpo.querySelector("#aSom").checked;
+    ajustes.cidade = corpo.querySelector("#aCidade").value.trim();
+    try { localStorage.setItem("claudcorp_ajustes", JSON.stringify(ajustes)); } catch (e) {}
+    clima.atualizado = 0; buscarClima();
+    corpo.querySelector(".resultado").textContent = "salvo ✓";
+  };
+}
+document.getElementById("bNova").onclick = abrirNovaTarefa;
+document.getElementById("bQuadro").onclick = abrirQuadro;
+document.getElementById("bTrofeus").onclick = abrirTrofeus;
+document.getElementById("bAjustes").onclick = abrirAjustes;
+
+// ---------- clicar no salão: ficha de quem você clicou, ou o quadro de tarefas ----------
+canvas.addEventListener("click", e => {
+  const {x, y} = noMundo(e);
+  const g = [...gente.values()].find(g => Math.abs(g.x - x) < 18 && y > g.y - 30 && y < g.y + 18);
+  if (g) return abrirFicha(g.chave);
+  const q = layout && layout.quadroRect;
+  if (q && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) abrirQuadro();
+});
+
+// ---------- ajustes, sons (sintetizados, sem arquivo) e clima ----------
+let ajustes = {som: false, cidade: ""};
+try { Object.assign(ajustes, JSON.parse(localStorage.getItem("claudcorp_ajustes") || "{}")); } catch (e) {}
+let audio = null;
+function som(tipo) {
+  if (!ajustes.som) return;
+  try {
+    audio = audio || new AudioContext();
+    const t0 = audio.currentTime, o = audio.createOscillator(), g = audio.createGain();
+    o.connect(g); g.connect(audio.destination);
+    const notas = {porta: [[660, 0], [880, 0.12]], entrega: [[988, 0], [1318, 0.1]], tecla: [[1800, 0]]}[tipo] || [[440, 0]];
+    o.type = tipo === "tecla" ? "square" : "sine";
+    notas.forEach(([f, dt]) => o.frequency.setValueAtTime(f, t0 + dt));
+    const vol = tipo === "tecla" ? 0.008 : 0.06, fim = tipo === "tecla" ? 0.02 : 0.35;
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + fim);
+    o.start(t0); o.stop(t0 + fim + 0.02);
+  } catch (e) {}
+}
+const clima = {tipo: "", atualizado: 0};
+async function buscarClima() {
+  if (!ajustes.cidade) { if (clima.tipo) { clima.tipo = ""; cenario = null; } return; }
+  if (Date.now() - clima.atualizado < 15 * 60000) return;
+  clima.atualizado = Date.now();
+  try {
+    const g = await (await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=" + encodeURIComponent(ajustes.cidade))).json();
+    const lugar = g.results && g.results[0];
+    if (!lugar) return;
+    const t = await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lugar.latitude}&longitude=${lugar.longitude}&current=weather_code`)).json();
+    const c = t.current ? t.current.weather_code : 0;
+    const tipo = c >= 95 ? "trovoada" : c >= 71 && c <= 77 ? "neve" : c >= 51 ? "chuva" : c >= 2 ? "nublado" : "sol";
+    if (tipo !== clima.tipo) { clima.tipo = tipo; cenario = null; }   // redesenha as janelas
+  } catch (e) {}
+}
+setInterval(buscarClima, 60000);
+buscarClima();
+
+// ---------- dica ao passar o mouse ----------
+canvas.addEventListener("mousemove", e => {
+  const {x, y, tx, ty} = noMundo(e), b = canvas.getBoundingClientRect();
+  const g = [...gente.values()].find(g => Math.abs(g.x - x) < 18 && y > g.y - 30 && y < g.y + 18);
+  if (!g) { dica.style.display = "none"; canvas.style.cursor = "default"; return; }
+  canvas.style.cursor = "help";
+  const estados = {trabalhando: "trabalhando", esperando: "esperando você", pronto: "na copa (terminou)",
+                   aberta: "na copa", parada: "parado faz tempo"};
+  dica.innerHTML = `<div class="n">${esc(g.nome)} <span class="tag" style="background:${css(CARGOS[g.cargo] || "--estagiario")}">${esc(g.cargo)}</span></div>
+    <div style="color:var(--apagado)">${esc(g.projeto)} · ${esc(estados[g.estado] || g.estado)}</div>
+    ${g.tarefa ? `<div style="margin-top:4px">📋 ${esc(g.tarefa)}</div>` : ""}
+    ${g.fazendo ? `<div>⚙️ ${esc(g.fazendo)}</div>` : ""}
+    ${g.chefe ? `<div style="color:var(--apagado)">chamado por ${esc(g.chefe)}</div>` : ""}`;
+  dica.style.display = "block";
+  dica.style.left = Math.min(tx + 14, b.width - 290) + "px"; dica.style.top = Math.max(4, ty - 10) + "px";
+});
+canvas.addEventListener("mouseleave", () => dica.style.display = "none");
+
+// o escritório tem tamanho fixo (pequeno, tipo maquete) e a tela dá zoom pra ele encher o espaço todo
+const MUNDO = {w: 960, h: 576};   // (um pouco maior que os bonequinhos: salas com folga)
+const vista = {zoom: 1, ox: 0, oy: 0, dpr: 1, cw: 0, ch: 0};
+function ajustar() {
+  const r = canvas.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (!r.width || !r.height) return;
+  W = MUNDO.w; H = MUNDO.h;
+  vista.zoom = Math.min(r.width / W, r.height / H);
+  vista.ox = (r.width - W * vista.zoom) / 2; vista.oy = (r.height - H * vista.zoom) / 2;
+  vista.dpr = dpr; vista.cw = r.width; vista.ch = r.height;
+  canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+  ctx.imageSmoothingEnabled = false;
+  cenario = null;
+  montarLayout();
+  for (const g of gente.values()) { g.alvo = null; rota(g); }
+}
+window.addEventListener("resize", ajustar);
+ajustar();
+buscar();
+setInterval(buscar, 2000);
+requestAnimationFrame(laco);
+</script>
+</body>
+</html>

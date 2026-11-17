@@ -161,8 +161,8 @@ def ligar_barra(ligar):
 # cada chat está fazendo (em segundo plano: não atrasam o chat) e o PermissionRequest (o Pode/Não pelo balão, que
 # espera a sua resposta: por isso o timeout maior)
 EVENTOS_AVISO = ("Stop", "Notification", "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse",
-                 "PermissionRequest")
-EVENTOS_FUNDO = ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse")
+                 "PermissionRequest", "SubagentStart", "SubagentStop", "PostToolUse")
+EVENTOS_FUNDO = ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "SubagentStart", "SubagentStop")
 
 
 def _hook_do_aviso(evento):

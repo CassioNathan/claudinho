@@ -20,3 +20,4 @@ edge-tts>=7.0
 miniaudio>=1.60
 websocket-client>=1.7
 comtypes>=1.4
+segno>=1.5

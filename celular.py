@@ -138,6 +138,7 @@ class Celular:
             caminho = rota   # (sem o "visivel": o celular olhando não tira o Claudinho da tela do PC)
         req = urllib.request.Request(f"http://127.0.0.1:{self.porta_principal}{caminho}", data=corpo, method=metodo,
                                      headers={"X-Token": self.token_principal, "Content-Type": "application/json",
+                                              "X-Celular": "1",
                                               "Host": f"127.0.0.1:{self.porta_principal}"})
         with urllib.request.urlopen(req, timeout=15) as r:
             return r.status, r.read()

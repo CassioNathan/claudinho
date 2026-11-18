@@ -1572,6 +1572,8 @@ def iniciar_servidor(eventos):
             elif self.path.split("?")[0] == "/api/escritorio" and self.token_ok() and APP:   # a ClaudCorp
                 if "visivel=1" in self.path:   # a janela do escritório está aberta e na tela: ele vai pra dentro dela
                     APP.escritorio_visto = time.time()
+                if self.headers.get("X-Celular"):   # o celular olhando: conta como escritório aberto pra esperar o Pode/Não
+                    APP.celular_visto = time.time()
                 self.responder(200, json.dumps(APP.estado_escritorio(), ensure_ascii=False).encode("utf-8"))
             elif self.path == "/api/estado" and self.token_ok() and APP:
                 self.responder(200, json.dumps(APP.estado_painel(), ensure_ascii=False).encode("utf-8"))
@@ -1781,8 +1783,8 @@ def iniciar_servidor(eventos):
                         inicio = time.time()
                         while not pedido["evento"].wait(2):
                             passou = time.time() - inicio
-                            if passou > ESPERA_PERMISSAO_ESCRITORIO_S or (passou > ESPERA_PERMISSAO_FORA_S
-                                                                         and not APP.no_escritorio):
+                            olhando = APP.no_escritorio or time.time() - APP.celular_visto < 10   # (no PC ou no celular)
+                            if passou > ESPERA_PERMISSAO_ESCRITORIO_S or (passou > ESPERA_PERMISSAO_FORA_S and not olhando):
                                 break
                         pedido["evento"].set()
                         decisao = {True: "allow", False: "deny"}.get(pedido["ok"], "")
@@ -2293,6 +2295,7 @@ class Claudinho:
         self.escritorio = escritorio.Escritorio(sistema.DADOS / "relatorios.json")   # a ClaudCorp
         self.celular = celular.Celular(sistema.BASE / "escritorio.html", PORTA, TOKEN)   # o escritório no celular
         self.escritorio_visto, self.no_escritorio = 0.0, False   # escritório aberto: ele sai da tela e vai pra lá
+        self.celular_visto = 0.0   # o escritório aberto no celular (a espera do Pode/Não fica longa igual)
         self.falas_escritorio = {}   # chave → {"fala", "ate", "atividade", "atividade_ate"} (IA local, tempo livre)
         self.ia_escritorio_em, self.ia_escritorio_rodando = 0.0, False
         self.autonomas = {}   # id → autonomo.Tarefa (subchats trabalhando sozinhos num worktree)

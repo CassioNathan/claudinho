@@ -185,6 +185,25 @@
     aside { border-left: 0; border-top: 1px solid var(--linha); }
     .legenda { display: none; }
   }
+  /* celular deitado: pouca altura, então volta pro lado a lado (escritório + lateral estreita) e o topo numa linha só */
+  @media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+    #app { grid-template-columns: 1fr 280px; grid-template-rows: auto 1fr; }
+    #salao { aspect-ratio: auto; }
+    header { grid-column: 1 / 3; flex-wrap: nowrap; padding: 4px 10px; gap: 8px; }
+    header h1 { font-size: 14px; white-space: nowrap; }
+    .contagem { display: none; }
+    .botoes-topo { margin-left: auto; }
+    .botoes-topo button { padding: 3px 8px; }
+    aside { border-top: 0; border-left: 1px solid var(--linha); }
+    .abas { padding-top: 4px; }
+    .abas button { padding: 5px 4px 6px; font-size: 12px; }
+  }
+  /* sem a lateral: só o escritório, centralizado no espaço todo (no PC e no celular, em pé ou deitado) */
+  body.sem-lateral aside { display: none; }
+  body.sem-lateral #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  body.sem-lateral header { grid-column: 1; }
+  body.sem-lateral #salao { aspect-ratio: auto; }
+  .botoes-topo button.on { border-color: var(--laranja); color: var(--laranja); }
 </style>
 </head>
 <body>
@@ -197,6 +216,8 @@
       <button id="bQuadro" title="o quadro de tarefas da firma">📋 quadro</button>
       <button id="bTrofeus" title="as conquistas da firma">🏆 <span id="nTrofeus"></span></button>
       <button id="bAjustes" title="sons e clima">⚙️</button>
+      <button id="bLateral" title="esconder a lateral e deixar só o escritório">◨</button>
+      <button id="bTela" title="tela cheia">⛶</button>
     </div>
     <div class="legenda">
       <span><span class="tag" style="background:var(--junior)">júnior</span></span>
@@ -1661,6 +1682,41 @@ function ajustar() {
   for (const g of gente.values()) { g.alvo = null; rota(g); }
 }
 window.addEventListener("resize", ajustar);
+// esconder a lateral ou entrar em tela cheia muda o tamanho do salão sem mudar a janela: observa o salão mesmo
+if (window.ResizeObserver) new ResizeObserver(() => ajustar()).observe(canvas.parentElement);
+
+// ---------- tela cheia e lateral escondida ----------
+const bTela = document.getElementById("bTela"), bLateral = document.getElementById("bLateral");
+const raiz = document.documentElement;
+const pedirTela = raiz.requestFullscreen || raiz.webkitRequestFullscreen;
+const emTelaCheia = () => document.fullscreenElement || document.webkitFullscreenElement;
+if (!pedirTela) bTela.hidden = true;   // iPhone não deixa página entrar em tela cheia: fica só o botão da lateral
+bTela.onclick = async () => {
+  try {
+    if (emTelaCheia()) { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    await pedirTela.call(raiz);
+    // no celular, tenta deitar a tela (Android deixa; quem não deixa, segue em pé normal)
+    if (matchMedia("(pointer: coarse)").matches && screen.orientation && screen.orientation.lock)
+      screen.orientation.lock("landscape").catch(() => {});
+  } catch (e) {}
+};
+function marcarTela() {
+  const on = !!emTelaCheia();
+  bTela.classList.toggle("on", on);
+  bTela.title = on ? "sair da tela cheia" : "tela cheia";
+}
+document.addEventListener("fullscreenchange", marcarTela);
+document.addEventListener("webkitfullscreenchange", marcarTela);
+
+function lateral(esconder) {
+  document.body.classList.toggle("sem-lateral", esconder);
+  bLateral.classList.toggle("on", esconder);
+  bLateral.title = esconder ? "mostrar a lateral (funcionários, relatórios)" : "esconder a lateral e deixar só o escritório";
+  try { localStorage.setItem("escritorio.semLateral", esconder ? "1" : ""); } catch (e) {}
+  ajustar();
+}
+bLateral.onclick = () => lateral(!document.body.classList.contains("sem-lateral"));
+try { if (localStorage.getItem("escritorio.semLateral")) lateral(true); } catch (e) {}
 ajustar();
 buscar();
 setInterval(buscar, 2000);

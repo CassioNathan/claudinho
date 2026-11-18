@@ -3917,7 +3917,33 @@ class Claudinho:
         if r["pedido"].get("perguntas") is None:
             self.comentar(f"Mandei pro {r['projeto']}!", duracao=3, prioridade=ESTADO)
 
+    APP_CLAUDE = "claude.exe"   # o app do Claude (desktop): você nele = vai responder por lá
+
+    def soltar_se_no_app(self):
+        """Você está no app do Claude (janela da frente): o que eu estava segurando pra você responder por mim (o fim
+        de um chat, um Pode/Não) e que você ainda não começou a responder volta pro app na hora. Segurar ali travava o
+        chat: a sua mensagem no app ficava na fila ("enviar agora") até a minha espera acabar."""
+        if time.time() - getattr(self, "_viu_frente", 0) < 1:
+            return
+        self._viu_frente = time.time()
+        try:
+            no_app = janelas.exe_de(user32.GetForegroundWindow()) == self.APP_CLAUDE
+        except Exception:
+            return
+        if not no_app:
+            return
+        for sid, p in list(self.respostas_chat.items()):
+            r = self.respondendo_chat
+            if responder.pendente(p) and not p.get("comecou") and not (r and r["pedido"] is p):
+                responder.desistir(p)
+        for p in [self.permissao, *self.permissoes_na_fila]:
+            if (p and p.get("fora") and not p["evento"].is_set() and not p.get("comecou")
+                    and not (p.get("perguntas") is not None and p.get("respostas"))):
+                p["ok"] = None   # (nem sim nem não: o pedido aparece normal no app)
+                p["evento"].set()
+
     def vigiar_respostas_chat(self):
+        self.soltar_se_no_app()
         for sid in [sid for sid, p in self.respostas_chat.items() if not responder.pendente(p)]:
             del self.respostas_chat[sid]
         if self.balao and self.balao.tipo == "aviso" and (self.balao.hover or self.fala.ocupada):

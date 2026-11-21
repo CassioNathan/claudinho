@@ -3181,7 +3181,9 @@ class Claudinho:
             (f"Comentar a tela agora ({self.cfg['atalho_comentar']})", "comentar_agora", None),
             (f"Resumir/explicar a janela ({self.cfg['atalho_resumir']})", "resumir", None),
             (f"Resumir minhas notificações 🔔 ({self.cfg['atalho_notificacoes']})", "notificacoes", None),
-            *([(f"Sugerir resposta no WhatsApp 💬 ({self.cfg['atalho_whatsapp']})", "sugerir_resposta", None)] if "vendedor" in self.cfg["habilidades"] else []),
+            *([("Olhar o WhatsApp 📥", "olhar_whatsapp", None),
+               (f"Sugerir resposta no WhatsApp 💬 ({self.cfg['atalho_whatsapp']})", "sugerir_resposta", None)]
+              if "vendedor" in self.cfg["habilidades"] else []),
             *([("Ver o WhatsApp dele 📱", "whatsapp_janela", None)] if self.whats_proprio else []),
             (f"Faixa nos olhos 🙈 ({self.cfg['atalho_venda']})", "venda", lambda: self.cfg["vendado"]),
             None,
@@ -3336,6 +3338,8 @@ class Claudinho:
             self.resumir_tela()
         elif acao == "sugerir_resposta":
             self.sugerir_resposta()
+        elif acao == "olhar_whatsapp":
+            self.olhar_whatsapp()
         elif acao == "whatsapp_janela" and self.whats_proprio:   # mostra (ou esconde de novo) o navegador dele
             self.whats_proprio.mostrar(self.whats_proprio.escondido)
         elif acao.startswith("vendas_escrita:"):   # a sugestão foi (ou não) pro campo do WhatsApp
@@ -4521,12 +4525,9 @@ class Claudinho:
                 self.fechar_balao()
                 funcao(*args)
             return fazer
-        if r.get("whatsapp"):
-            if self.whats_proprio and self.whats_proprio.pronto():
-                botoes.append(("responder", depois(self.preparar_respostas, r["whatsapp"]), True))
-            else:
-                botoes.append(("ver whats", depois(self.receber_vendas, {"etapa": "nao_lidas", "conversas": r["whatsapp"]}),
-                               True))
+        if r.get("whatsapp"):   # a lista das não lidas, com o "responder" de cada uma (e o "responder todos")
+            botoes.append(("responder", depois(self.receber_vendas, {"etapa": "nao_lidas", "conversas": r["whatsapp"]}),
+                           True))
         if r.get("notificacoes"):
             botoes.append(("resumir 🔔", depois(self.ver_notificacoes), not botoes))
         botoes.append(("explica", lambda: self.explicar(fala["texto"]), False))
@@ -6187,7 +6188,12 @@ class Claudinho:
         conversas = lista.get("conversas") or []
         if acao == "whatsapp_conversas":
             quantas = max(1, min(int(dados.get("quantas") or 10), 30))
-            return habilidades.lista_em_texto(conversas[:quantas])
+            nao_lidas = [c for c in conversas if c.get("n") and not c.get("silenciada")]
+            if nao_lidas:   # você pediu pra olhar: aparece também o balão com o "responder" de cada uma
+                self.eventos.put(("vendas", {"etapa": "nao_lidas", "conversas": nao_lidas}))
+            return habilidades.lista_em_texto(conversas[:quantas]) + (
+                "\n(Mostrei as não lidas num balão com \"responder\" em cada uma: não precisa repetir a lista.)"
+                if nao_lidas else "")
         contato = str(dados.get("contato") or "").strip()
         if not contato:
             return "faltou o nome do contato"
@@ -6313,23 +6319,93 @@ class Claudinho:
         threading.Thread(target=lambda: self.eventos.put(("vendas", self.gerar_sugestao(anterior, contato))),
                          daemon=True).start()
 
-    def preparar_respostas(self, conversas, maximo=3):
-        """No WhatsApp próprio: abre cada conversa não lida (até `maximo`), lê e deixa uma resposta preparada: um balão por
-        conversa, com ver/enviar. A IA roda uma vez por conversa e só porque você pediu."""
+    def responder_conversas(self, nomes):
+        """O "responder" da lista (um nome) ou o "responder todos": lê cada conversa e prepara a resposta, um balão por
+        conversa com enviar/preencher. Com "Responder sozinho" (e o enviar liberado) já envia, nos mesmos limites. A IA
+        roda uma vez por conversa e só porque você pediu. No WhatsApp do navegador ele não abre conversa: espera você
+        abrir a da pessoa."""
         cfg = self.cfg["vendedor"]
         if not cfg["so_local"] and not tem_ia():
             self.comentar(sem_ia(), prioridade=IMPORTANTE)
             return
         if self.vendas_pensando:
+            self.comentar("Calma, ainda tô respondendo as outras. ✍️", duracao=4, prioridade=ESTADO)
+            return
+        nomes = [n for n in nomes if n][:10]
+        if not nomes:
+            return
+        proprio = bool(self.whats_proprio and self.whats_proprio.pronto())
+        if not proprio and len(nomes) > 1:
+            self.comentar("Responder todos só no meu WhatsApp (painel → WhatsApp próprio): no seu navegador eu não "
+                          "consigo abrir as conversas.", duracao=8, prioridade=IMPORTANTE)
             return
         self.vendas_pensando = True
-        nomes = [c["nome"] for c in conversas if not c.get("silenciada")][:maximo]
-        self.comentar(f"Preparando {len(nomes)} resposta{'s' if len(nomes) > 1 else ''}… ✍️", duracao=5, prioridade=ESTADO)
+        auto = cfg["enviar"] and cfg["auto"]
+        if proprio:
+            self.comentar(f"Respondendo {nomes[0] if len(nomes) == 1 else f'{len(nomes)} conversas'}… ✍️", duracao=5,
+                          prioridade=ESTADO)
+        else:
+            self.comentar(f"Abre a conversa com {nomes[0]} no WhatsApp que eu já respondo. 👀", duracao=10,
+                          prioridade=IMPORTANTE)
 
         def trabalho():
-            for nome in nomes:
-                self.eventos.put(("vendas", self.gerar_sugestao("", nome)))
-                time.sleep(2)   # sem pressa: nada de abrir conversa atrás de conversa
+            try:
+                for nome in nomes:
+                    if not proprio and not self.esperar_conversa_aberta(nome):
+                        self.eventos.put(("vendas", {"etapa": "erro", "lote": True, "contato": nome,
+                                                     "texto": f"Não vi a conversa com {nome} aberta, deixei pra lá."}))
+                        continue
+                    dados = dict(self.gerar_sugestao("", nome), lote=True)
+                    if dados["etapa"] == "sugestao" and not habilidades.mesmo_contato(dados["contato"], nome):
+                        dados.update(etapa="erro", texto=f"A conversa aberta mudou pra {dados['contato']}: não respondi {nome}.")
+                    if dados["etapa"] == "sugestao" and auto:
+                        liberado = self.esperar_vez_de_enviar()
+                        situacao = self.escrever_no_whatsapp(dados["texto"], liberado, dados["contato"])
+                        if situacao == "enviada":
+                            dados["etapa"] = "auto"
+                        else:   # não enviou (limite, conversa nova, campo ocupado): fica pra você decidir
+                            self.eventos.put(("menu", "vendas_escrita:" + situacao))
+                            continue
+                    self.eventos.put(("vendas", dados))
+                    time.sleep(2)   # sem pressa: nada de abrir conversa atrás de conversa
+            finally:
+                self.eventos.put(("vendas", {"etapa": "fim"}))
+        threading.Thread(target=trabalho, daemon=True).start()
+
+    def esperar_conversa_aberta(self, nome, limite=90):
+        """(em thread) WhatsApp do navegador: espera você abrir a conversa com `nome` (lê só o cabeçalho, sem IA)."""
+        fim = time.time() + limite
+        while time.time() < fim:
+            if habilidades.mesmo_contato(habilidades.ler_conversa(3).get("contato"), nome):
+                return True
+            time.sleep(2)
+        return False
+
+    def esperar_vez_de_enviar(self, limite=60):
+        """(em thread) Responder sozinho: espera o intervalo entre envios (25 s) em vez de desistir. Passou do limite por
+        hora/dia: False (aí só preenche o campo)."""
+        fim = time.time() + limite
+        while True:
+            liberado, motivo = habilidades.pode_enviar(self.mem.meta("vendas_envios", []), time.time())
+            if liberado or "segundos" not in motivo or time.time() > fim:
+                return liberado
+            time.sleep(3)
+
+    def olhar_whatsapp(self):
+        """Menu "Olhar o WhatsApp": a lista das não lidas (sem IA, sem abrir nada), com responder ao lado de cada uma."""
+        if "vendedor" not in self.cfg["habilidades"]:
+            self.comentar("Liga a habilidade de WhatsApp no painel (Faz por mim → Habilidades) que eu ajudo! 💬",
+                          duracao=6, prioridade=IMPORTANTE)
+            return
+
+        def trabalho():
+            lista = habilidades.ler_lista(30)
+            if lista.get("erro"):
+                self.eventos.put(("vendas", {"etapa": "erro", "lote": True,
+                                             "texto": f"Não consegui ler o WhatsApp: {lista['erro']}."}))
+                return
+            vivas = [c for c in lista.get("conversas", []) if not c.get("silenciada")]
+            self.eventos.put(("vendas", {"etapa": "nao_lidas", "conversas": vivas} if vivas else {"etapa": "nada"}))
         threading.Thread(target=trabalho, daemon=True).start()
 
     def gerar_sugestao(self, anterior="", contato=""):
@@ -6365,9 +6441,16 @@ class Claudinho:
     def receber_vendas(self, dados):
         if dados["etapa"] == "nao_lidas":
             n = len(dados["conversas"])
-            self.enfileirar({"tipo": "comentario", "duracao": 30, "vendas": dados,
-                             "texto": habilidades.resumo_nao_lidas(dados["conversas"]),
+            nomes = ", ".join(c["nome"] for c in dados["conversas"][:6])
+            self.enfileirar({"tipo": "comentario", "duracao": 60, "vendas": dados, "texto": "Quem eu respondo?",
+                             "dizer": f"{n} conversa{'s' if n > 1 else ''} no WhatsApp: {nomes}. Quem eu respondo?",
                              "titulo": f"💬 {n} conversa{'s' if n > 1 else ''} não lida{'s' if n > 1 else ''}"}, FALA)
+            return
+        if dados["etapa"] == "nada":
+            self.comentar("Nada não lido no WhatsApp. 👌", duracao=4, prioridade=ESTADO)
+            return
+        if dados["etapa"] == "fim":
+            self.vendas_pensando = False
             return
         if dados["etapa"] == "oferta":
             self.vendas_vistas.add(dados["id"])
@@ -6375,24 +6458,32 @@ class Claudinho:
             self.enfileirar({"tipo": "comentario", "duracao": 25, "vendas": dados,
                              "texto": f"“{trecho}”\nQuer uma sugestão de resposta?"}, FALA)
             return
-        self.vendas_pensando = False
+        if not dados.get("lote"):   # do lote (responder um/todos), quem libera é o "fim"
+            self.vendas_pensando = False
         if dados["etapa"] == "erro":
             self.comentar(dados["texto"], duracao=8, prioridade=IMPORTANTE)
+        elif dados["etapa"] == "auto":   # respondeu sozinho: mostra o que foi, pra você saber o que saiu em seu nome
+            self.comentar(f"✓ Respondi {dados['contato']}: {dados['texto']}", duracao=10, prioridade=IMPORTANTE)
         else:
             self.enfileirar({"tipo": "comentario", "duracao": None, "vendas": dados, "texto": dados["texto"]}, IMPORTANTE)
 
     def balao_vendas(self, fala):
         dados = fala["vendas"]
         if dados["etapa"] == "nao_lidas":
-            botoes = [("ok", self.fechar_balao, True)]
-            if self.whats_proprio and self.whats_proprio.pronto():   # no WhatsApp dele ele abre e prepara as respostas
-                def preparar():
-                    self.fechar_balao()
-                    self.preparar_respostas(dados["conversas"])
-                botoes.insert(0, ("preparar respostas", preparar, True))
-                botoes[1] = ("agora não", self.fechar_balao, False)
+            def responder(*nomes):
+                self.fechar_balao()
+                self.responder_conversas(list(nomes))
+            botoes = []
+            for c in dados["conversas"][:6]:   # uma linha por contato: o "responder" é ela mesma
+                n = f" ({c['n']})" if c.get("n", 1) > 1 else ""
+                previa = " ".join(str(c.get("previa") or "").split())
+                previa = f": {previa[:38]}…" if len(previa) > 38 else f": {previa}" if previa else ""
+                botoes.append((f"↩ {c['nome']}{n}{previa}", (lambda nome=c["nome"]: responder(nome)), False))
+            if len(dados["conversas"]) > 1 and self.whats_proprio and self.whats_proprio.pronto():
+                botoes.append(("responder todos", lambda: responder(*(c["nome"] for c in dados["conversas"])), True))
+            botoes.append(("agora não", self.fechar_balao, False))
             return Balao(self, fala["tipo"], fala["texto"], titulo=fala["titulo"], duracao=fala["duracao"],
-                         botoes=botoes, botoes_estreitos=True)
+                         botoes=botoes, botoes_em_coluna=True)
         if dados["etapa"] == "oferta":
             def aceitar():
                 self.fechar_balao()
@@ -6423,34 +6514,38 @@ class Claudinho:
                 enviar = False
                 self.comentar(f"Não enviei: {motivo}. Deixei no campo, é só você apertar Enter. 🐢", duracao=8,
                               prioridade=IMPORTANTE)
+        threading.Thread(target=lambda: self.eventos.put(
+            ("menu", "vendas_escrita:" + self.escrever_no_whatsapp(texto, enviar, contato))), daemon=True).start()
 
-        def trabalho():
-            recusa = ""
-            aberta = habilidades.abrir_conversa(contato) if contato else {"ok": True}   # WhatsApp próprio: vai pra conversa dela
-            if not aberta.get("ok"):
-                self.eventos.put(("menu", "vendas_escrita:erro:" + str(aberta.get("erro") or "não abri a conversa")))
-                return
-            if enviar:   # só envia pra conversa que você já começou e que ainda é a da sugestão
-                liberado, recusa = habilidades.pode_enviar_para(habilidades.ler_conversa(60), contato)
-                if liberado:
-                    recusa = ""
-            r = habilidades.escrever(texto, enviar=enviar and not recusa)
-            ok = "enviada" if r.get("enviada") else "ok"
-            if r.get("enviada"):
-                agora = time.time()
-                self.mem.guardar_meta("vendas_envios", [t for t in self.mem.meta("vendas_envios", []) if agora - t < 86400] + [agora])
-            if r.get("ok") or r.get("ocupado"):   # usou: vai pro histórico e a próxima sugestão não repete
-                self.mem.registrar_mensagem("claudinho", f"[WhatsApp → {contato or 'contato'}"
-                                                         f"{', enviada' if r.get('enviada') else ''}] {texto}")
-                self.vendas_usadas.setdefault(contato, []).append(texto)
-                self.vendas_usadas[contato] = self.vendas_usadas[contato][-5:]
-            if recusa and r.get("ok"):
-                ok = "recusada:" + recusa
-            self.eventos.put(("menu", "vendas_escrita:" + (ok if r.get("ok") else "ocupado" if r.get("ocupado")
-                                                            else "erro:" + str(r.get("erro") or "?"))))
-            if r.get("ocupado"):
-                self.sugestao_copiar = texto
-        threading.Thread(target=trabalho, daemon=True).start()
+    def escrever_no_whatsapp(self, texto, enviar, contato):
+        """(em thread) Abre a conversa (no WhatsApp próprio), põe o texto no campo e, com `enviar`, manda; só envia pra
+        conversa que você já começou e que ainda é a de `contato`. Devolve a situação: ok, enviada, recusada:<motivo>,
+        ocupado ou erro:<motivo>."""
+        recusa = ""
+        aberta = habilidades.abrir_conversa(contato) if contato else {"ok": True}   # WhatsApp próprio: vai pra conversa dela
+        if not aberta.get("ok"):
+            return "erro:" + str(aberta.get("erro") or "não abri a conversa")
+        if enviar:
+            liberado, recusa = habilidades.pode_enviar_para(habilidades.ler_conversa(60), contato)
+            if liberado:
+                recusa = ""
+        r = habilidades.escrever(texto, enviar=enviar and not recusa)
+        if r.get("enviada"):
+            agora = time.time()
+            self.mem.guardar_meta("vendas_envios", [t for t in self.mem.meta("vendas_envios", []) if agora - t < 86400] + [agora])
+        if r.get("ok") or r.get("ocupado"):   # usou: vai pro histórico e a próxima sugestão não repete
+            self.mem.registrar_mensagem("claudinho", f"[WhatsApp → {contato or 'contato'}"
+                                                     f"{', enviada' if r.get('enviada') else ''}] {texto}")
+            self.vendas_usadas.setdefault(contato, []).append(texto)
+            self.vendas_usadas[contato] = self.vendas_usadas[contato][-5:]
+        if r.get("ocupado"):
+            self.sugestao_copiar = texto
+            return "ocupado"
+        if not r.get("ok"):
+            return "erro:" + str(r.get("erro") or "?")
+        if r.get("enviada"):
+            return "enviada"
+        return "recusada:" + recusa if recusa else "ok"
 
     def ficha_da_frente(self):
         """A ficha do programa na frente; no navegador, a do site da aba (a extensão diz qual). Pode levar uns

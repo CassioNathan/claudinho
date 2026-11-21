@@ -27,7 +27,7 @@ CATALOGO = {
 # varrer: de tempos em tempos olha a lista de conversas (sem IA) e avisa das não lidas; varrer_min = de quantos em quantos minutos
 # proprio: usa o WhatsApp Web do próprio Claudinho (navegador à parte, aparelho conectado) em vez da aba do seu navegador
 VENDEDOR_PADRAO = {"loja": "", "tom": "", "so_local": False, "avisar": True, "enviar": False, "varrer": False,
-                   "varrer_min": 3, "proprio": False}
+                   "varrer_min": 3, "proprio": False, "auto": False}   # auto: "responder" já envia (precisa do enviar)
 
 
 def validar(valor):
@@ -39,7 +39,8 @@ def validar_vendedor(valor):
     v = valor if isinstance(valor, dict) else {}
     return {"loja": str(v.get("loja") or "").strip()[:80], "tom": str(v.get("tom") or "").strip()[:200],
             "so_local": bool(v.get("so_local")), "avisar": bool(v.get("avisar", True)), "enviar": bool(v.get("enviar")),
-            "varrer": bool(v.get("varrer")), "proprio": bool(v.get("proprio")), "varrer_min": _inteiro(v.get("varrer_min"), 3, 1, 30)}
+            "varrer": bool(v.get("varrer")), "proprio": bool(v.get("proprio")), "varrer_min": _inteiro(v.get("varrer_min"), 3, 1, 30),
+            "auto": bool(v.get("auto"))}
 
 
 def _inteiro(valor, padrao, menor, maior):

@@ -1598,6 +1598,10 @@ function montarHabilidade(caixa, completo) {
           <div class="info"><div class="titulo">Deixar eu enviar 📤</div><div class="desc">A sugestão ganha o botão <b>enviar</b>. Com limite por hora e dia. ⚠️ O WhatsApp pode restringir o número.</div></div>
           <label class="chave"><input type="checkbox" id="habEnviar" ${v.enviar ? "checked" : ""}><span></span></label>
         </div>
+        <div class="linha" style="${v.enviar ? "" : "display:none"}">
+          <div class="info"><div class="titulo">Responder sozinho 🤖</div><div class="desc">No <b>responder</b> da lista, eu já envio sem mostrar a sugestão antes. Mesmos limites.</div></div>
+          <label class="chave"><input type="checkbox" id="habAuto" ${v.auto ? "checked" : ""}><span></span></label>
+        </div>
         <div class="linha">
           <div class="info"><div class="titulo">Só no meu PC 🏠</div><div class="desc">A conversa não sai do PC (resposta mais fraca).</div></div>
           <label class="chave"><input type="checkbox" id="habLocal" ${v.so_local ? "checked" : ""}><span></span></label>
@@ -1637,8 +1641,9 @@ function montarHabilidade(caixa, completo) {
       e.target.checked = false;
       return;
     }
-    salvarV({enviar: e.target.checked});
+    salvarV({enviar: e.target.checked}).then(() => montarHabilidade(caixa, completo));
   };
+  caixa.querySelector("#habAuto").onchange = e => salvarV({auto: e.target.checked});
   const area = caixa.querySelector("#habConhecimento");
   if (area) {
     const contar = () => caixa.querySelector("#habConta").textContent = `${area.value.length.toLocaleString("pt-BR")} de 30.000 letras`;

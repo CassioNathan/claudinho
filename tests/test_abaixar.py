@@ -1,5 +1,7 @@
 """Quando o som dos outros abaixa e volta (sem mexer no áudio de verdade)."""
-import abaixar
+import pytest
+
+abaixar = pytest.importorskip("abaixar")   # áudio do Windows (comtypes): no CI em Linux, pula
 
 
 def montar(monkeypatch):
